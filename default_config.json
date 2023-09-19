@@ -1,0 +1,35 @@
+{
+    "OBSFILE": "/users/PCON0003/cond0007/imcom/coadd-test-fall2022/observing_sequence_hls_06_21.fits",
+    "INDATA": [
+        "/fs/scratch/PCON0003/cond0007/combo-in",
+        "dc2_imsim"
+    ],
+    "CTR": [
+        53.0,
+        -40.0
+    ],
+    "OUTSIZE": [
+        48,
+        50,
+        0.025
+    ],
+    "BLOCK": 48,
+    "FILTER": 4,
+    "KAPPA": [
+        8.12436e-08,
+        8.12436e-07,
+        8.12436e-06
+    ],
+    "INPSF": [
+        "/fs/scratch/PCON0003/cond0007/combo-in/psf",
+        "dc2_imsim",
+        8
+    ],
+    "OUT": "/users/PAS2055/kailicao/pyimcom/test/test4C_Yband",
+    "STOP": 16,
+    "INPAD": 1.25,
+    "PAD": 2,
+    "EXTRASMOOTH": 0.9554870253240214,
+    "PMASK": "/users/PCON0003/cond0007/imcom/coadd-test-fall2022/permanent_mask_220730.fits",
+    "CMASK": 0.00077
+}
