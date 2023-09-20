@@ -1,41 +1,78 @@
 import numpy as np
-from astropy.io import fits
 from scipy.special import jv
+from astropy.io import fits
 import matplotlib.pyplot as plt
 
-from config import Settings as Stn
+from .config import Settings as Stn
 from pyimcom_croutines import iD5512C, iD5512C_sym, gridD5512C
 
 
-class OutPSF:
-    '''Simple PSF models (for testing or outputs).
+class OutPsf:
+    '''
+    Simple PSF models (for testing or outputs).
+
+    Methods
+    -------
+    psf_gaussian (staticmethod) : Gaussian spot.
+    psf_simple_airy (staticmethod) : Airy spot.
+    psf_cplx_airy (staticmethod) : somewhat messier Airy function.
+
     '''
 
-    @staticmethod  # NOT TESTED
-    def psf_gaussian(n, sigmax, sigmay):
-        '''Gaussian spot, n x n, given sigma, centered
+    @staticmethod
+    def psf_gaussian(n: int, sigmax: float, sigmay: float) -> np.array:
+        '''
+        Gaussian spot, n x n, given sigma, centered
         (useful for testing)
+
+        Parameters
+        ----------
+        n : int
+        sigmax : float
+        sigmay : float
+
+        Returns
+        -------
+        np.array, shape : (n, n)
+
         '''
 
-        y, x = np.mgrid[(1-n)/2:(n-1)/2:n*1j,
-                        (1-n)/2:(n-1)/2:n*1j]
+        y, x = np.mgrid[(1-n)/2/sigmay:(n-1)/2/sigmay:n*1j,
+                        (1-n)/2/sigmax:(n-1)/2/sigmax:n*1j]
 
-        I = np.exp(-.5*(x**2/sigmax**2+y**2/sigmay**2)) / \
-            (2.*np.pi*sigmax*sigmay)
+        I = np.exp(-0.5 * (np.square(x) + np.square(y)))\
+            / (2.0 * np.pi * sigmax * sigmay)
+        del y, x
 
         return I
 
     @staticmethod
-    def psf_simple_airy(n, ldp, obsc=0., tophat_conv=0., sigma=0.):
-        '''Airy spot, n x n, with lamda/D = ldp pixels,
+    def psf_simple_airy(n: int, ldp: float, obsc: float = 0.0,
+                        tophat_conv: float = 0.0, sigma: float = 0.0) -> np.array:
+        '''
+        Airy spot, n x n, with lamda/D = ldp pixels,
         and convolved with a tophat (square, full width tophat_conv)
         and Gaussian (sigma)
         and linear obscuration factor (obsc)
 
-        result is centered on (n-1)/2,(n-1)/2 (so on a pixel if
+        Parameters
+        ----------
+        n : int
+        ldp : int
+            lamda/D = ldp pixels.
+        obsc : float, optional. The default is 0.0.
+        tophat_conv : float, optional. The default is 0.0.
+        sigma : float, optional. The default is 0.0.
+
+        Returns
+        -------
+        np.array, shape : (n, n)
+
+        result is centered on (n-1)/2, (n-1)/2 (so on a pixel if
         n is odd and a corner if n is even)
 
         normalized to *sum* to unity if analytically extended
+
         '''
 
         # figure out pad size -- want to get to at least a tophat width and 6 sigmas
@@ -44,29 +81,46 @@ class OutPSF:
 
         y, x = np.mgrid[(1-npad)/2:(npad-1)/2:npad*1j,
                         (1-npad)/2:(npad-1)/2:npad*1j]
-        r = np.sqrt(x**2+y**2) / ldp  # r in units of ldp
+        r = np.sqrt(np.square(x) + np.square(y)) / ldp  # r in units of ldp
 
         # make Airy spot
-        I = (jv(0, np.pi*r)+jv(2, np.pi*r)
-             - obsc**2*(jv(0, np.pi*r*obsc) + jv(2, np.pi*r*obsc))
-             )**2 / (4.*ldp**2*(1-obsc**2)) * np.pi
+        I = np.square(             jv(0, np.pi*r)      + jv(2, np.pi*r)
+                      - obsc**2 * (jv(0, np.pi*r*obsc) + jv(2, np.pi*r*obsc))) \
+            / (4.0*ldp**2 * (1-obsc**2)) * np.pi
+        del y, x, r
 
         # now convovle
         It = np.fft.rfft2(I)
-        uxa = np.linspace(0, 1-1/npad, npad)
-        uxa[-(npad//2):] -= 1
+        uxa = np.linspace(0, 1-1/npad, npad); uxa[-(npad//2):] -= 1
         ux = np.tile(uxa[None, :npad//2+1], (npad, 1))
         uy = np.tile(uxa[:, None], (1, npad//2+1))
-        It *= np.exp(-2*np.pi**2*sigma**2*(ux**2+uy**2)) * \
-            np.sinc(ux*tophat_conv) * np.sinc(uy*tophat_conv)
-        I = np.real(np.fft.irfft2(It))
+        It *= np.exp(-2.0*np.pi**2 * (np.square(ux*sigma) + np.square(uy*sigma))) \
+            * np.sinc(ux*tophat_conv) * np.sinc(uy*tophat_conv)
+        I = np.fft.irfft2(It, s=(npad, npad))
+        del It, uxa, ux, uy
 
         return I[kp:-kp, kp:-kp]
 
-    @staticmethod  # NOT TESTED
-    def psf_cplx_airy(n, ldp, tophat_conv=0., sigma=0., features=0):
-        '''somewhat messier Airy function with a few diffraction features printed on
+    @staticmethod
+    def psf_cplx_airy(n: int, ldp: float, tophat_conv: float = 0.0,
+                      sigma: float = 0.0, features: int = 0) -> np.array:
+        '''
+        somewhat messier Airy function with a few diffraction features printed on
         'features' is an integer that can be added. everything is band limited
+
+        Parameters
+        ----------
+        n : int
+        ldp : float
+            lamda/D = ldp pixels.
+        tophat_conv : float, optional. The default is 0.0.
+        sigma : float, optional. The default is 0.0.
+        features : int, optional. The default is 0.
+
+        Returns
+        -------
+        np.array, shape : (n, n)
+
         '''
 
         # figure out pad size -- want to get to at least a tophat width and 6 sigmas
@@ -75,163 +129,255 @@ class OutPSF:
 
         y, x = np.mgrid[(1-npad)/2:(npad-1)/2:npad*1j,
                         (1-npad)/2:(npad-1)/2:npad*1j]
-        r = np.sqrt(x**2+y**2) / ldp  # r in units of ldp
+        r = np.sqrt(np.square(x) + np.square(y)) / ldp  # r in units of ldp
         phi = np.arctan2(y, x)
 
         # make modified Airy spot
-        L1 = .8
-        L2 = .01
-        f = L1*L2*4./np.pi
-        II = jv(0, np.pi*r)+jv(2, np.pi*r)
+        L1 = 0.8
+        L2 = 0.01
+        f = L1 * L2 * 4.0/np.pi
+        II = jv(0, np.pi*r) + jv(2, np.pi*r)
         for t in range(6):
-            II -= f*np.sinc(L1*r*np.cos(phi+t*np.pi/6.)) * \
-                np.sinc(L2*r*np.sin(phi+t*np.pi/6.))
-        I = II**2 / (4.*ldp**2*(1-6*f)) * np.pi
+            II -= f * np.sinc(L1*r * np.cos(phi + t*np.pi/6.0)) \
+                    * np.sinc(L2*r * np.sin(phi + t*np.pi/6.0))
+        I = II**2 / (4.0*ldp**2 * (1-6*f)) * np.pi
+        del r, phi, II
 
-        if features % 2 == 1:
-            rp = np.sqrt((x-1*ldp)**2+(y+2*ldp)**2) / 2. / ldp
-            II = jv(0, np.pi*rp)+jv(2, np.pi*rp)
-            I = .8*I + .2*II**2 / (4.*(2.*ldp)**2) * np.pi
+        if features & 1:  # features % 2 == 1
+            rp = np.sqrt(np.square(x-1*ldp) + np.square(y+2*ldp)) / (2.0*ldp)
+            II = jv(0, np.pi*rp) + jv(2, np.pi*rp)
+            I *= 0.8
+            I += 0.2 * II**2 / (4.0*(2.0*ldp)**2) * np.pi
+            del rp, II
+        del y, x
 
-        if (features//2) % 2 == 1:
+        if features & 2:  # (features//2) % 2 == 1
             Icopy = np.copy(I)
-            I *= .85
-            I[:-8, :] += .15*Icopy[8:, :]
+            I         *= 0.85
+            I[:-8, :] += 0.15 * Icopy[8:, :]
+            del Icopy
 
-        if (features//4) % 2 == 1:
+        if features & 4:  # (features//4) % 2 == 1
             Icopy = np.copy(I)
-            I *= .8
-            I[:-4, :-4] += .1*Icopy[4:, 4:]
-            I[4:, :-4] += .1*Icopy[:-4, 4:]
+            I           *= 0.8
+            I[ :-4, :-4] += 0.1 * Icopy[4:,   4:]
+            I[4:,   :-4] += 0.1 * Icopy[ :-4, 4:]
+            del Icopy
 
-        # now convolve
+        # now convovle
         It = np.fft.rfft2(I)
-        uxa = np.linspace(0, 1-1/npad, npad)
-        uxa[-(npad//2):] -= 1
+        uxa = np.linspace(0, 1-1/npad, npad); uxa[-(npad//2):] -= 1
         ux = np.tile(uxa[None, :npad//2+1], (npad, 1))
         uy = np.tile(uxa[:, None], (1, npad//2+1))
-        It *= np.exp(-2*np.pi**2*sigma**2*(ux**2+uy**2)) * \
-            np.sinc(ux*tophat_conv) * np.sinc(uy*tophat_conv)
-        I = np.real(np.fft.irfft2(It))
+        It *= np.exp(-2.0*np.pi**2 * (np.square(ux*sigma) + np.square(uy*sigma))) \
+            * np.sinc(ux*tophat_conv) * np.sinc(uy*tophat_conv)
+        I = np.fft.irfft2(It, s=(npad, npad))
+        del It, uxa, ux, uy
 
         return I[kp:-kp, kp:-kp]
 
 
-class PSFGrp:
-    '''Either a group of input PSFs attached to an InStamp instance
-    or a group of output PSFs attached to a Block instance.
+class PsfGrp:
+    '''
+    Group of PSFs.
+
+    Either a group of input PSFs attached to an coadd.InStamp instance
+        or a group of output PSFs attached to a coadd.Block instance.
+
+    Methods
+    -------
+    setup (classmethod) : Set up class attributes.
+    __init__ : Constructor.
+    visualize_psf (staticmethod) : Visualize a PSF.
+    _sample_psf : Sample a single PSF or a set of PSFs.
+    _build_inpsfgrp : Build a group of input PSFs.
+    _build_outpsfgrp : Build a group of output PSFs.
+    accel_pad_and_rfft2 (staticmethod) : Zero-padding and rfft2.
+    clear: Free up memory space.
+
     '''
 
-    dsample = 1.0  # 0.5  # sampling rate of overlap matrices
-    npixpsf = 64  # size of PSF postage stamp in native pixels
-    oversamp = 8  # will be set by Config.inpsf_oversamp
-    # nsample = 2 * npixpsf * oversamp + 15  # 1039
-    nsample = npixpsf * oversamp + 15  # 527
-    # sampling matrix has shape (..., nsample, nsample)
+    # some default settings, will be overwritten by PsfGrp.setup
+    nsample = 527
+    nc = nsample // 2  # 263
+    nsp = nsample + 2*5  # 537
+    nfft = 1280
 
-    nc = nsample // 2  # 519 -> 263
-    kpad = 5
-    ns2 = nsample + 2 * kpad  # 1049 -> 537
+    @classmethod
+    def setup(cls, npixpsf: int = 64, oversamp: int = 8, kpad: int = 5) -> None:
+        '''
+        Set up class attributes.
 
-    # unrotated grid of sampling positions
-    # never modified (but frequently used) after initialization
-    xyo = np.mgrid[(1-ns2)/2*dsample:(ns2-1)/2*dsample:ns2*1j,
-                   (1-ns2)/2*dsample:(ns2-1)/2*dsample:ns2*1j]
+        Parameters
+        ----------
+        npixpsf : int, optional
+            Size of PSF postage stamp in native pixels. The default is 64.
+        oversamp : int, optional
+            PSF oversampling factor relative to native pixel scale. The default is 8.
+        kpad : int, optional. The default is 5.
 
-    # p = 0  # pad size, pyimcom_interface.py line 189
+        Returns
+        -------
+        None.
 
-    nfft0div8 = 2**(int(np.ceil(np.log2(ns2-0.5)))-2)
-    nfft = nfft0div8 * int(np.ceil(2*ns2/nfft0div8))
+        '''
+
+        cls.oversamp = oversamp
+        cls.nsample = npixpsf * oversamp + 15  # 527 by default
+        # sampling matrix has shape (..., nsample, nsample)
+
+        cls.nc = cls.nsample // 2  # 263 by default
+        cls.nsp = cls.nsample + 2*kpad  # 537 by default
+
+        # unrotated grid of sampling positions
+        # never modified (but frequently referred to) after initialization
+        cls.xyo = np.mgrid[(1-cls.nsp)/2:(cls.nsp-1)/2:cls.nsp*1j,
+                           (1-cls.nsp)/2:(cls.nsp-1)/2:cls.nsp*1j]
+        # dsample (sampling rate of overlap matrices) has been fixed to 1.0.
+
+        nfft0div8 = 2**(int(np.ceil(np.log2(cls.nsp-0.5)))-2)
+        cls.nfft = nfft0div8 * int(np.ceil(2*cls.nsp/nfft0div8))  # 1280 by default
 
     def __init__(self, in_or_out: bool = True,
-                 inst=None, blk=None, visualize: bool = False):
-        self.in_or_out = in_or_out  # True if input PSF group, False if output PSF group
-        self.visualize = visualize  # whether to visualize PSFs and sampling positions
+                 inst: 'coadd.InStamp' = None, blk: 'coadd.Block' = None,
+                 visualize: bool = False) -> None:
+        '''
+        Constructor.
 
-        if in_or_out:
+        Parameters
+        ----------
+        in_or_out : bool, optional
+            True if input PSF group, False if output PSF group. The default is True.
+        inst : coadd.InStamp, must be provided when in_or_out is True
+        blk : coadd.Block, must be provided when in_or_out is False
+        visualize : bool, optional
+            Whether to visualize PSFs and sampling positions. The default is False.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        self.in_or_out = in_or_out
+
+        if in_or_out:  # input PSF group
             assert inst is not None, 'inst must be specified for an input PSF group'
-            print(f'building input PSFGrp for InStamp {(inst.j_st, inst.i_st)}',
+            print(f'building input PsfGrp for InStamp {(inst.j_st, inst.i_st)}',
                   '@', inst.blk.timer(), 's')
             self.inst = inst
-            self.build_inpsfgrp()
-        else:
-            assert blk is not None, 'block must be specified for an output PSF group'
-            print(f'building output PSFGrp for Block {blk.this_sub=}', '@', blk.timer(), 's')
-            self.blk = blk
-            self.build_outpsfgrp()
+            self._build_inpsfgrp(visualize)
+            # this produces the following instance attributes:
+            # use_inimage, idx_blk2grp, idx_grp2blk, n_psf, psf_arr
 
-        self.perform_rfts()
-        # if in_or_out:
-        #     print(f'finished', '@', inst.blk.timer(), 's')
-        # else:
-        #     print(f'finished', '@', blk.timer(), 's')
+        else:  # output PSF group
+            assert blk is not None, 'block must be specified for an output PSF group'
+            print(f'building output PsfGrp for Block {blk.this_sub=}', '@', blk.timer(), 's')
+            self.blk = blk
+            self._build_outpsfgrp(visualize)
+            # this produces the following instance attributes:
+            # n_psf, psf_arr
+
+        self.psf_rft = PsfGrp.accel_pad_and_rfft2(self.psf_arr)
+        del self.psf_arr  # remove the PSFs since they are only used for FFT purposes
 
     @staticmethod
-    def visualize_psf(psf: np.ndarray, xyco: np.ndarray, xctr: float, yctr: float):
-        plt.imshow(np.log10(psf), origin='lower')
+    def visualize_psf(psf_: np.array, xyco: np.array,
+                      xctr: float, yctr: float) -> None:
+        '''
+        Visualize a single PSF, together with sampling positions.
+
+        Parameters
+        ----------
+        psf_ : np.array, shape : (ny, nx)
+            A single PSF.
+        xyco : np.array
+            Sampling positions, with (0, 0) at the PSF center.
+        xctr, yctr : float, float
+            Position of the PSF center.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        plt.imshow(np.log10(psf_), origin='lower')
         plt.colorbar()
         plt.scatter(xyco[0].ravel()+xctr, xyco[1].ravel()+yctr, s=1e-5)
         plt.show()
 
-    def sample_psf(self, idx: int, psf: np.ndarray,
-                   distort_mat: np.ndarray = None, print_shapes: bool = False):
-        '''Perform the interpolation to sample a single input/output PSF.
+    def _sample_psf(self, idx: int, psf: np.array, distort_mat: np.array = None,
+                   visualize: bool = False) -> None:
+        '''
+        Perform interpolations to sample a single PSF or a set of PSFs.
 
-        Corresponding to furry-parakeet/pyimcom_interface.py lines 191 to 226.
-        print_shapes: print shapes of C routine arguments for debugging purposes.
+        Parameters
+        ----------
+        idx : int
+            Index of the single PSF (int); sample a set of PSFs at the same time.
+        psf : np.array, shape : (n_psf, ny, nx)
+            PSF(s) to be sampled.
+        distort_mat : np.array, shape : (2, 2)
+            Distortion matrix of the original input PSF.
+            The default is None, meaning not to rotate the sampling positions.
+        visualize : bool, optional
+            Whether to visualize PSFs and sampling positions. The default is False.
+
+        Returns
+        -------
+        None.
+
         '''
 
         ny, nx = np.shape(psf)[-2:]
         xctr = (nx-1) / 2.0
         yctr = (ny-1) / 2.0
 
-        # xyco: sampling positions
+        # get sampling positions
         if distort_mat is None:
-            xyco = PSFGrp.xyo
+            xyco = PsfGrp.xyo
         else:  # succinct way to rotate
             rotate_mat = np.linalg.inv(distort_mat)
-            xyo_ = np.flip(np.moveaxis(PSFGrp.xyo, 0, -1), axis=-1)
+            xyo_ = np.flip(np.moveaxis(PsfGrp.xyo, 0, -1), axis=-1)
             xyco = np.moveaxis(np.flip(xyo_ @ rotate_mat.T, axis=-1), -1, 0)
             del rotate_mat, xyo_
 
-            # TypeError: In-place matrix multiplication is not (yet) supported.
-            # xyco = PSFGrp.xyo.copy()
-            # view = np.flip(np.moveaxis(xyco, 0, -1), axis=-1)
-            # view = view @ rotate_mat.T
-            # del rotate_mat, view
-
-        if self.visualize:
+        if visualize:
             if idx is not None:
-                PSFGrp.visualize_psf(psf, xyco, xctr, yctr)
+                PsfGrp.visualize_psf(psf, xyco, xctr, yctr)
             else:  # sampling a group of output PSFs at the same time
                 for psf_ in psf:
-                    PSFGrp.visualize_psf(psf_, xyco, xctr, yctr)
+                    PsfGrp.visualize_psf(psf_, xyco, xctr, yctr)
 
         if idx is not None:
-            out_arr = np.zeros((1, PSFGrp.ns2**2))
-            if print_shapes:
-                # print('iD5512C in sample_psf', (1, ny+2*PSFGrp.p, nx+2*PSFGrp.p),
-                print('iD5512C in sample_psf', (1, ny, nx),
-                      xyco[1].ravel().shape, xyco[0].ravel().shape, out_arr.shape)
-            # iD5512C(np.pad(psf, PSFGrp.p).reshape((1, ny+2*PSFGrp.p, nx+2*PSFGrp.p)),
+            out_arr = np.zeros((1, PsfGrp.nsp**2))
             iD5512C(psf.reshape((1, ny, nx)),
                     xyco[1].ravel()+xctr, xyco[0].ravel()+yctr, out_arr)
-            self.psf_arr[idx] = out_arr.reshape((PSFGrp.ns2, PSFGrp.ns2))
+            self.psf_arr[idx] = out_arr.reshape((PsfGrp.nsp, PsfGrp.nsp))
             del out_arr
 
-        else:  # sampling a group of output PSFs at the same time
-            out_arr = np.zeros((self.n_psf, PSFGrp.ns2**2))
-            if print_shapes:
-                # print('iD5512C in sample_psf', (self.n_psf, ny+2*PSFGrp.p, nx+2*PSFGrp.p),
-                print('iD5512C in sample_psf', (self.n_psf, ny, nx),
-                      xyco[1].ravel().shape, xyco[0].ravel().shape, out_arr.shape)
-            # iD5512C(np.pad(psf, pad_width=((0, 0), (PSFGrp.p, PSFGrp.p), (PSFGrp.p, PSFGrp.p))),
-            #         xyco[1].ravel()+xctr, xyco[0].ravel()+yctr, out_arr)
+        else:  # sample a group of output PSFs at the same time
+            out_arr = np.zeros((self.n_psf, PsfGrp.nsp**2))
             iD5512C(psf, xyco[1].ravel()+xctr, xyco[0].ravel()+yctr, out_arr)
-            self.psf_arr = out_arr.reshape((self.n_psf, PSFGrp.ns2, PSFGrp.ns2))
+            self.psf_arr = out_arr.reshape((self.n_psf, PsfGrp.nsp, PsfGrp.nsp))
             del out_arr
 
-    def build_inpsfgrp(self):
+    def _build_inpsfgrp(self, visualize: bool = False) -> None:
+        '''
+        Build a group of input PSFs.
+
+        Parameters
+        ----------
+        visualize : bool, optional
+            Whether to visualize PSFs and sampling positions. The default is False.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         # whether to use each of the input images
         self.use_inimage = np.zeros((self.inst.blk.n_inimage,), dtype=bool)
         for dj_st in range(2):
@@ -250,27 +396,41 @@ class PSFGrp:
                 self.idx_blk2grp[idx_b] = self.n_psf
                 self.idx_grp2blk[self.n_psf] = idx_b
                 self.n_psf += 1
-        # print(self.use_inimage, self.idx_blk2grp, self.idx_grp2blk, self.n_psf, sep='\n')
 
-        self.psf_arr = np.zeros((self.n_psf, PSFGrp.ns2, PSFGrp.ns2))
+        self.psf_arr = np.zeros((self.n_psf, PsfGrp.nsp, PsfGrp.nsp))
         for idx in range(self.n_psf):
-            self.sample_psf(idx, *self.inst.blk.inimages[self.idx_grp2blk[idx]].\
-                            get_psf_and_distort_mat(self.inst.j_st, self.inst.i_st))
-            if self.visualize:
+            self._sample_psf(idx, *self.inst.blk.inimages[self.idx_grp2blk[idx]].\
+                            get_psf_and_distort_mat(self.inst.j_st, self.inst.i_st), visualize=visualize)
+            if visualize:
                 print(f'The above PSF is from InImage {(self.inst.blk.inimages[self.idx_grp2blk[idx]].idsca)}',
                       f'at the upper right corner of InStamp {(self.inst.j_st, self.inst.i_st)}')
 
-    def build_outpsfgrp(self):
-        self.n_psf = 1  # to be set by self.blk.cfg
-        psf_orig = np.zeros((self.n_psf, PSFGrp.npixpsf * PSFGrp.oversamp,
-                             PSFGrp.npixpsf * PSFGrp.oversamp))
+    def _build_outpsfgrp(self, visualize: bool = False) -> None:
+        '''
+        Build a group of output PSFs.
+
+        Currently this only includes a single PSF returned by OutPsf.psf_simple_airy;
+        in the future, what output PSFs to include will be set by the configuration file.
+
+        Parameters
+        ----------
+        visualize : bool, optional
+            Whether to visualize PSFs and sampling positions. The default is False.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        self.n_psf = 1
+        psf_orig = np.zeros((self.n_psf, PsfGrp.nsample, PsfGrp.nsample))
 
         for idx in range(self.n_psf):
-            psf_orig[idx] = OutPSF.psf_simple_airy(PSFGrp.npixpsf * PSFGrp.oversamp,
-                Stn.QFilterNative[self.blk.cfg.use_filter] * PSFGrp.oversamp,
-                obsc=Stn.obsc, tophat_conv=0.0, sigma=self.blk.cfg.sigmatarget * PSFGrp.oversamp)
-        self.sample_psf(None, psf_orig)
-        # self.psf_arr.shape: (self.n_psf, PSFGrp.ns2, PSFGrp.ns2)
+            psf_orig[idx] = OutPsf.psf_simple_airy(PsfGrp.nsample,
+                Stn.QFilterNative[self.blk.cfg.use_filter] * PsfGrp.oversamp,
+                obsc=Stn.obsc, tophat_conv=0.0, sigma=self.blk.cfg.sigmatarget * PsfGrp.oversamp)
+        self._sample_psf(None, psf_orig)  # this produces self.psf_arr
 
         # save the output PSFs to a file
         OutputPSFHDU = fits.HDUList([fits.PrimaryHDU()] + [fits.ImageHDU(x) for x in psf_orig])
@@ -280,198 +440,266 @@ class PSFGrp:
         del OutputPSFHDU
 
     @staticmethod
-    def accel_pad_and_rfft2(psf_arr: np.array):
-        '''Accelerated version for zero-padding and rfft2.
+    def accel_pad_and_rfft2(psf_arr: np.array) -> np.array:
+        '''
+        Accelerated version of zero-padding and rfft2.
+
+        This saves about 20% of the time compared to simply using np.fft.rfft2.
+        Diagram of the steps involved here:
+                                             +---+      +---+
+                                             |   | fft  |***|
+        +---+ pad  +-------+ rfft +---+ pad  |   | ===> |***|
+        |***| ===> |***    | ===> |***| ===> |***|      |***|
+        +---+      +-------+      +---+      +---+      +---+
+        psf_arr     pad_m1                   pad_m2
+
+        Parameters
+        ----------
+        psf_arr : np.array, shape : (..., PsfGrp.nsp, PsfGrp.nsp)
+            PSF array to be padded and Fourier transformed.
+
+        Returns
+        -------
+        np.array, shape : (..., PsfGrp.nfft, PsfGrp.nfft//2+1)
+            Real Fourier transform results of psf_arr.
+
         '''
 
         n_arr = psf_arr.shape[0]
         # m1 stands for axis=-1, m2 stands for axis=-2. 
-        pad_m1 = np.zeros((n_arr, PSFGrp.ns2,  PSFGrp.nfft))
-        pad_m2 = np.zeros((n_arr, PSFGrp.nfft, PSFGrp.nfft//2+1), dtype=np.complex128)
+        pad_m1 = np.zeros((n_arr, PsfGrp.nsp,  PsfGrp.nfft))
+        pad_m2 = np.zeros((n_arr, PsfGrp.nfft, PsfGrp.nfft//2+1), dtype=np.complex128)
 
-        pad_m1[:, :, :PSFGrp.ns2] = psf_arr
-        pad_m2[:, :PSFGrp.ns2, :] = np.fft.rfft(pad_m1, axis=-1)
-        del pad_m1
-        return np.fft.fft(pad_m2, axis=-2)
+        pad_m1[:, :, :PsfGrp.nsp] = psf_arr
+        pad_m2[:, :PsfGrp.nsp, :] = np.fft.rfft(pad_m1, axis=-1)
+        res = np.fft.fft(pad_m2, axis=-2)
+        del pad_m1, pad_m2
 
-    def perform_rfts(self):
-        if self.n_psf <= Stn.fft_max_n_arr:
-            self.psf_rft = PSFGrp.accel_pad_and_rfft2(self.psf_arr)
-        else:  # perform rfts in batches
-            self.psf_rft = np.zeros((self.n_psf, PSFGrp.nfft, PSFGrp.nfft//2+1), dtype=np.complex128)
-            n_batch = int(np.ceil(self.n_psf / Stn.fft_max_n_arr))
-            for i_b in range(n_batch):
-                self.psf_rft[i_b*Stn.fft_max_n_arr:(i_b+1)*Stn.fft_max_n_arr] =\
-                PSFGrp.accel_pad_and_rfft2(self.psf_arr[i_b*Stn.fft_max_n_arr:(i_b+1)*Stn.fft_max_n_arr])
-        del self.psf_arr
+        return res
+
+    def clear(self) -> None:
+        '''
+        Free up memory space.
+
+        Use this in addition to the default __del__ method
+        to make sure that the PSF array is removed.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        if self.in_or_out:
+            print(f'clearing input PsfGrp attached to InStamp {(self.inst.j_st, self.inst.i_st)}',
+                  '@', self.inst.blk.timer(), 's')
+            # the following instance attributes should not be removed
+            # as they will be referred to in PsfOvl.__call__:
+            # self.use_inimage, self.idx_blk2grp, self.idx_grp2blk
+        del self.n_psf, self.psf_rft
 
 
-class PSFOvl:
-    '''Overlap between two PSFGrp instances or a PSFGrp instance and itself.
+class PsfOvl:
+    '''
+    Overlap between two PsfGrp instances or a PsfGrp instance and itself.
+
+    Methods
+    -------
+    __init__ : Constructor.
+    _idx_square2triangle : Convert a 2-d square index to a 1-d triangle index.
+    accel_irfft2_and_extract (staticmethod) : irfft2 and extraction.
+    _build_psfovl : Build the PSF overlap array.
+    visualize_psfovl : Visualize the PSF overlap array.
+
+    __call__ : Wrapper for the C interpolators.
+    _call_ii_cross : Interpolations in the input-input cross-overlap case.
+    _call_io_cross : Interpolations in the input-output cross-overlap case.
+    _call_ii_self : Interpolations in the input-input self-overlap case.
+    clear: Free up memory space.
+
     '''
 
-    # for slicing psf overlap arrays
-    s_lower = PSFGrp.nfft//2-PSFGrp.nc    #  761 -> 377
-    s_upper = PSFGrp.nfft//2+PSFGrp.nc+1  # 1800 -> 904
+    flat_penalty = 1e-6  # amount by which to penalize
+    # having different contributions to the output from different input images
 
-    flat_penalty = 1e-6
+    def __init__(self, psfgrp1: PsfGrp, psfgrp2: PsfGrp = None) -> None:
+        '''
+        Constructor.
 
-    # The lines below have been superseded by self.dscale:
-    # in_stamp_dscale = Stn.pixscale_native/Stn.arcsec
-    # s_in = Stn.pixscale_native/Stn.arcsec
-    # s = PSFGrp.dsample/PSFGrp.oversamp*s_in  # this needs a better name!
-    # scale of the PSF overlap arrays in arcsecs
+        Parameters
+        ----------
+        psfgrp1 : PsfGrp
+            The first PsfGrp instance.
+        psfgrp2 : PsfGrp, optional
+            The second PsfGrp instance.
+            The default is None, meaning the self-overlap of psfgrp1.
 
-    def __init__(self, psfgrp1: PSFGrp, psfgrp2: PSFGrp = None):
+        Returns
+        -------
+        None.
+
+        '''
+
         self.grp1 = psfgrp1
         self.grp2 = psfgrp2  # None if self-overlap
 
-        if psfgrp2 is not None:
-            if psfgrp2.in_or_out:
-                print(f'building input-input PSFOvl for InStamp {(psfgrp1.inst.j_st, psfgrp1.inst.i_st)}',
+        if psfgrp2 is not None:  # cross-overlap
+            if psfgrp2.in_or_out:  # input-input cross-overlap
+                print(f'building input-input PsfOvl for InStamp {(psfgrp1.inst.j_st, psfgrp1.inst.i_st)}',
                       f'and InStamp {(psfgrp2.inst.j_st, psfgrp2.inst.i_st)}', '@', psfgrp1.inst.blk.timer(), 's')
-            else:
-                print(f'building input-output PSFOvl for InStamp {(psfgrp1.inst.j_st, psfgrp1.inst.i_st)}',
+            else:  # input-output cross-overlap
+                print(f'building input-output PsfOvl for InStamp {(psfgrp1.inst.j_st, psfgrp1.inst.i_st)}',
                       f'and Block this_sub={psfgrp2.blk.this_sub}', '@', psfgrp1.inst.blk.timer(), 's')
 
-        else:
-            if psfgrp1.in_or_out:
-                print(f'building input-self PSFOvl for InStamp {(psfgrp1.inst.j_st, psfgrp1.inst.i_st)}',
+        else:  # self-overlap
+            if psfgrp1.in_or_out:  # input-self overlap
+                print(f'building input-self PsfOvl for InStamp {(psfgrp1.inst.j_st, psfgrp1.inst.i_st)}',
                       '@', psfgrp1.inst.blk.timer(), 's')
-            else:
-                print(f'building output-self PSFOvl for Block {psfgrp1.blk.this_sub=}',
+            else:  # output-self overlap
+                print(f'building output-self PsfOvl for Block this_sub={psfgrp1.blk.this_sub}',
                       '@', psfgrp1.blk.timer(), 's')
 
-        self.build_psfovl()
+        self._build_psfovl()
 
         # scale conversion for interpolations in PSF overlap arrays
-        self.dscale = PSFGrp.dsample/PSFGrp.oversamp * Stn.pixscale_native/Stn.arcsec
-        if psfgrp1.in_or_out:
-            self.dscale /= psfgrp1.inst.blk.cfg.dtheta*3600
-            self.n_inimage = psfgrp1.inst.blk.n_inimage
-        else:
-            self.dscale /= psfgrp1.blk.cfg.dtheta*3600
-            self.n_inimage = psfgrp1.blk.n_inimage
+        dtheta = psfgrp1.inst.blk.cfg.dtheta if psfgrp1.in_or_out else psfgrp1.blk.cfg.dtheta
+        self.dscale = (Stn.pixscale_native/Stn.arcsec) / (dtheta*3600) / PsfGrp.oversamp
 
-        # if psfgrp2 is not None:
-        #     print('finished', '@', psfgrp1.inst.blk.timer(), 's')
-        # else:
-        #     if psfgrp1.in_or_out:
-        #         print('finished', '@', psfgrp1.inst.blk.timer(), 's')
-        #     else:
-        #         print('finished', '@', psfgrp1.blk.timer(), 's')
+    def _idx_square2triangle(self, idx1: int, idx2: int) -> int:
+        '''
+        Convert a 2-d square index to a 1-d triangle index.
 
-    def idx_square2triangle(self, idx1: int, idx2: int):
-        '''For the self-overlap of an input PSF group,
-        convert a 2-d square index to a 1-d triangle index
-        e.g., for self.grp1.n_psf == 3:
-        +---+---+---+
-        | 0 | 1 | 2 |
-        +---+---+---+
-        |   | 3 | 4 |
-        +---+---+---+
-        |   |   | 5 |
-        +---+---+---+
+        The motivation is that, in the input-self overlap case,
+        the overlap between psf_arr[idx2] and psf_arr[idx1] is simply
+        the flipped version of the overlap between psf_arr[idx1] and psf_arr[idx2].
+        Therefore, we only need to compute the latter, and the results
+        are stored in a np.array of shape (n_psf*(n_psf+1)//2, nsample, nsample).
+
+        For example, in the n_psf == 3 case:
+         \idx2  0   1   2
+        idx1  +---+---+---+
+          0   | 0 | 1 | 2 |
+              +---+---+---+
+          1   |   | 3 | 4 |
+              +---+---+---+
+          2   |   |   | 5 |
+              +---+---+---+
+
+        Parameters
+        ----------
+        idx1, idx2 : int, int
+            2-d square index.
+
+        Returns
+        -------
+        int
+            1-d triangle index.
+
         '''
 
         assert idx1 <= idx2, 'the two indices must satisfy idx1 <= idx2'
         return (2*self.grp1.n_psf-idx1+1)*idx1//2 + idx2-idx1
 
     @staticmethod
-    def accel_irfft2_and_extract(ovl_rft: np.array):
-        '''Accelerated version for irfft2 and extracting,
-        based on the fact that we only need about (2/5) x (2/5) of the irfft2 results.
+    def accel_irfft2_and_extract(ovl_rft: np.array) -> np.array:
+        '''
+        Accelerated version of irfft2 and extraction.
+
+        This acceleration is based on the fact that we only need
+        about (2/5) x (2/5) of the irfft2 results. This saves about 40%
+        of the time compared to simply using np.fft.irfft2 and np.ifftshift.
+
+        Diagram of the steps involved here (ext. stands for extraction):
+        +---+      +---+
+        |***| ifft |***|
+        |***| ===> |***| ext. +---+ irfft+-------+ ext. +---+
+        |***|      |***| ===> |***| ===> |*******| ===> |***|
+        +---+      +---+      +---+      +-------+      +---+
+        ovl_rft    ift_m2     ovl_m2      ift_m1        ovl_m1
+
+        Parameters
+        ----------
+        ovl_rft : np.array, shape : (..., PsfGrp.nfft, PsfGrp.nfft//2+1)
+            Real Fourier transform of the PSF overlap array we want.
+
+        Returns
+        -------
+        np.array, shape : (..., nsample, nsample)
+            The PSF overlap array we want.
+
         '''
 
         n_arr = ovl_rft.shape[0]
         # m2 stands for axis=-2, m1 stands for axis=-1. 
-        ovl_m2 = np.zeros((n_arr, PSFGrp.nsample, PSFGrp.nfft//2+1), dtype=np.complex128)
-        ovl_m1 = np.zeros((n_arr, PSFGrp.nsample, PSFGrp.nsample))
-        nc = PSFGrp.nc  # shortcut
+        ovl_m2 = np.zeros((n_arr, PsfGrp.nsample, PsfGrp.nfft//2+1), dtype=np.complex128)
+        ovl_m1 = np.zeros((n_arr, PsfGrp.nsample, PsfGrp.nsample))
+        nc = PsfGrp.nc  # shortcut
 
         ift_m2 = np.fft.ifft(ovl_rft, axis=-2)
         ovl_m2[:,   :nc, :] = ift_m2[:, -nc:    , :]
         ovl_m2[:, nc:  , :] = ift_m2[:,    :nc+1, :]
         del ift_m2
 
-        ift_m1 = np.fft.irfft(ovl_m2, axis=-1, n=PSFGrp.nfft)
+        ift_m1 = np.fft.irfft(ovl_m2, axis=-1, n=PsfGrp.nfft)
         ovl_m1[:, :,   :nc] = ift_m1[:, :, -nc:    ]
         ovl_m1[:, :, nc:  ] = ift_m1[:, :,    :nc+1]
         del ovl_m2, ift_m1
 
         return ovl_m1
 
-    def build_psfovl(self):
+    def _build_psfovl(self) -> None:
+        '''
+        Build the PSF overlap array.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         if self.grp2 is not None:  # cross-overlap
-            self.ovl_arr = np.zeros((self.grp1.n_psf, self.grp2.n_psf, PSFGrp.nsample, PSFGrp.nsample))
+            self.ovl_arr = np.zeros((self.grp1.n_psf, self.grp2.n_psf, PsfGrp.nsample, PsfGrp.nsample))
 
-            if self.grp2.n_psf <= Stn.fft_max_n_arr:
-                for idx in range(self.grp1.n_psf):
-                    ovl_rft = self.grp1.psf_rft[idx] * self.grp2.psf_rft.conjugate()
-                    self.ovl_arr[idx] = PSFOvl.accel_irfft2_and_extract(ovl_rft)
-                    del ovl_rft
-
-            else:  # perform irfts in batches
-                n_batch = int(np.ceil(self.grp2.n_psf / Stn.fft_max_n_arr))
-                for idx in range(self.grp1.n_psf):
-                    for i_b in range(n_batch):
-                        ovl_rft = self.grp1.psf_rft[idx] * self.grp2.psf_rft\
-                        [i_b*Stn.fft_max_n_arr:(i_b+1)*Stn.fft_max_n_arr].conjugate()
-                        self.ovl_arr[idx, i_b*Stn.fft_max_n_arr:(i_b+1)*Stn.fft_max_n_arr] =\
-                        PSFOvl.accel_irfft2_and_extract(ovl_rft)
-                        del ovl_rft
-
-        elif self.grp1.in_or_out:  # self-overlap of an input PSF group
-            n_psf = self.grp1.n_psf  # shortcut
-            self.ovl_arr = np.zeros((n_psf*(n_psf+1)//2, PSFGrp.nsample, PSFGrp.nsample))
-
-            for idx in range(n_psf):
-                start = self.idx_square2triangle(idx, idx)
-                # print(idx, start, start+n_psf-idx)
-
-                if n_psf <= Stn.fft_max_n_arr:
-                    ovl_rft = self.grp1.psf_rft[idx] * self.grp1.psf_rft[idx:].conjugate()
-                    self.ovl_arr[start:start+n_psf-idx] = PSFOvl.accel_irfft2_and_extract(ovl_rft)
-                    del ovl_rft
-
-                else:  # perform irfts in batches
-                    n_batch = int(np.ceil((n_psf-idx) / Stn.fft_max_n_arr))
-                    for i_b in range(n_batch):
-                        ovl_rft = self.grp1.psf_rft[idx] * self.grp1.psf_rft\
-                        [idx+i_b*Stn.fft_max_n_arr:idx+(i_b+1)*Stn.fft_max_n_arr].conjugate()
-                        self.ovl_arr[start+i_b*Stn.fft_max_n_arr:
-                                     start+min((i_b+1)*Stn.fft_max_n_arr, n_psf-idx)] =\
-                        PSFOvl.accel_irfft2_and_extract(ovl_rft)
-                        del ovl_rft
-
-        else:  # self-overlap of an output PSF group
-            n_psf = self.grp1.n_psf  # shortcut
-
-            if n_psf <= Stn.fft_max_n_arr:
-                ovl_rft = self.grp1.psf_rft * self.grp1.psf_rft.conjugate()
-                self.ovl_arr = PSFOvl.accel_irfft2_and_extract(ovl_rft)
+            for idx in range(self.grp1.n_psf):
+                ovl_rft = self.grp1.psf_rft[idx] * self.grp2.psf_rft.conjugate()
+                self.ovl_arr[idx] = PsfOvl.accel_irfft2_and_extract(ovl_rft)
                 del ovl_rft
 
-            else:  # perform irfts in batches, not tested yet
-                self.ovl_arr = np.zeros((n_psf, PSFGrp.nsample, PSFGrp.nsample))
+        elif self.grp1.in_or_out:  # input-self overlap
+            n_psf = self.grp1.n_psf  # shortcut
+            self.ovl_arr = np.zeros((n_psf*(n_psf+1)//2, PsfGrp.nsample, PsfGrp.nsample))
 
-                n_batch = int(np.ceil((n_psf) / Stn.fft_max_n_arr))
-                for i_b in range(n_batch):
-                    ovl_rft = self.grp1.psf_rft * self.grp1.psf_rft\
-                    [i_b*Stn.fft_max_n_arr:(i_b+1)*Stn.fft_max_n_arr].conjugate()
-                    self.ovl_arr[i_b*Stn.fft_max_n_arr:(i_b+1)*Stn.fft_max_n_arr] =\
-                    PSFOvl.accel_irfft2_and_extract(ovl_rft)
-                    del ovl_rft
+            for idx in range(n_psf):
+                start = self._idx_square2triangle(idx, idx)
+                ovl_rft = self.grp1.psf_rft[idx] * self.grp1.psf_rft[idx:].conjugate()
+                self.ovl_arr[start:start+n_psf-idx] = PsfOvl.accel_irfft2_and_extract(ovl_rft)
+                del ovl_rft
+
+        else:  # output-self overlap
+            ovl_rft = self.grp1.psf_rft * self.grp1.psf_rft.conjugate()
+            # we do not need overlaps between different output PSFs
+            self.ovl_arr = PsfOvl.accel_irfft2_and_extract(ovl_rft)
+            del ovl_rft
 
             # extract C value(s)
-            self.outovlc = self.ovl_arr[:, PSFGrp.nc, PSFGrp.nc]
-            del self.ovl_arr  # remove this if the entire overlap array is needed
+            self.outovlc = self.ovl_arr[:, PsfGrp.nc, PsfGrp.nc]
+            del self.ovl_arr  # move this to PsfOvl.clear
+            # if the entire output-self overlap array is needed
 
-    def visualize_ovls(self):
-        if self.grp2 is not None:
-            n_psf1, n_psf2 = self.ovl_arr.shape[:2]
-            fig, axs = plt.subplots(n_psf1, n_psf2,
-                                    figsize=(3.2*min(n_psf2, 4), 2.4*min(n_psf1, 4)))
+    def visualize_psfovl(self) -> None:
+        '''
+        Visualize the PSF overlap array.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        if self.grp2 is not None:  # cross-overlap
+            n_psf1, n_psf2 = self.ovl_arr.shape[:2]  # shortcuts
+            fig, axs = plt.subplots(
+                n_psf1, n_psf2, figsize=(3.2*min(n_psf2, 4), 2.4*min(n_psf1, 4)))
 
             for idx1 in range(n_psf1):
                 for idx2 in range(n_psf2):
@@ -488,7 +716,7 @@ class PSFOvl:
             plt.show()
             del fig, axs
         
-        else:  # self-overlap of a PSF group
+        else:  # self overlap
             n_psf = self.grp1.n_psf  # shortcut
 
             if n_psf == 1:
@@ -497,8 +725,8 @@ class PSFOvl:
                 plt.show()
 
             else:
-                fig, axs = plt.subplots(n_psf, n_psf,
-                                        figsize=(3.2*min(n_psf, 4), 2.4*min(n_psf, 4)))
+                fig, axs = plt.subplots(
+                    n_psf, n_psf, figsize=(3.2*min(n_psf, 4), 2.4*min(n_psf, 4)))
 
                 for idx1 in range(n_psf):
                     for idx2 in range(n_psf):
@@ -507,45 +735,71 @@ class PSFOvl:
                             continue
 
                         im = axs[idx1, idx2].imshow(np.log10(
-                            self.ovl_arr[self.idx_square2triangle(idx1, idx2)]), origin='lower')
+                            self.ovl_arr[self._idx_square2triangle(idx1, idx2)]), origin='lower')
                         plt.colorbar(im)
 
                 plt.show()
                 del fig, axs
 
-    def __call__(self, st1: 'InStamp', st2: 'InStamp, OutStamp, or None' = None,
-                 visualize: bool = False, print_shapes: bool = False):
-        '''Wrapper for the C interpolators.
+    def __call__(self, st1: 'coadd.InStamp',
+                 st2: 'coadd.InStamp, coadd.OutStamp, or None' = None,
+                 visualize: bool = False) -> np.array:
+        '''
+        Wrapper for the C interpolators.
 
-        st1: must be InStamp.
-        st2: can be either InStamp, OutStamp, or None (for self-overlap).
-        visualize: whether to visualize overlap arrays and sampling positions.
-        print_shapes: print shapes of C routine arguments for debugging purposes.
+        Parameters
+        ----------
+        st1 : coadd.InStamp
+        st2 : coadd.InStamp, coadd.OutStamp, or None
+            The default is None, indicating diagonal blocks of the A matrix.
+        visualize : bool, optional
+            Whether to visualize overlap arrays and sampling positions. The default is False.
+
+        Returns
+        -------
+        np.array, of which the shape depends on
+        the nature of this PsfOvl instance and the input
+
         '''
 
-        if self.grp2 is not None:
-            if self.grp2.in_or_out:  # overlap between two input PSF groups
-                return self.call_ii_cross(st1, st2, visualize, print_shapes)
-            else:  # overlap between an input PSF group and the output PSF group
-                return self.call_io_cross(st1, st2, visualize, print_shapes)
-        else:  # self-overlap of an input PSF group
-            assert self.grp1.in_or_out, f'{self.grp1.in_or_out=}'
-            return self.call_ii_self(st1, st2, visualize, print_shapes)
+        if self.grp2 is not None:  # cross-overlap
+            if self.grp2.in_or_out:  # input-input cross-overlap
+                return self._call_ii_cross(st1, st2, visualize)
+            else:  # input-output cross-overlap
+                return self._call_io_cross(st1, st2, visualize)
 
-    def call_ii_cross(self, st1: 'InStamp', st2: 'InStamp',
-                      visualize: bool = False, print_shapes: bool = False):
+        else:  # input-self overlap
+            assert self.grp1.in_or_out, f'{self.grp1.in_or_out=} in a self-overlap case'
+            # this method never deals with output-self overlap!
+            return self._call_ii_self(st1, st2, visualize)
+
+    def _call_ii_cross(self, st1: 'coadd.InStamp', st2: 'coadd.InStamp',
+                       visualize: bool = False) -> np.array:
+        '''
+        Interpolations in the input-input cross-overlap case.
+
+        Parameters
+        ----------
+        st1 : coadd.InStamp
+        st2 : coadd.InStamp
+        visualize : bool, optional
+            Whether to visualize overlap arrays and sampling positions. The default is False.
+
+        Returns
+        -------
+        np.array, shape : (st1.pix_cumsum[-1], st2.pix_cumsum[-1])
+
+        '''
+
         res = np.zeros((st1.pix_cumsum[-1], st2.pix_cumsum[-1]))
         ddx = st1.x_val[:, None] - st2.x_val[None, :]
-        ddx /= self.dscale; ddx += PSFGrp.nc
+        ddx /= self.dscale; ddx += PsfGrp.nc
         ddy = st1.y_val[:, None] - st2.y_val[None, :]
-        ddy /= self.dscale; ddy += PSFGrp.nc
+        ddy /= self.dscale; ddy += PsfGrp.nc
 
         if visualize:
             n_psf1, n_psf2 = self.ovl_arr.shape[:2]
             fig, axs = plt.subplots(n_psf1, n_psf2, figsize=(6.4*n_psf2, 4.8*n_psf1))
-
-        # print(f'{(st1.j_st, st1.i_st)=}', f'{st1.pix_count=}')
-        # print(f'{(st2.j_st, st2.i_st)=}', f'{st2.pix_count=}')
 
         for j_im in range(st1.blk.n_inimage):
             if st1.pix_count[j_im] == 0: continue
@@ -569,33 +823,47 @@ class PSFOvl:
                     ax.scatter(ddx[slice_].ravel(), ddy[slice_].ravel(), s=1e-2)
 
                 out_arr = np.zeros((1, st1.pix_count[j_im] * st2.pix_count[i_im]))
-                if print_shapes:
-                    print('iD5512C in call_ii_cross', (1, PSFGrp.nsample, PSFGrp.nsample),
-                          ddx[slice_].ravel().shape, ddy[slice_].ravel().shape, out_arr.shape)
-                # print(f'{self.ovl_arr.shape=}')
-                # print(f'{j_im=}', f'{self.grp1.idx_blk2grp=}')
-                # print(f'{i_im=}', f'{self.grp2.idx_blk2grp=}')
                 iD5512C(self.ovl_arr[self.grp1.idx_blk2grp[j_im], self.grp2.idx_blk2grp[i_im]].\
-                        reshape((1, PSFGrp.nsample, PSFGrp.nsample)),
-                    ddx[slice_].ravel(), ddy[slice_].ravel(), out_arr)
+                        reshape((1, PsfGrp.nsample, PsfGrp.nsample)),
+                        ddx[slice_].ravel(), ddy[slice_].ravel(), out_arr)
 
                 res[slice_] = out_arr.reshape((st1.pix_count[j_im], st2.pix_count[i_im]))
                 del out_arr
 
                 # flat penalty
                 if j_im == i_im:
-                    res[slice_] += PSFOvl.flat_penalty
+                    res[slice_] += PsfOvl.flat_penalty
                 else:
-                    res[slice_] -= PSFOvl.flat_penalty / self.n_inimage / 2.
+                    res[slice_] -= PsfOvl.flat_penalty / self.grp1.inst.blk.n_inimage / 2.0
+                del slice_
 
         if visualize:
             plt.show()
             del fig, axs
 
+        del ddx, ddy
+
         return res
 
-    def call_io_cross(self, st1: 'InStamp', st2: 'OutStamp',
-                      visualize: bool = False, print_shapes: bool = False):
+    def _call_io_cross(self, st1: 'coadd.InStamp', st2: 'coadd.OutStamp',
+                       visualize: bool = False) -> np.array:
+        '''
+        Interpolations in the input-output cross-overlap case.
+
+        Parameters
+        ----------
+        st1 : coadd.InStamp
+        st2 : coadd.OutStamp
+        visualize : bool, optional
+            Whether to visualize overlap arrays and sampling positions. The default is False.
+
+        Returns
+        -------
+        np.array, shape : either (self.grp2.n_psf, n_outpix, st1.pix_cumsum[-1])
+                              or (self.grp2.n_psf, n_outpix, selection.shape[0])
+
+        '''
+
         x_val_, y_val_ = st1.x_val, st1.y_val
         pix_count_ = st1.pix_count
         pix_cumsum_ = st1.pix_cumsum
@@ -612,9 +880,9 @@ class PSFOvl:
             res = np.zeros((self.grp2.n_psf, n_outpix, selection.shape[0]))
 
         ddx = x_val_[:, None] - st2.yx_val[None, 1, 0, :]
-        ddx /= self.dscale; ddx += PSFGrp.nc
+        ddx /= self.dscale; ddx += PsfGrp.nc
         ddy = y_val_[:, None] - st2.yx_val[None, 0, :, 0]
-        ddy /= self.dscale; ddy += PSFGrp.nc
+        ddy /= self.dscale; ddy += PsfGrp.nc
 
         if visualize:
             n_psf1, n_psf2 = self.ovl_arr.shape[:2]
@@ -635,17 +903,13 @@ class PSFOvl:
                     im = ax.imshow(np.log10(self.ovl_arr[self.grp1.idx_blk2grp[j_im], i_psf]), origin='lower')
                     plt.colorbar(im)
                     ddx_ = st1.x_val[:, None] - st2.yx_val[1, ::10, ::10].ravel()[None, :]
-                    ddx_ /= self.dscale; ddx_ += PSFGrp.nc
+                    ddx_ /= self.dscale; ddx_ += PsfGrp.nc
                     ddy_ = st1.y_val[:, None] - st2.yx_val[0, ::10, ::10].ravel()[None, :]
-                    ddy_ /= self.dscale; ddy_ += PSFGrp.nc
+                    ddy_ /= self.dscale; ddy_ += PsfGrp.nc
                     ax.scatter(ddx_.ravel(), ddy_.ravel(), s=1e-2, c='r')
                     del ddx_, ddy_
 
                 out_arr = np.zeros((pix_count_[j_im], n_outpix))
-                if print_shapes:
-                    print('gridD5512C in call_io_cross', self.ovl_arr[self.grp1.idx_blk2grp[j_im], i_psf].shape,
-                          ddx[pix_cumsum_[j_im]:pix_cumsum_[j_im+1], :].shape,
-                          ddy[pix_cumsum_[j_im]:pix_cumsum_[j_im+1], :].shape, out_arr.shape)
                 gridD5512C(self.ovl_arr[self.grp1.idx_blk2grp[j_im], i_psf],
                            ddx[pix_cumsum_[j_im]:pix_cumsum_[j_im+1], :],
                            ddy[pix_cumsum_[j_im]:pix_cumsum_[j_im+1], :], out_arr)
@@ -656,13 +920,32 @@ class PSFOvl:
             plt.show()
             del fig, axs
 
+        del x_val_, y_val_, pix_count_, pix_cumsum_
+        del selection, ddx, ddy
+
         return res
 
-    def call_ii_self(self, st1: 'InStamp', st2: 'InStamp',
-                     visualize: bool = False, print_shapes: bool = False):
-        '''The self-overlap of an input PSF group can be used to
+    def _call_ii_self(self, st1: 'coadd.InStamp', st2: 'coadd.InStamp',
+                      visualize: bool = False) -> np.array:
+        '''
+        Interpolations in the input-input self-overlap case.
+        
+        Note that the self-overlap of an input PSF group can be used to
         compute either the sub-matrices for a single input stamp
-        or the sub-matrices for a pair of input stamps within a 2x2 group.
+                    or the sub-matrices for a pair of input stamps within a 2x2 group.
+
+        Parameters
+        ----------
+        st1 : coadd.InStamp
+        st2 : coadd.InStamp
+            The default is None, indicating diagonal blocks of the A matrix.
+        visualize : bool, optional
+            Whether to visualize overlap arrays and sampling positions. The default is False.
+
+        Returns
+        -------
+        np.array, shape : (st1.pix_cumsum[-1], st2.pix_cumsum[-1])
+
         '''
 
         same_inst = st2 is None
@@ -677,12 +960,11 @@ class PSFOvl:
                 plt.colorbar()
                 plt.show()
 
-        ddx /= self.dscale; ddx += PSFGrp.nc
-        ddy /= self.dscale; ddy += PSFGrp.nc
+        ddx /= self.dscale; ddx += PsfGrp.nc
+        ddy /= self.dscale; ddy += PsfGrp.nc
 
         if visualize:
             n_psf = self.grp1.n_psf  # shortcut
-            # print(n_psf)
             fig, axs = plt.subplots(n_psf, n_psf, figsize=(6.4*n_psf, 4.8*n_psf))
 
         for j_im in range(st1.blk.n_inimage):
@@ -691,17 +973,16 @@ class PSFOvl:
                 if st2.pix_count[i_im] == 0: continue
 
                 if j_im <= i_im:
-                    ovl_arr_ = self.ovl_arr[self.idx_square2triangle(
+                    ovl_arr_ = self.ovl_arr[self._idx_square2triangle(
                         self.grp1.idx_blk2grp[j_im], self.grp1.idx_blk2grp[i_im])]
                 else:
-                    ovl_arr_ = np.flip(self.ovl_arr[self.idx_square2triangle(
+                    ovl_arr_ = np.flip(self.ovl_arr[self._idx_square2triangle(
                         self.grp1.idx_blk2grp[i_im], self.grp1.idx_blk2grp[j_im])])
 
                 slice_ = np.s_[st1.pix_cumsum[j_im]:st1.pix_cumsum[j_im+1],
                                st2.pix_cumsum[i_im]:st2.pix_cumsum[i_im+1]]
 
                 if visualize:
-                    # print(j_im, i_im, self.grp1.idx_blk2grp[j_im], self.grp1.idx_blk2grp[i_im])
                     ax = axs[self.grp1.idx_blk2grp[j_im], self.grp1.idx_blk2grp[i_im]] if n_psf > 1 else axs
                     im = ax.imshow(np.log10(ovl_arr_), origin='lower')
                     plt.colorbar(im)
@@ -709,23 +990,21 @@ class PSFOvl:
 
                 out_arr = np.zeros((1, st1.pix_count[j_im] * st2.pix_count[i_im]))
                 interpolator = iD5512C_sym if same_inst and j_im == i_im else iD5512C
-                if print_shapes:
-                    print('iD5512C(_sym) in call_ii_self', (1, PSFGrp.nsample, PSFGrp.nsample),
-                          ddx[slice_].ravel().shape, ddy[slice_].ravel().shape, out_arr.shape)
-                interpolator(ovl_arr_.reshape((1, PSFGrp.nsample, PSFGrp.nsample)),
+                interpolator(ovl_arr_.reshape((1, PsfGrp.nsample, PsfGrp.nsample)),
                              ddx[slice_].ravel(), ddy[slice_].ravel(), out_arr)
 
                 res[slice_] = out_arr.reshape((st1.pix_count[j_im], st2.pix_count[i_im]))
+
                 # flat penalty
                 if j_im == i_im:
-                    res[slice_] += PSFOvl.flat_penalty
+                    res[slice_] += PsfOvl.flat_penalty
                 else:
-                    res[slice_] -= PSFOvl.flat_penalty / self.n_inimage / 2.
+                    res[slice_] -= PsfOvl.flat_penalty / self.grp1.inst.blk.n_inimage / 2.0
 
                 if same_inst and j_im < i_im:
                     res[st2.pix_cumsum[i_im]:st2.pix_cumsum[i_im+1],
                         st1.pix_cumsum[j_im]:st1.pix_cumsum[j_im+1]] = res[slice_].T
-                del out_arr
+                del out_arr, slice_
 
         if visualize:
             if n_psf > 1:
@@ -738,50 +1017,123 @@ class PSFOvl:
             plt.show()
             del fig, axs
 
+        del ddx, ddy
+
         return res
 
-    def clear(self):
-        '''Use this in addition to the default __del__ method
-        to make sure that references to PSFGrp instances are removed,
-        and more importantly the the huge overlap array (self.ovl_arr).
+    def clear(self) -> None:
+        '''
+        Free up memory space.
+
+        Use this in addition to the default __del__ method
+        to make sure that the huge PSF overlap array is removed.
+
+        Returns
+        -------
+        None.
+
         '''
 
         if self.grp2 is not None and not self.grp2.in_or_out:
-            print(f'clearing input-output PSFOvl for InStamp {(self.grp1.inst.j_st, self.grp1.inst.i_st)}',
+            print(f'clearing input-output PsfOvl for InStamp {(self.grp1.inst.j_st, self.grp1.inst.i_st)}',
                   f'and Block this_sub={self.grp2.blk.this_sub}', '@', self.grp1.inst.blk.timer(), 's')
 
         del self.grp1, self.grp2, self.ovl_arr
 
 
 class SysMatA:
-    '''System matrix A attached to a Block instance.
+    '''
+    System matrix A attached to a coadd.Block instance.
+
+    The symtem matrix A is defined in Rowe+ 2011 Equation (17).
+
+    Methods
+    -------
+    __init__ : Constructor.
+    ji_st2psf (staticmethod) : Convert InStamp index to PsfGrp index.
+    shift_ji_st (staticmethod) : Tool function for tuple addition.
+    iisubmat_dist (staticmethod) : Calculate the index for iisubmats_ref.
+    _compute_iisubmats : Make input-input PsfOvl and compute A submatrices.
+    get_iisubmat : Return a requested A submatrix.
+
     '''
 
-    def __init__(self, blk):
+    def __init__(self, blk: 'coadd.Block') -> None:
+        '''
+        Constructor.
+
+        Parameters
+        ----------
+        blk : coadd.Block
+
+        Returns
+        -------
+        None.
+
+        '''
+
         self.blk = blk
 
-        self.iisubmats = {}  # ii stands for input-input
+        # dictionary of A submatrices; ii stands for input-input
+        self.iisubmats = {}
+        # reference counts for the A submatrices
+        # see the static method iisubmat_dist defined below for why 13
         self.iisubmats_ref = np.zeros((blk.cfg.n1+2, blk.cfg.n1+2, 13), dtype=np.uint8)
 
     @staticmethod
     def ji_st2psf(ji_st: (int, int)) -> (int, int):
-        '''Convert ji_st to that of the corresponding psfovl,
-        e.g., (0, 0), (0, 1), (1, 0), (1, 1) -> (0, 0).
+        '''
+        Convert InStamp index to PsfGrp index.
+
+        More precisely, convert index of the InStamp of interest
+        to that of its neighbor which harbors the PsfGrp in that 2x2 group.
+        For example, any element of {(0, 0), (0, 1), (1, 0), (1, 1)} -> (0, 0).
+
+        Parameters
+        ----------
+        ji_st : (int, int)
+            Index of the InStamp of interest.
+
+        Returns
+        -------
+        (int, int)
+            Index of the InStamp which harbors the PsfGrp.
+
         '''
 
         return tuple(ji >> 1 << 1 for ji in ji_st)
 
     @staticmethod
-    def shift_ji_st(in_st: (int, int), din_st: (int, int)):
-        '''Tool function for tuple addition.
+    def shift_ji_st(ji_st: (int, int), dji_st: (int, int)) -> (int, int):
+        '''
+        Tool function for tuple addition.
+
+        For our purposes, this function shifts an InStamp index
+        in both directions by either 0 or 1.
+
+        Parameters
+        ----------
+        ji_st : (int, int)
+            InStamp index to be shifted.
+        dji_st : (int, int)
+            Shift in InStamp index.
+
+        Returns
+        -------
+        (int, int)
+            Shifted InStamp index.
+
         '''
 
-        return (in_st[0]+din_st[0], in_st[1]+din_st[1])
+        return (ji_st[0]+dji_st[0], ji_st[1]+dji_st[1])
 
     @staticmethod
     def iisubmat_dist(ji_st1: (int, int), ji_st2: (int, int)) -> (int, int, int):
-        '''Calculate the "distance" between two input postage stamps
-        to store the reference counts in the 3-d array self.iisubmats_ref
+        '''
+        Calculate the index for iisubmats_ref.
+
+        Specifically, calculate the "distance" between two input postage stamps
+        in order to store the reference counts in the 3-d array iisubmats_ref
         using indices (ji_st1[0], ji_st1[1], dist), which this static method returns.
 
         The "distance" is defined as follows:
@@ -792,7 +1144,24 @@ class SysMatA:
         +---+---+---+---+---+
         |   |   | 0*| 1 | 2 |
         +---+---+---+---+---+
-        where "*" denotes ji_st1.
+        where "*" denotes ji_st1. Note that ji_st1 must precede ji_st2.
+        If the "distance" is out of range, this function returns None.
+
+        Parameters
+        ----------
+        ji_st1 : (int, int)
+            Index of the first InStamp.
+        ji_st2 : (int, int)
+            Index of the second InStamp.
+
+        Returns
+        -------
+        (int, int, int)
+            Index of the first InStamp combined with the "distance,"
+            which can be directly used as the index of iisubmats_ref;
+        or None
+            when the "distance" is out of range.
+
         '''
 
         # this should never happen by design
@@ -807,10 +1176,41 @@ class SysMatA:
         dist = dj_st*5 + di_st+2 - 2
         return (*ji_st1, dist)
 
-    def compute_iisubmats(self, ji_st1: (int, int), ji_st2: (int, int), sim_mode: bool = False):
-        '''sim_mode: count references, no actual iisubmats computed.
+    def _compute_iisubmats(self, ji_st1: (int, int), ji_st2: (int, int),
+                           sim_mode: bool = False) -> None:
+        '''
+        Make input-input PsfOvl and compute A submatrices.
+
+        This method is only called in SysMatA.get_iisubmat.
+        When an A submatrix is requested from an OutStamp but not in iisubmats,
+        get_iisubmat calls this method, which makes the input-input PsfOvl,
+        computes all the needed A submatrices which are supposed to be computed
+        using that particular PsfOvl instance, and clears the PsfOvl.
+
+        Note that removing the huge PSF overlap arrays is important!
+        Otherwise pyimcom would demand much more memory.
+
+        To determine whether a specific system submatrix is needed,
+        a Block instance first runs the postage coaddition framework
+        in sim_mode to count references to all possible system submatrices.
+
+        Parameters
+        ----------
+        ji_st1 : (int, int)
+            Index of the first InStamp.
+        ji_st2 : (int, int)
+            Index of the second InStamp.
+        sim_mode : bool, optional
+            Whether to count references without actually computing submatrices.
+            The default is False.
+
+        Returns
+        -------
+        None.
+
         '''
 
+        # identify InStamp instance(s) harboring input PsfGrp instances
         ji_psf1 = SysMatA.ji_st2psf(ji_st1)
         ji_psf2 = SysMatA.ji_st2psf(ji_st2)
 
@@ -819,22 +1219,30 @@ class SysMatA:
             psfgrp2 = self.blk.instamps[ji_psf2[0]][ji_psf2[1]].get_inpsfgrp(sim_mode)
         else:
             psfgrp2 = None
+
         if not sim_mode:
-            iipsfovl = PSFOvl(psfgrp1, psfgrp2)
+            # make the input-input PsfOvl instance
+            iipsfovl = PsfOvl(psfgrp1, psfgrp2)
 
         counter = 0
-        # all 4 possible ji_st1's using the same iipsfovl
+
+        # all 4 possible InStamp's in the 2x2 group of psfgrp1
         for dji_st1 in range(4):
             ji_st1_ = SysMatA.shift_ji_st(ji_psf1, divmod(dji_st1, 2))
 
-            # all 4 possible ji_st2's using the same iipsfovl
+            # all 4 possible InStamp's in the 2x2 group of psfgrp2
             for dji_st2 in range(4):
                 ji_st2_ = SysMatA.shift_ji_st(ji_psf2, divmod(dji_st2, 2))
 
+                # SysMatA.iisubmat_dist requires the first index to precede the second
                 ji_st_pair = (ji_st1_, ji_st2_) if ji_st1_ <= ji_st2_ else (ji_st2_, ji_st1_)
                 ji_dist = SysMatA.iisubmat_dist(*ji_st_pair)
-                # print(ji_st_pair, ji_dist, self.iisubmats_ref[ji_dist] if ji_dist is not None else '')
+
+                # don't compute this A submatrix if the distance
+                # between these two InStamp's is out of range,
+                # or if this A submatrix will never be used
                 if ji_dist is None or (not sim_mode and self.iisubmats_ref[ji_dist] == 0): continue
+
                 if ji_st_pair not in self.iisubmats:
                     if sim_mode:
                         self.iisubmats[ji_st_pair] = None
@@ -842,26 +1250,50 @@ class SysMatA:
                         my_submat = iipsfovl(self.blk.instamps[ji_st1_[0]][ji_st1_[1]],
                                              self.blk.instamps[ji_st2_[0]][ji_st2_[1]] \
                                              if ji_st1_ != ji_st2_ else None)
+
+                        # although ji_psf1 always precedes ji_psf2, sometimes ji_st2_ precedes ji_st1_
+                        # for example, ji_psf1 = (0, 0), ji_psf2 = (0, 2), ji_st1_ = (1, 0), ji_st2_ = (0, 2)
+                        # in such (relatively rare) cases, we need to transpose the submatrix
                         if ji_st1_ <= ji_st2_:
                             self.iisubmats[ji_st_pair] = my_submat
                         else:
                             self.iisubmats[ji_st_pair] = my_submat.T
-                        # print(f'{ji_psf1=}', f'{ji_st1_=}', f'{ji_psf2=}', f'{ji_st2_=}', ji_st1_ <= ji_st2_)
-
-                    # The code below is incorrect in some rare cases.
-                    # self.iisubmats[ji_st_pair] = None if sim_mode else iipsfovl(
-                    #     self.blk.instamps[ji_st_pair[0][0]][ji_st_pair[0][1]],
-                    #     self.blk.instamps[ji_st_pair[1][0]][ji_st_pair[1][1]] \
-                    #     if ji_st_pair[0] != ji_st_pair[1] else None)
 
                     counter += 1
 
-        if not sim_mode:
+        if not sim_mode:  # remove the large PsfGrp and PsfOvl arrays and declare victory
+            if self.blk.instamps[ji_psf1[0]][ji_psf1[1]].inpsfs_ref == 0:
+                psfgrp1.clear()
+            if ji_psf1 != ji_psf2 and self.blk.instamps[ji_psf2[0]][ji_psf2[1]].inpsfs_ref == 0:
+                psfgrp2.clear()
+            del psfgrp1, psfgrp2
+
             iipsfovl.clear(); del iipsfovl
             print(f'finished computing {counter} input-input sub-matrices', '@', self.blk.timer(), 's')
 
-    def get_iisubmat(self, ji_st1: (int, int), ji_st2: (int, int), sim_mode: bool = False):
-        '''sim_mode: count references, no actual iisubmats returned.
+    def get_iisubmat(self, ji_st1: (int, int), ji_st2: (int, int),
+                     sim_mode: bool = False) -> np.array:
+        '''
+        Return a requested A submatrix.
+
+        This is the only public interface of this class.
+        For the sim_mode, see the docstring of SysMatA._compute_iisubmats.
+
+        Parameters
+        ----------
+        ji_st1 : (int, int)
+            Index of the first InStamp.
+        ji_st2 : (int, int)
+            Index of the second InStamp.
+        sim_mode : bool, optional
+            Whether to count references without actually computing submatrices.
+            The default is False.
+
+        Returns
+        -------
+        np.array, shape : (st1.pix_cumsum[-1], st2.pix_cumsum[-1])
+            The requested A submatrix.
+
         '''
 
         assert ji_st1 <= ji_st2, f'{ji_st1=} should precede {ji_st2=}'
@@ -870,77 +1302,108 @@ class SysMatA:
 
         if sim_mode: self.iisubmats_ref[ji_dist] += 1
         if (ji_st1, ji_st2) not in self.iisubmats:
-            self.compute_iisubmats(ji_st1, ji_st2, sim_mode)
+            self._compute_iisubmats(ji_st1, ji_st2, sim_mode)
         if sim_mode: return
 
         self.iisubmats_ref[ji_dist] -= 1
         if self.iisubmats_ref[ji_dist] > 0:
             return self.iisubmats[(ji_st1, ji_st2)]
         else:
+            # remove this A submatrix from iisubmats if it will never be referred to again
             arr = self.iisubmats[(ji_st1, ji_st2)]
             del self.iisubmats[(ji_st1, ji_st2)]
             return arr
 
 
 class SysMatB:
-    '''System matrix B attached to a Block instance.
+    '''
+    System matrix B attached to a coadd.Block instance.
 
-    INPORTANT: The -2 coefficient in Rowe+ 2011 Equation (18)
-    is NOT included in this program.
+    The symtem matrix B is defined in Rowe+ 2011 Equation (18).
+    INPORTANT: The -2 coefficient is NOT included in this program.
+
+    Methods
+    -------
+    __init__ : Constructor.
+    get_iosubmat : Return a requested B submatrix.
+
     '''
 
-    def __init__(self, blk):
+    def __init__(self, blk: 'coadd.Block') -> None:
+        '''
+        Constructor.
+
+        Parameters
+        ----------
+        blk : coadd.Block
+
+        Returns
+        -------
+        None.
+
+        '''
+
         self.blk = blk
 
-        self.iopsfovls = {}  # io stands for input-output
+        # dictionary of input-output PsfOvl's; io stands for input-output
+        # in the case of the system matrix B, storing PsfOvl's is more economical
+        self.iopsfovls = {}
+        # reference counts for the input-output PsfOvl's
         self.iopsfovls_ref = np.zeros((blk.cfg.n1//2+1, blk.cfg.n1//2+1), dtype=np.uint8)
 
-    @staticmethod
-    def iosubmat_dist(ji_st_in: (int, int), ji_st_out: (int, int)) -> int:
-        '''Calculate the "distance" between an input postage stamp
-        and the output postage stamp of interest to store the reference counts
-        in the 3-d array self.iosubmats_ref using indices (ji_st_out[0], ji_st_out[1], dist),
-        where dist is returned by this static method.
+    def get_iosubmat(self, ji_st_in: (int, int), ji_st_out: (int, int),
+                     sim_mode: bool = False) -> np.array:
+        '''
+        Return a requested B submatrix.
 
-        The "distance" is defined as follows:
-        +---+---+---+
-        | 6 | 7 | 8 |
-        +---+---+---+
-        | 3 | 4*| 5 |
-        +---+---+---+
-        | 0 | 1 | 2 |
-        +---+---+---+
-        where "*" denotes ji_st_out.
+        Note that this is the courterpart of the combination of
+        SysMatA.get_iisubmat and the _compute_iisubmats method behind it,
+        since SysMatB is much simpler than SysMatA.
 
-        Updated on 9/17/2023: Now the dist is only used for checking purposes.
+        For the sim_mode, see the docstring of SysMatA._compute_iisubmats.
+
+        Parameters
+        ----------
+        ji_st_in : (int, int)
+            Index of the InStamp.
+        ji_st_out : (int, int)
+            Index of the OutStamp.
+        sim_mode : bool, optional
+            Whether to count references without actually computing submatrices.
+            The default is False.
+
+        Returns
+        -------
+        np.array, shape : same as PsfOvl._call_io_cross
+            The requested B submatrix.
+
         '''
 
-        dj_st = ji_st_in[0] - ji_st_out[0]
-        if abs(dj_st) > 1: return None
-        di_st = ji_st_in[1] - ji_st_out[1]
-        if abs(di_st) > 1: return None
+        assert max(abs(ji_st_in[0] - ji_st_out[0]), abs(ji_st_in[1] - ji_st_out[1])) <= 1, \
+            f'distance between InStamp {ji_st_in} and OutStamp {ji_st_out} is out of range'
 
-        return (dj_st+1) * 3 + (di_st+1)
-
-    def get_iosubmat(self, ji_st_in: (int, int), ji_st_out: (int, int), sim_mode: bool = False):
-        '''sim_mode: count references, no actual iosubmats returned.
-        '''
-
-        dist = SysMatB.iosubmat_dist(ji_st_in, ji_st_out)
-        assert dist is not None, f'distance between InStamp {ji_st_in} and OutStamp {ji_st_out} is out of range'
-
+        # identify InStamp instance harboring input PsfGrp instance
         ji_st_inpsf = SysMatA.ji_st2psf(ji_st_in)
-        inpsf_key = tuple(ji//2 for ji in ji_st_inpsf)
+        # since iopsfovls_ref is an "shrunk" array, we need a conversion here
+        inpsf_key = tuple(ji >> 1 for ji in ji_st_inpsf)
 
         if sim_mode: self.iopsfovls_ref[inpsf_key] += 1
         if inpsf_key not in self.iopsfovls:
+            # get the input PsfGrp array and make the input-output PsfOvl instance
             inpsfgrp = self.blk.instamps[ji_st_inpsf[0]][ji_st_inpsf[1]].get_inpsfgrp(sim_mode)
-            self.iopsfovls[inpsf_key] = PSFOvl(inpsfgrp, self.blk.outpsfgrp) if not sim_mode else None
+            self.iopsfovls[inpsf_key] = PsfOvl(inpsfgrp, self.blk.outpsfgrp) if not sim_mode else None
+
+            # remove the input PsfGrp array if it will never be referred to again
+            if not sim_mode and self.blk.instamps[ji_st_inpsf[0]][ji_st_inpsf[1]].inpsfs_ref == 0:
+                inpsfgrp.clear()
+            del inpsfgrp
         if sim_mode: return
 
         self.iopsfovls_ref[inpsf_key] -= 1
         iosubmat = self.iopsfovls[inpsf_key](self.blk.instamps [ji_st_in [0]][ji_st_in [1]],
                                              self.blk.outstamps[ji_st_out[0]][ji_st_out[1]])
+
+        # clear this input-output PsfOvl from iopsfovls if it will never be referred to again
         if self.iopsfovls_ref[inpsf_key] == 0:
             self.iopsfovls[inpsf_key].clear(); del self.iopsfovls[inpsf_key]
         return iosubmat

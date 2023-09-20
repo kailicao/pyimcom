@@ -25,9 +25,9 @@
         "dc2_imsim",
         8
     ],
-    "OUT": "/users/PAS2055/kailicao/pyimcom/test/test4C_Yband",
+    "OUT": "/users/PAS2055/kailicao/pyimcom_dev/test/test4C_Yband",
     "STOP": 16,
-    "INPAD": 1.25,
+    "INPAD": 0.625,
     "PAD": 2,
     "EXTRASMOOTH": 0.9554870253240214,
     "PMASK": "/users/PCON0003/cond0007/imcom/coadd-test-fall2022/permanent_mask_220730.fits",
