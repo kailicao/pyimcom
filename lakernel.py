@@ -3,7 +3,7 @@ from warnings import warn
 import numpy as np
 from scipy.linalg import cholesky, cho_solve
 
-from config import Timer
+from .config import Timer
 from pyimcom_croutines import build_reduced_T_wrap
 
 
@@ -91,11 +91,3 @@ class LAKernel:
             if timing: print('C function took', timer(), 's')
 
         return (k_, S_, UC_, T_)
-
-
-class PyKernel:
-    '''Alternative to LAKernel using pure Python (with Numba?),
-    which can be used as: from lakernel import PyKernel as LAKernel.
-    '''
-
-    pass

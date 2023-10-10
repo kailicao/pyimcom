@@ -1,6 +1,7 @@
-import os
 from os.path import exists
+import shutil
 from itertools import combinations, product
+import gc
 
 from astropy import units as u
 import numpy as np
@@ -10,16 +11,46 @@ from astropy import wcs
 import fitsio
 import matplotlib.pyplot as plt
 
-from config import Timer, Settings as Stn, Config
-from psfutil import PSFGrp, PSFOvl, SysMatA, SysMatB
-from lakernel import LAKernel
+from .config import Timer, Settings as Stn, Config
+from .psfutil import PSFGrp, PSFOvl, SysMatA, SysMatB
+from .lakernel import LAKernel
 
 
 class InImage:
-    '''Input image attached to a Block instance.
+    '''
+    Input image attached to a Block instance.
+
+    Methods
+    -------
+    __init__ : Constructor.
+    generate_idx_grid (staticmethod) : Generate a grid of indices.
+    _inpix2world2outpix : Composition of pix2world and world2pix.
+    partition_pixels : Partition input pixels into postage stamps.
+    extract_layers : Make and extract input layers.
+    clear : Free up memory space.
+
+    smooth_and_pad (staticmethod): Utility to smear a PSF with a tophat and a Gaussian.
+    get_psf_and_distort_mat: Get input PSF array and the corresponding distortion matrix.
+
     '''
 
-    def __init__(self, blk, idsca: (int, int)):
+    def __init__(self, blk: 'Block', idsca: (int, int)) -> None:
+        '''
+        Constructor.
+
+        Parameters
+        ----------
+        blk : Block
+            The Block instance to which this InImage instance is attached to.
+        idsca : (int, int)
+            ID of observation and SCA used.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         self.blk = blk
         self.idsca = idsca
 
@@ -31,28 +62,70 @@ class InImage:
                 self.inwcs = wcs.WCS(f[Stn.hdu_with_wcs].header)
 
     @staticmethod
-    def generate_idx_grid(xs: np.ndarray, ys: np.ndarray):
-        '''Both xs and ys should be 1-d arrays.
-        Return an array of shape (xs.shape[0] * ys.shape[0], 2)
-        which exhausts all combinations of xs elements and ys elements.
+    def generate_idx_grid(xs: np.array, ys: np.array) -> np.array:
+        '''
+        Generate a grid of indices.
+
+        Parameters
+        ----------
+        xs : np.array, shape : (nx,)
+        ys : np.array, shape : (ny,)
+            x and y indices of the grid.
+
+        Returns
+        -------
+        np.array, shape : (nx * ny, 2)
+            All combinations of xs elements and ys elements.
+
         '''
 
         return np.moveaxis(np.array(np.meshgrid(xs, ys)), 0, -1).reshape(-1, 2)
-        # return np.array([np.tile(xs[None, :], (ys.shape[0], 1)).ravel(),
-        #                  np.tile(ys[:, None], (1, xs.shape[0])).ravel()]).T
 
-    def inpix2world2outpix(self, inxys):
+    def _inpix2world2outpix(self, inxys: np.array) -> np.array:
+        '''
+        Composition of pix2world and world2pix.
+
+        Parameters
+        ----------
+        inxys : np.array, shape : (npix, 2)
+            x and y positions in the input image coordinates.
+
+        Returns
+        -------
+        np.array, shape : (npix, 2)
+            x and y positions in the output block coordinates.
+
+        '''
+
         return self.blk.outwcs.all_world2pix(
                     self.inwcs.all_pix2world(inxys, 0), 0)
 
-    def partition_pixels(self, sp_res: int = 90, relax: float = 1.05,
-                         visualize: bool = False):
-        print(f'partitioning pixels from InImage {self.idsca}', '@', self.blk.timer(), 's')
+    def partition_pixels(self, sp_res: int = 90, relax_coef: float = 1.05,
+                         visualize: bool = False) -> None:
+        '''
+        Partition input pixels into postage stamps.
+
+        Parameters
+        ----------
+        sp_res : int, optional
+            Resolution of the sparse grid. The default is 90.
+        relax_coef : float, optional
+            Coefficient to create enough space for input pixels. The default is 1.05.
+        visualize : bool, optional
+            Whether to visualize the partition process and results. The default is False.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        print(f'> partitioning pixels from InImage {self.idsca}', '@', self.blk.timer(), 's')
 
         # create a sparse grid of pixels to locate regions of interest
         sp_arr = np.linspace(0, Stn.sca_nside, sp_res+1, dtype=np.uint16)
         sp_inxys = InImage.generate_idx_grid(sp_arr, sp_arr)
-        sp_outxys = self.inpix2world2outpix(sp_inxys).T.reshape(2, sp_res+1, sp_res+1)
+        sp_outxys = self._inpix2world2outpix(sp_inxys).T.reshape(2, sp_res+1, sp_res+1)
         del sp_inxys
 
         if visualize:
@@ -63,10 +136,10 @@ class InImage:
                 plt.show()
 
         # limits for stamp indices
-        pix_lower = (                 self.blk.cfg.postage_pad-1) * self.blk.cfg.n2 - 0.5  #  1 x n2
-        pix_upper = (self.blk.cfg.n1P-self.blk.cfg.postage_pad+1) * self.blk.cfg.n2 - 0.5  # 51 x n2
+        pix_lower = (                 self.blk.cfg.postage_pad-1) * self.blk.cfg.n2 - 0.5  #  1 x n2 by default
+        pix_upper = (self.blk.cfg.n1P-self.blk.cfg.postage_pad+1) * self.blk.cfg.n2 - 0.5  # 51 x n2 by default
 
-        self.is_relevant = False  # whether the inimage is relevant
+        self.is_relevant = False  # whether the input image is relevant to the output block
         relevant_matrix = np.zeros((sp_res, sp_res), dtype=bool)
         for j in range(1, sp_res):
             for i in range(1, sp_res):
@@ -90,16 +163,18 @@ class InImage:
             del self.inwcs, sp_arr, relevant_matrix
             return
 
-        # maximum number of pixels per stamp (for this InImage)
-        # relax: the actual maximum may be larger due to distortions
+        # maximum number of input pixels per postage stamp (from this InImage)
+        # relax_coef: the actual maximum may be larger due to distortions
         npixmax = int(((self.blk.cfg.n2 * self.blk.cfg.dtheta * u.degree.to('arcsec')) /\
-                       (Stn.pixscale_native / Stn.arcsec) + 1) ** 2 * relax)  # default: about 160
+                       (Stn.pixscale_native / Stn.arcsec) + 1) ** 2 * relax_coef)  # default: about 160
 
-        # arrays for indices and number of pixels in each stamp (for this InImage)
+        # arrays for indices (in the input image grid),
         self.y_idx = np.zeros((self.blk.cfg.n1+2, self.blk.cfg.n1+2, npixmax), dtype=np.uint16)
         self.x_idx = np.zeros((self.blk.cfg.n1+2, self.blk.cfg.n1+2, npixmax), dtype=np.uint16)
+        # positions (in the output block coordinates),
         self.y_val = np.zeros((self.blk.cfg.n1+2, self.blk.cfg.n1+2, npixmax), dtype=np.float32)
         self.x_val = np.zeros((self.blk.cfg.n1+2, self.blk.cfg.n1+2, npixmax), dtype=np.float32)
+        # and number of pixels in each postage stamp (from this InImage)
         self.pix_count = np.zeros((self.blk.cfg.n1+2, self.blk.cfg.n1+2), dtype=np.uint16)
 
         # load masks here
@@ -112,7 +187,7 @@ class InImage:
                 left, right = sp_arr[i_sp:i_sp+2]
                 bottom, top = sp_arr[j_sp:j_sp+2]
                 inxys = InImage.generate_idx_grid(np.arange(left, right), np.arange(bottom, top))
-                outxys = self.inpix2world2outpix(inxys).T.reshape(2, top-bottom, right-left)
+                outxys = self._inpix2world2outpix(inxys).T.reshape(2, top-bottom, right-left)
 
                 for j in range(top-bottom):
                     for i in range(right-left):
@@ -137,12 +212,21 @@ class InImage:
             plt.colorbar()
             plt.show()
 
-        print(np.sum(self.pix_count), 'pixels selected from idsca', self.idsca)
+        print('-->', np.sum(self.pix_count), 'pixels selected from idsca', self.idsca, end='; ')
         self.max_count = np.max(self.pix_count)
         print('the most populous stamp has', self.max_count, 'pixels')
         del sp_arr, relevant_matrix, mask
 
-    def extract_layers(self):
+    def extract_layers(self) -> None:
+        '''
+        Make and extract input layers.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         assert self.exists, 'Error: input image and/or input psf do(es) not exist'
 
         self.data = np.zeros((self.blk.cfg.n_inframe, self.blk.cfg.n1+2,
@@ -160,17 +244,40 @@ class InImage:
         # advanced layers to be made and extracted here
 
         del indata, self.y_idx, self.x_idx
-        print(f'finished extracting layers for InImage {self.idsca}', '@', self.blk.timer(), 's')
+        print(f'--> finished extracting layers for InImage {self.idsca}', '@', self.blk.timer(), 's')
 
-    def clear(self):
+    def clear(self) -> None:
+        '''
+        Free up memory space.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         if self.is_relevant:
             del self.y_val, self.x_val, self.pix_count, self.data
 
     @staticmethod
-    def smooth_and_pad(inArray, tophatwidth=0., gaussiansigma=0.):
-        '''Utility to smear a PSF with a tophat and a Gaussian.
+    def smooth_and_pad(inArray: np.array, tophatwidth: float = 0.0,
+                       gaussiansigma: float = 0.0) -> np.array:
+        '''
+        Utility to smear a PSF with a tophat and a Gaussian.
 
-        tophat --> width, Gaussian --> sigma in units of the pixels given (not native pixel).
+        Parameters
+        ----------
+        inArray : np.array, shape : (ny, nx)
+            Input PSF array to be smeared.
+        tophatwidth : float, optional
+        gaussiansigma : float, optional
+            For both: In units of the pixels given (not native pixel). The default is 0.0.
+
+        Returns
+        -------
+        outArray : np.array, shape : (ny+npad*2, nx+npad*2)
+            Smeared input PSF array.
+
         '''
 
         npad = int(np.ceil(tophatwidth + 6*gaussiansigma + 1))
@@ -193,7 +300,25 @@ class InImage:
         outArray = np.real(np.fft.ifft2(outArrayFT))
         return outArray
 
-    def get_psf_and_distort_mat(self, j_st: int, i_st: int):
+    def get_psf_and_distort_mat(self, j_st: int, i_st: int) -> tuple:
+        '''
+        Get input PSF array and the corresponding distortion matrix.
+
+        This is an interface for psfutil.PSFGrp._build_inpsfgrp.
+
+        Parameters
+        ----------
+        j_st, i_st : int, int
+            InStamp index.
+
+        Returns
+        -------
+        tuple : (this_psf, distort_matrice)
+            Smeared input PSF array : np.array, see smooth_and_pad
+            and distortion matrix : np.array, shape : (2, 2)
+
+        '''
+
         fname = self.blk.cfg.inpsf_path+'/dc2_psf_{:d}.fits'.format(self.idsca[0])
         assert exists(fname), 'Error: input psf does not exist'
 
@@ -216,19 +341,45 @@ class InImage:
 
 
 class InStamp:
-    '''Data structure for input pixel positions and signals
-    referred to as an "input postage stamp."
+    '''
+    Data structure for input pixel positions and signals.
+
+    Methods
+    -------
+    __init__ : Constructor.
+    make_selection : Return the indices of selected input pixels.
+    get_inpsfgrp : Get the input PSFGrp attached to this InStamp.
+    clear : Free up memory space.
+
     '''
 
-    def __init__(self, blk, j_st, i_st):
+    def __init__(self, blk: 'Block', j_st: int, i_st: int) -> None:
+        '''
+        Constructor.
+
+        Parameters
+        ----------
+        blk : Block
+            The Block instance to which this InStamp instance is attached to.
+        j_st, i_st : int, int
+            InStamp index.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         self.blk = blk
         self.j_st = j_st
         self.i_st = i_st
 
+        # numbers of input pixels from input images and the cumulative sum
         self.pix_count = np.array([inimage.pix_count[j_st, i_st]
                                    for inimage in blk.inimages], dtype=np.uint16)
-        # print(f'{j_st=}', f'{i_st=}', f'{self.pix_count=}')
         self.pix_cumsum = np.cumsum([0] + list(self.pix_count), dtype=np.uint16)
+
+        # input pixel positions and signals
         self.y_val = np.empty((self.pix_cumsum[-1],), dtype=np.float32)
         self.x_val = np.empty((self.pix_cumsum[-1],), dtype=np.float32)
         self.data = np.empty((blk.cfg.n_inframe, self.pix_cumsum[-1]), dtype=np.float32)
@@ -241,50 +392,136 @@ class InStamp:
             self.data[:, self.pix_cumsum[i_im]:self.pix_cumsum[i_im+1]] =\
                 inimage.data[:, j_st, i_st, :self.pix_count[i_im]]
 
-        self.inpsfs = None
-        self.inpsfs_ref = 0
+        self.inpsfgrp = None
+        self.inpsfgrp_ref = 0
 
-    def make_selection(self, pivot: (float, float) = None, radius: float = None):
-        '''Return the indices of selected input pixels.
+    def make_selection(self, pivot: (float, float) = (None, None),
+                       radius: float = None) -> np.array:
+        '''
+        Return the indices of selected input pixels.
+
+        This is an interface for OutStamp._process_input_stamps.
+
+        Parameters
+        ----------
+        pivot : (float, float), optional
+            Pivot position in the output block coordinates.
+            If None in one direction, select input pixels according to the other;
+            if None in both direction, select all input pixels.
+            The default is (None, None).
+        radius : float, optional
+            Select input pixels within this radius. The default is None.
+
+        Returns
+        -------
+        np.array, shape : (npix,)
+            Indices of selected input pixels.
+            None if selecting all input pixels.
+
         '''
 
-        if radius is None:  # select all pixels
-            return np.arange(self.pix_cumsum[-1], dtype=np.uint16)
+        if pivot == (None, None) or radius is None:
+            return None  # select all pixels
 
-        dist = np.sqrt(np.square(self.x_val - pivot[0]) +
-                       np.square(self.y_val - pivot[1]))
-        return np.array(np.where(dist < radius)[0], dtype=np.uint16)
+        dist_sq = np.zeros((self.pix_cumsum[-1],))
+        if pivot[0] is not None:
+            dist_sq += np.square(self.x_val - pivot[0])
+        if pivot[1] is not None:
+            dist_sq += np.square(self.y_val - pivot[1])
 
-    def get_inpsfgrp(self, sim_mode: bool = False):
+        selection = np.array(np.where(dist_sq < radius**2)[0], dtype=np.uint16)
+        return selection if (selection.shape[0] < self.pix_cumsum[-1]) else None
+
+    def get_inpsfgrp(self, sim_mode: bool = False) -> None:
+        '''
+        Get the input PSFGrp attached to this InStamp.
+
+        This is an interface for psfutil.SysMatA._compute_iisubmats
+        and psfutil.SysMatB.get_iosubmat.
+
+        Parameters
+        ----------
+        sim_mode : bool, optional
+            Whether to count references without actually making inpsfgrp.
+            See the docstring of psfutil.SysMatA._compute_iisubmats.
+            The default is False.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         if sim_mode:  # count references, no actual inpsfgrp invovled
-            self.inpsfs_ref += 1
+            self.inpsfgrp_ref += 1
             return
 
-        if self.inpsfs is None:
-            self.inpsfs = PSFGrp(in_or_out=True, inst=self)
+        if self.inpsfgrp is None:
+            self.inpsfgrp = PSFGrp(in_or_out=True, inst=self)
 
-        self.inpsfs_ref -= 1
-        if self.inpsfs_ref > 0:
-            return self.inpsfs
+        self.inpsfgrp_ref -= 1
+        if self.inpsfgrp_ref > 0:
+            return self.inpsfgrp
         else:
-            inpsfs = self.inpsfs
-            del self.inpsfs;self.inpsfs = None
-            return inpsfs
+            inpsfgrp = self.inpsfgrp
+            del self.inpsfgrp; self.inpsfgrp = None
+            return inpsfgrp
 
-    def clear(self):
+    def clear(self) -> None:
+        '''
+        Free up memory space.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         del self.pix_count, self.pix_cumsum
         del self.y_val, self.x_val, self.data
 
 
 class OutStamp:
-    '''Postage stamp coaddition.
+    '''
+    Postage stamp coaddition.
+
+    Methods
+    -------
+    __init__ : Constructor.
+    _process_input_stamps : Fetch and process input postage stamps.
+
+    __call__ : Build system matrices and perform coaddition.
+    _build_system_matrices : Build system matrices and coaddition matrices.
+    _visualize_system_matrices : Visualize system matrices.
+    _visualize_coadd_matrices : Visualize coaddition matrices.
+    _perform_coaddition : Perform the actual multiplication.
+    _show_in_and_out_images : Display input and output images.
+    _study_individual_pixels : Study individual input and output pixels.
+    clear : Free up memory space.
+
     '''
 
-    uctarget = [1.e-6]
+    uctarget = [1.0e-6]
     targetleak = np.array(uctarget)
     imcom_smax = 0.5
 
-    def __init__(self, blk, j_st: int, i_st: int):
+    def __init__(self, blk: 'Block', j_st: int, i_st: int) -> None:
+        '''
+        Constructor.
+
+        Parameters
+        ----------
+        blk : Block
+            The Block instance to which this InStamp instance is attached to.
+        j_st, i_st : int, int
+            OutStamp index.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         self.blk = blk
         self.j_st = j_st
         self.i_st = i_st
@@ -302,6 +539,7 @@ class OutStamp:
             blk.sysmata.get_iisubmat(*ji_st_pair, sim_mode=True)
 
         # limit y and x positions of this output postage stamp, all integers
+        # not including the transition pixels (of which the number is set by fade_kernel)
         self.bottom = (blk.cfg.postage_pad-1+j_st) * blk.cfg.n2
         self.top    = self.bottom + blk.cfg.n2-1
         self.left   = (blk.cfg.postage_pad-1+i_st) * blk.cfg.n2
@@ -312,23 +550,13 @@ class OutStamp:
         self.yx_val = np.mgrid[self.bottom-fade_kernel:self.top+fade_kernel+1,
                                self.left-fade_kernel:self.right+fade_kernel+1]
 
-        self.process_input_stamps()
+        self._process_input_stamps()
 
-    def __call__(self, visualize: bool = False,
-                 save_abc: bool = False, save_t: bool = False):
-        print(f'coadding OutStamp {(self.j_st, self.i_st)}', '@', self.blk.timer(), flush=True)
-        self.build_system_matrices(visualize, save_abc)
-        self.perform_coaddition(visualize, save_t)
-        print()
+    def _process_input_stamps(self, visualize: bool = False) -> None:
+        '''
+        Fetch and process input postage stamps.
 
-    def process_input_stamps(self, visualize: bool = False):
-        # fetch instamps and select input pixels
-        self.instamps   = [None for _ in range(9)]
-        self.selections = [None for _ in range(9)]
-        self.inpix_count = np.zeros((9,), dtype=np.uint16)
-        radius = self.blk.cfg.n2  # acceptance radius = postage stamp size
-
-        '''Select input pixels to form a region like this:
+        This method selects input pixels to form a region like this:
         +-----+-----+-----+
         |   **|*****|**   |
         | ****|*****|**** |
@@ -340,18 +568,39 @@ class OutStamp:
         |   **|*****|**   |
         +-----+-----+-----+
         where the central postage stamp is the OutStamp we are coadding.
+
+        Parameters
+        ----------
+        visualize : bool, optional
+            Whether to visualize the process. The default is False.
+
+        Returns
+        -------
+        None.
+
         '''
 
+        # fetch instamps and select input pixels
+        self.instamps   = [None for _ in range(9)]
+        self.selections = [None for _ in range(9)]
+        self.inpix_count = np.zeros((9,), dtype=np.uint16)
+
+        # acceptance radius in units of output pixels
+        radius = (self.blk.cfg.instamp_pad / Stn.arcsec) \
+        / (self.blk.cfg.dtheta * u.degree.to('arcsec')) \
+        + self.blk.cfg.fade_kernel * np.sqrt(2.0)
+
+        # now select input pixels
         for idx, ji_st_in in enumerate(self.ji_st_in_s):
             self.instamps[idx] = self.blk.instamps[ji_st_in[0]][ji_st_in[1]]
-            if ji_st_in[0] == self.j_st or ji_st_in[1] == self.i_st:
-                self.inpix_count[idx] = self.instamps[idx].pix_cumsum[-1]
-                continue
 
-            x_pivot = (self.left-0.5) if (ji_st_in[1] < self.i_st) else (self.right+0.5)
-            y_pivot = (self.bottom-0.5) if (ji_st_in[0] < self.j_st) else (self.top+0.5)
+            x_pivot = [self.left-0.5, None, self.right+0.5][ji_st_in[1]-self.i_st+1]
+            y_pivot = [self.bottom-0.5, None, self.top+0.5][ji_st_in[0]-self.j_st+1]
             self.selections[idx] = self.instamps[idx].make_selection((x_pivot, y_pivot), radius)
-            self.inpix_count[idx] = self.selections[idx].shape[0]
+            if self.selections[idx] is None:
+                self.inpix_count[idx] = self.instamps[idx].pix_cumsum[-1]
+            else:
+                self.inpix_count[idx] = self.selections[idx].shape[0]
 
         self.inpix_cumsum = np.cumsum([0] + list(self.inpix_count), dtype=np.uint16)
 
@@ -381,7 +630,50 @@ class OutStamp:
         self.inx_val = np.hstack(inx_val); inx_val.clear(); del inx_val
         self.indata  = np.hstack(indata);  indata.clear();  del indata
 
-    def build_system_matrices(self, visualize: bool = False, save_abc: bool = False):
+    def __call__(self, visualize: bool = False,
+                 save_abc: bool = False, save_t: bool = False) -> None:
+        '''
+        Build system matrices and perform coaddition.
+
+        Parameters
+        ----------
+        visualize : bool, optional
+            Whether to visualize the process. The default is False.
+        save_abc : bool, optional
+            Whether to save system matrices. The default is False.
+        save_t : bool, optional
+            Whether to save coaddition matrices. The default is False.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        print(f'> coadding OutStamp {(self.j_st, self.i_st)}', '@', self.blk.timer(), flush=True)
+        self._build_system_matrices(visualize, save_abc)
+        self._perform_coaddition(visualize, save_t)
+        print()
+
+    def _build_system_matrices(self, visualize: bool = False, save_abc: bool = False) -> None:
+        '''
+        Build system matrices and coaddition matrices.
+
+        This method probably needs to be split.
+
+        Parameters
+        ----------
+        visualize : bool, optional
+            Whether to visualize the process. The default is False.
+        save_abc : bool, optional
+            Whether to save system matrices. The default is False.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         # the A-matrix first
         self.sysmata = np.zeros((self.inpix_cumsum[-1], self.inpix_cumsum[-1]))  # dtype=np.float64
 
@@ -415,9 +707,6 @@ class OutStamp:
         self.mhalfb = np.zeros((self.blk.outpsfgrp.n_psf, self.blk.cfg.n2f**2,
                                 self.inpix_cumsum[-1]))  # dtype=np.float64
 
-        # for idx, ji_st_in, selection in zip(range(9), self.ji_st_in_s, self.selections):
-        #     self.mhalfb[:, :, self.inpix_cumsum[idx]:self.inpix_cumsum[idx+1]] =\
-        #     self.blk.sysmatb.get_iosubmat(ji_st_in, (self.j_st, self.i_st), selection)
         for idx, ji_st_in in zip(range(9), self.ji_st_in_s):
             self.mhalfb[:, :, self.inpix_cumsum[idx]:self.inpix_cumsum[idx+1]] =\
             self.blk.sysmatb.get_iosubmat(ji_st_in, (self.j_st, self.i_st))
@@ -427,9 +716,9 @@ class OutStamp:
 
         if visualize:
             print()
-            self.visualize_system_matrices()
+            self._visualize_system_matrices()
 
-        print(f'getting coadd matrix for OutStamp {(self.j_st, self.i_st)}', '@', self.blk.timer(), 's', flush=True)
+        print(f'--> getting coadd matrix for OutStamp {(self.j_st, self.i_st)}', '@', self.blk.timer(), 's', flush=True)
         # kappa_, Sigma_, UC_: (n_out, n_outpix); self.T: (n_out, n_outpix, n_inpix)
         kappa_, Sigma_, UC_, self.T = LAKernel.get_coadd_matrix_discrete(
             self.sysmata, self.mhalfb, self.outovlc,
@@ -444,10 +733,19 @@ class OutStamp:
 
         if visualize:
             print()
-            self.visualize_coadd_results()
+            self._visualize_coadd_matrices()
 
-    def visualize_system_matrices(self):
-        print('OutStamp.visualize_system_matrices')
+    def _visualize_system_matrices(self) -> None:
+        '''
+        Visualize system matrices.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        print('OutStamp._visualize_system_matrices')
 
         # the A-matrix first
         print(f'{self.sysmata.shape=}')  # (n_inpix, n_inpix)
@@ -477,8 +775,17 @@ class OutStamp:
         # and C
         print(f'{self.outovlc.shape=}')  # (n_out,)
 
-    def visualize_coadd_results(self):
-        print('OutStamp.visualize_coadd_results')
+    def _visualize_coadd_matrices(self) -> None:
+        '''
+        Visualize coaddition matrices.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        print('OutStamp._visualize_coadd_matrices')
 
         for j_out, T_ in enumerate(self.T):
             # print(f'{j_out=}')
@@ -498,15 +805,29 @@ class OutStamp:
             plt.colorbar()
             plt.show()
 
-    def perform_coaddition(self, visualize: bool = False,
-                           save_t: bool = False, use_trunc_sinc: bool = True):
-        '''use_trunc_sinc: argument for coadd_utils.trapezoid
+    def _perform_coaddition(self, visualize: bool = False,
+                            save_t: bool = False, use_trunc_sinc: bool = True) -> None:
+        '''
+        Perform the actual multiplication.
+
+        Parameters
+        ----------
+        visualize : bool, optional
+            Whether to visualize the process. The default is False.
+        save_t : bool, optional
+            Whether to save coaddition matrices. The default is False.
+        use_trunc_sinc : bool, optional
+            Argument for coadd_utils.trapezoid. The default is True.
+
+        Returns
+        -------
+        None.
+
         '''
 
         # coadd_utils.trapezoid
         fk2 = 2*self.blk.cfg.fade_kernel  # shortcut
         if fk2 > 0:
-            ar = np.ones((self.blk.cfg.n2f, self.blk.cfg.n2f))
             s = np.arange(1, fk2+1, dtype=float) / (fk2+1)
             if use_trunc_sinc:
                 s -= np.sin(2*np.pi*s)/(2*np.pi)
@@ -525,9 +846,9 @@ class OutStamp:
 
         if visualize:
             print()
-            self.show_in_and_out_images()
+            self._show_in_and_out_images()
             print()
-            self.study_individual_pixels()
+            self._study_individual_pixels()
         del self.iny_val, self.inx_val, self.indata
 
         Tsum_partial = np.sum(self.T, axis=1)
@@ -549,12 +870,19 @@ class OutStamp:
         del Tsum_partial
         self.Tsum /= self.Tsum.sum(axis=1)[:, None]
 
-    def show_in_and_out_images(self):
-        print('OutStamp.show_in_and_out_images')
+    def _show_in_and_out_images(self) -> None:
+        '''
+        Display input and output images.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        print('OutStamp._show_in_and_out_images')
 
         for j_in in range(self.blk.cfg.n_inframe):
-            # print(f'{j_in=}')
-
             plt.scatter(self.inx_val, self.iny_val, c=self.indata[j_in], cmap='viridis', s=5)
             plt.colorbar()
             for x in [self.left, self.right]: plt.axvline(x, c='r', ls='--')
@@ -566,8 +894,17 @@ class OutStamp:
             plt.colorbar()
             plt.show()
 
-    def study_individual_pixels(self):
-        print('OutStamp.study_individual_pixels')
+    def _study_individual_pixels(self) -> None:
+        '''
+        Study individual input and output pixels.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        print('OutStamp._study_individual_pixels')
 
         accrad = np.arange(15, 140, 5)  # acceptance radius in units of output pixels
         closest_inpix = []  # indices of input pixels closest to the corners and the center
@@ -612,7 +949,16 @@ class OutStamp:
                         self.iny_val[in_idx]-(self.bottom-fk2//2), c='r', s=2)
             plt.show()
 
-    def clear(self):
+    def clear(self) -> None:
+        '''
+        Free up memory space.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         del self.inpix_count, self.inpix_cumsum
         self.selections.clear(); del self.selections
         del self.kappa, self.Sigma, self.UC, self.Tsum
@@ -620,34 +966,97 @@ class OutStamp:
 
 
 class Block:
-    '''Output block coaddition.
+    '''
+    Output block coaddition.
+
+    Methods
+    -------
+    __init__ : Constructor.
+    __call__ : Coadd this block.
+    parse_config : Parse the configuration.
+    _get_obs_cover: Get observations relevant to this Block.
+    process_input_images : Process input images.
+    build_input_stamps : Build input stamps from input images.
+    _output_stamp_wrapper : Wrapper for output stamp coaddition.
+    coadd_output_stamps : Coadd output stamps using input stamps.
+    build_output_file : Build the output FITS file.
+    clear_all : Free up all memory spaces.
+
     '''
 
-    def __init__(self, cfg: Config = None, this_sub: int = 0, run_coadd: bool = True):
+    def __init__(self, cfg: Config = None, this_sub: int = 0,
+                 run_coadd: bool = True) -> None:
+        '''
+        Constructor.
+
+        Parameters
+        ----------
+        cfg : Config, optional
+            Configuration for this Block. The default is None.
+        this_sub : int, optional
+            Number determining the location of this Block in the mosaic. The default is 0.
+        run_coadd : bool, optional
+            Whether to coadd this block. The default is True.
+            Turn this off if you want to perform the procedure manually.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         self.timer = Timer()
         self.cfg = cfg
-        self.this_sub = this_sub
         if cfg is None: self.cfg = Config()  # use the default config
+
+        PSFGrp.setup(npixpsf=cfg.inpsf_npix, oversamp=cfg.inpsf_oversamp)
+        self.this_sub = this_sub
         if run_coadd: self()
 
-    def __call__(self):
+    def __call__(self) -> None:
+        '''
+        Coadd this block.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         print('> Block.parse_config', '@', self.timer(), 's')
         self.parse_config()
+        # this produces: obsdata, outwcs, outpsfgrp, outpsfovl
+
         print('> Block.process_input_images', '@', self.timer(), 's')
         self.process_input_images()
+        # this produces: obslist, inimages (1-d list), n_inimage
+
         print('> Block.build_input_stamps', '@', self.timer(), 's')
         self.build_input_stamps()
+        # this produces: instamps (2-d list)
 
         print('> Block.coadd_output_stamps(sim_mode=True)', '@', self.timer(), 's')
         self.coadd_output_stamps(sim_mode=True)
-        print('> Block.coadd_output_stamps(sim_mode=False)', '@', self.timer(), 's')
+        # this produces: sysmata (object), sysmatb (object), outstamps (2-d list)
+        print('> Block.coadd_output_stamps(sim_mode=False)', '@', self.timer(), 's', end='\n\n')
         self.coadd_output_stamps(sim_mode=False)
-        print('> Block.build_output_image', '@', self.timer(), 's')
-        self.build_output_image()
+        # this produces: out_map, fidelity_map, kappamin, kappamax, T_weightmap
+
+        print('> Block.build_output_file', '@', self.timer(), 's')
+        self.build_output_file()
         print('> Block.clear_all', '@', self.timer(), 's')
         self.clear_all()
 
-    def parse_config(self):
+    def parse_config(self) -> None:
+        '''
+        Parse the configuration.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         # Get observation table
         assert self.cfg.obsfile is not None, 'Error: no obsfile found'
         print('Getting observations from {:s}'.format(self.cfg.obsfile))
@@ -698,8 +1107,23 @@ class Block:
         # and the output PSFs and target leakages
         # (this will have to be modified for multiple outputs)
         self.outpsfgrp = PSFGrp(in_or_out=False, blk=self)
+        self.outpsfovl = PSFOvl(self.outpsfgrp, None)
 
-    def get_obs_cover(self, radius):
+    def _get_obs_cover(self, radius: float) -> None:
+        '''
+        Get observations relevant to this Block.
+
+        Parameters
+        ----------
+        radius : float
+            Search for input images within this radius.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         self.obslist = []
         n_obs_tot = len(self.obsdata.field(0))
 
@@ -717,9 +1141,9 @@ class Block:
         z2 = np.cos(self.obsdata['dec']*Stn.degree)*x1 + \
             np.sin(self.obsdata['dec']*Stn.degree)*z1
         # and finally the PA direction
-        X = (-np.sin(self.obsdata['pa']*Stn.degree)*x2 -
+        X = (-np.sin(self.obsdata['pa']*Stn.degree)*x2 - \
              np.cos(self.obsdata['pa']*Stn.degree)*y2) / Stn.degree
-        Y = (-np.cos(self.obsdata['pa']*Stn.degree)*x2 +
+        Y = (-np.cos(self.obsdata['pa']*Stn.degree)*x2 + \
              np.sin(self.obsdata['pa']*Stn.degree)*y2) / Stn.degree
         #
         # throw away points in wrong hemisphere -- important since in orthographic projection, can have (X,Y)=0 for antipodal point
@@ -733,12 +1157,21 @@ class Block:
 
         self.obslist.sort()
 
-    def process_input_images(self):
+    def process_input_images(self) -> None:
+        '''
+        Process input images.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         ### Now figure out which observations we need ###
 
         search_radius = Stn.sca_sidelength / np.sqrt(2.) / Stn.degree +\
                         self.cfg.NsideP * self.cfg.dtheta / np.sqrt(2.)
-        self.get_obs_cover(search_radius)
+        self._get_obs_cover(search_radius)
         print(len(self.obslist), 'observations within range ({:7.5f} deg)'.format(search_radius),
               'filter =', self.cfg.use_filter, '({:s})'.format(Stn.RomanFilters[self.cfg.use_filter]))
 
@@ -759,7 +1192,6 @@ class Block:
         assert any_exists, 'No candidate observations found to stack. Exiting now.'
 
         for inimage in self.inimages:
-            # print(inimage.idsca)
             inimage.partition_pixels()
             if not inimage.is_relevant: continue
             inimage.extract_layers()
@@ -769,10 +1201,16 @@ class Block:
         self.inimages = [inimage for inimage in self.inimages if inimage.is_relevant]
         self.n_inimage = len(self.inimages)
 
-        # this has to be done after we know n_inimage
-        self.outpsfovl = PSFOvl(self.outpsfgrp, None)
+    def build_input_stamps(self) -> None:
+        '''
+        Build input stamps from input images.
 
-    def build_input_stamps(self):
+        Returns
+        -------
+        None.
+
+        '''
+
         # current version only works when acceptance radius <= postage stamp size
         self.instamps = [[None for i_st in range(self.cfg.n1+2)]
                                for j_st in range(self.cfg.n1+2)]  # st stands for stamp
@@ -784,23 +1222,88 @@ class Block:
         for inimage in self.inimages:
             inimage.clear()
 
-    def output_stamp_wrapper(self, i_st, j_st, sim_mode: bool = False):
+    def _output_stamp_wrapper(self, i_st, j_st, sim_mode: bool = False):
+        '''
+        Wrapper for output stamp coaddition.
+
+        Parameters
+        ----------
+        j_st, i_st : int, int
+            OutStamp index.
+        sim_mode : bool, optional
+            Whether to count references without actually making inpsfgrp.
+            See the docstring of psfutil.SysMatA._compute_iisubmats.
+            The default is False.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         assert 0 < i_st < self.cfg.n1+1 and 0 < j_st < self.cfg.n1+1, 'outstamp out of boundary'
-        # if not (0 < i_st < self.cfg.n1+1 and 0 < j_st < self.cfg.n1+1):
-        #     return False
 
         if sim_mode:  # count references to PSF overlaps and system matrices
             self.outstamps[j_st][i_st] = OutStamp(self, j_st, i_st)
         else:
-            self.outstamps[j_st][i_st]()
-        return True
+            outst = self.outstamps[j_st][i_st]; outst()
 
-    def coadd_output_stamps(self, sim_mode: bool = False):
+            bottom = (j_st+self.cfg.postage_pad-1) * self.cfg.n2 - self.cfg.fade_kernel
+            top    = (j_st+self.cfg.postage_pad)   * self.cfg.n2 + self.cfg.fade_kernel
+            left   = (i_st+self.cfg.postage_pad-1) * self.cfg.n2 - self.cfg.fade_kernel
+            right  = (i_st+self.cfg.postage_pad)   * self.cfg.n2 + self.cfg.fade_kernel
+
+            self.out_map[:, :, bottom:top, left:right] += outst.outimage
+
+            # weight computations
+            self.T_weightmap[:, :, j_st+self.cfg.postage_pad-1, i_st+self.cfg.postage_pad-1] = outst.Tsum
+
+            # fidelity map
+            self.fidelity_map[:, bottom:top, left:right] = np.minimum(
+                self.fidelity_map[:, bottom:top, left:right],
+                np.floor(-10*np.log10(np.clip(outst.UC, 10**(-25.5999), .99999))).astype(np.uint8))
+
+            # kappa map
+            self.kappamin[bottom:top, left:right] = np.minimum(self.kappamin[bottom:top, left:right], outst.kappa)
+            self.kappamax[bottom:top, left:right] = np.maximum(self.kappamax[bottom:top, left:right], outst.kappa)
+
+    def coadd_output_stamps(self, sim_mode: bool = False) -> None:
+        '''
+        Coadd output stamps using input stamps.
+
+        Parameters
+        ----------
+        sim_mode : bool, optional
+            Whether to count references without actually making inpsfgrp.
+            See the docstring of psfutil.SysMatA._compute_iisubmats.
+            The default is False.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         if sim_mode:  # count references to PSF overlaps and system matrices
             self.sysmata = SysMatA(self)
             self.sysmatb = SysMatB(self)
             self.outstamps = [[None for i_st in range(self.cfg.n1+2)]
                                     for j_st in range(self.cfg.n1+2)]
+        else:
+            n_out  = self.outpsfgrp.n_psf
+            NsideP = self.cfg.NsideP
+
+            # make basic output array (NOT including transition pixels on the boundaries)
+            self.out_map = np.zeros((n_out, self.cfg.n_inframe, NsideP, NsideP), dtype=np.float32)
+            # and the fidelity information (store as integer, will be in dB; initialize at full fidelity)
+            self.fidelity_map = np.full((n_out, NsideP, NsideP), fill_value=255, dtype=np.uint8)
+            # and kappa (2 layers, min and max; start min layer at a large value))
+            self.kappamin = np.full ((NsideP, NsideP), fill_value=1e32, dtype=np.float32)
+            self.kappamax = np.zeros((NsideP, NsideP), dtype=np.float32)
+
+            # allocate ancillary arrays
+            self.T_weightmap = np.zeros((self.outpsfgrp.n_psf, self.n_inimage,
+                                         self.cfg.n1P, self.cfg.n1P), dtype=np.float32)
 
         remaining = self.cfg.n1 ** 2
         if self.cfg.stoptile is not None:
@@ -808,8 +1311,9 @@ class Block:
 
         for j_st, i_st in product(range(1, 49, 2), range(1, 49, 2)):
             for dj, di in product(range(2), range(2)):
-                # if i_st+di > 32: continue  # for testing purposes
-                remaining -= self.output_stamp_wrapper(i_st+di, j_st+dj, sim_mode)
+                # if i_st+di > 4: continue  # for testing purposes
+                self._output_stamp_wrapper(i_st+di, j_st+dj, sim_mode)
+                remaining -= 1
 
                 if remaining == 0:
                     if sim_mode:
@@ -822,52 +1326,28 @@ class Block:
                         assert len(self.sysmatb.iopsfovls) == 0, 'self.sysmatb.iopsfovls is not empty'
                     return
 
-    def build_output_image(self):
-        # shortcuts
-        n_out       = self.outpsfgrp.n_psf
-        NsideP      = self.cfg.NsideP
-        postage_pad = self.cfg.postage_pad
-        n2          = self.cfg.n2
-        fade_kernel = self.cfg.fade_kernel
+            if not sim_mode:
+                gc.collect()  # force a garbage collection
+                # Write an intermediate map
+                print('  --> intermediate output -->\n')
+                maphdu = fits.PrimaryHDU(self.out_map, header=self.outwcs.to_header())
+                hdu_list = fits.HDUList([maphdu])
+                hdu_list.writeto(self.cfg.outstem+'_map.fits', overwrite=True)
 
-        # make basic output array (NOT including transition pixels on the boundaries)
-        out_map = np.zeros((n_out, self.cfg.n_inframe, NsideP, NsideP), dtype=np.float32)
-        # and the fidelity information (store as integer, will be in dB; initialize at full fidelity)
-        fidelity_map = np.full((n_out, NsideP, NsideP), fill_value=255, dtype=np.uint8)
-        # and kappa (2 layers, min and max; start min layer at a large value))
-        kappamin = np.full ((NsideP, NsideP), fill_value=1e32, dtype=np.float32)
-        kappamax = np.zeros((NsideP, NsideP), dtype=np.float32)
+    def build_output_file(self) -> None:
+        '''
+        Build the output FITS file.
 
-        # allocate ancillary arrays
-        T_weightmap = np.zeros((self.outpsfgrp.n_psf, self.n_inimage,
-                                self.cfg.n1P, self.cfg.n1P), dtype=np.float32)
+        Currently the kappa maps are in a separate file.
+        Those will be merged into the main FITS file.
 
-        for j_st, i_st in product(range(50), range(50)):
-            outst = self.outstamps[j_st][i_st]
-            if outst is None: continue
+        Returns
+        -------
+        None.
 
-            bottom = (j_st+postage_pad-1) * n2 - fade_kernel
-            top    = (j_st+postage_pad)   * n2 + fade_kernel
-            left   = (i_st+postage_pad-1) * n2 - fade_kernel
-            right  = (i_st+postage_pad)   * n2 + fade_kernel
+        '''
 
-            out_map[:, :, bottom:top, left:right] += outst.outimage
-
-            # weight computations
-            T_weightmap[:, :, j_st+postage_pad-1, i_st+postage_pad-1] = outst.Tsum
-
-            # fidelity map
-            this_fidelity_map = np.floor(-10*np.log10(
-                np.clip(outst.UC, 10**(-25.5999), .99999))).astype(np.uint8)
-            fidelity_map[:, bottom:top, left:right] = np.minimum(
-                fidelity_map[:, bottom:top, left:right], this_fidelity_map)
-            del this_fidelity_map
-
-            # kappa map
-            kappamin[bottom:top, left:right] = np.minimum(kappamin[bottom:top, left:right], outst.kappa)
-            kappamax[bottom:top, left:right] = np.maximum(kappamax[bottom:top, left:right], outst.kappa)
-
-        maphdu = fits.PrimaryHDU(out_map, header=self.outwcs.to_header())
+        maphdu = fits.PrimaryHDU(self.out_map, header=self.outwcs.to_header())
         config_hdu = fits.TableHDU.from_columns(
             [fits.Column(name='text', array=self.cfg.to_file(None).splitlines(), format='A512', ascii=True)])
         config_hdu.header['EXTNAME'] = 'CONFIG'
@@ -880,32 +1360,43 @@ class Block:
             fits.Column(name='valid', array=np.array([inimage.exists for inimage in self.inimages]), format='L')
         ])
         inlist_hdu.header['EXTNAME'] = 'INDATA'
-        T_hdu = fits.ImageHDU(T_weightmap)
+        T_hdu = fits.ImageHDU(self.T_weightmap)
         T_hdu.header['EXTNAME'] = 'INWEIGHT'
-        T_hdu2 = fits.ImageHDU(np.transpose(T_weightmap, axes=(0, 2, 1, 3)).reshape((n_out*self.cfg.n1P, self.n_inimage*self.cfg.n1P)))
+        T_hdu2 = fits.ImageHDU(np.transpose(self.T_weightmap, axes=(0, 2, 1, 3)).\
+                               reshape((self.outpsfgrp.n_psf*self.cfg.n1P, self.n_inimage*self.cfg.n1P)))
         T_hdu2.header['EXTNAME'] = 'INWTFLAT'
-        fidelity_hdu = fits.ImageHDU(fidelity_map, header=self.outwcs.to_header())
+        fidelity_hdu = fits.ImageHDU(self.fidelity_map, header=self.outwcs.to_header())
         fidelity_hdu.header['EXTNAME'] = 'FIDELITY'
         fidelity_hdu.header['UNIT'] = ('dB', '-10*log10(U/C)')
         hdu_list = fits.HDUList([maphdu, config_hdu, inlist_hdu, T_hdu, T_hdu2, fidelity_hdu])
         hdu_list.writeto(self.cfg.outstem+'_map.fits', overwrite=True)
 
         # ... and the kappa map
-        fits.PrimaryHDU(np.stack((kappamin, kappamax))).writeto(self.cfg.outstem+'_kappa.fits', overwrite=True)
+        fits.PrimaryHDU(np.stack((self.kappamin, self.kappamax))).writeto(self.cfg.outstem+'_kappa.fits', overwrite=True)
 
-        if self.cfg.fname is not None:
-            os.system('cp ' + self.cfg.fname + ' ' + self.cfg.outstem + '_config.json')
+        # if self.cfg.fname is not None:
+        #     shutil.copy(str(self.cfg.fname), self.cfg.outstem+'_config.json')
 
-    def clear_all(self):
+    def clear_all(self) -> None:
+        '''
+        Free up all memory spaces.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         del self.obsdata, self.obslist, self.outwcs
-        del self.outpsfgrp, self.outpsfovl
-        del self.sysmata, self.sysmatb
+        del self.outpsfgrp, self.outpsfovl, self.sysmata, self.sysmatb
+        del self.out_map, self.fidelity_map, self.kappamin, self.kappamax, self.T_weightmap
 
         for j_st in range(self.cfg.n1+2):
             for i_st in range(self.cfg.n1+2):
                 self.instamps[j_st][i_st].clear()
 
-        for j_st, i_st in product(range(50), range(50)):
-            outst = self.outstamps[j_st][i_st]
-            if outst is None: continue
-            outst.clear()
+        for j_st in range(self.cfg.n1+2):
+            for i_st in range(self.cfg.n1+2):
+                outst = self.outstamps[j_st][i_st]
+                if outst is None: continue
+                outst.clear()

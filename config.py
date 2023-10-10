@@ -131,7 +131,7 @@ class Config:
         self.fname = fname
         if fname is not None:
             if fname == '':
-                print(' > Using default_config.json', flush=True)
+                print('> Using default_config.json', flush=True)
                 self.fname = files(__package__).joinpath('default_config.json')
             self._from_file()
         else:
