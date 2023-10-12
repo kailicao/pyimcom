@@ -186,6 +186,9 @@ class Config:
         # input stamp size padding, aka acceptance radius
         self.instamp_pad = cfg.get('INPAD', 1.055) * Settings.arcsec
 
+        # width of PSF sampling/overlap arrays in native pixels
+        self.npixpsf = cfg.get('NPIXPSF', 48)
+
         # pad this many IMCOM postage stamps around the edge
         self.postage_pad = cfg.get('PAD', 0)
 
@@ -327,6 +330,11 @@ class Config:
             "INPAD = input('INPAD (float) [default: 1.055]: ')" '\n'
             "self.instamp_pad = (float(INPAD) if INPAD else 1.055) * Settings.arcsec")
 
+        print('# width of PSF sampling/overlap arrays in native pixels', flush=True)
+        self._get_attrs_wrapper(
+            "NPIXPSF = input('NPIXPSF (int) [default: 48]: ')" '\n'
+            "self.npixpsf = (int(NPIXPSF) if NPIXPSF else 48)")
+
         print('# number of IMCOM postage stamps to pad around each output region', flush=True)
         self._get_attrs_wrapper(
             "PAD = input('PAD (int) [default: 0]: ')" '\n'
@@ -400,6 +408,8 @@ class Config:
         # if self.instamp_pad != 1.055 * Settings.arcsec:
         cfg['INPAD'] = self.instamp_pad / Settings.arcsec
 
+        cfg['NPIXPSF'] = self.npixpsf
+
         if self.postage_pad != 0:
             cfg['PAD'] = self.postage_pad
 
@@ -416,7 +426,7 @@ class Config:
 
         if fname is not None:
             if fname == '':
-                print(' > Overwriting default_config.json', flush=True)
+                print('> Overwriting default_config.json', flush=True)
                 fname = files(__package__).joinpath('default_config.json')
 
             with open(fname, 'w') as f:

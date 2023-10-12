@@ -1,7 +1,11 @@
 import numpy as np
 from scipy.special import jv
-from astropy.io import fits
 import matplotlib.pyplot as plt
+
+try:
+    from mkl_fft import _numpy_fft as numpy_fft
+except:
+    import numpy.fft as numpy_fft
 
 from .config import Settings as Stn
 from pyimcom_croutines import iD5512C, iD5512C_sym, gridD5512C
@@ -90,13 +94,13 @@ class OutPSF:
         del y, x, r
 
         # now convovle
-        It = np.fft.rfft2(I)
+        It = numpy_fft.rfft2(I)
         uxa = np.linspace(0, 1-1/npad, npad); uxa[-(npad//2):] -= 1
         ux = np.tile(uxa[None, :npad//2+1], (npad, 1))
         uy = np.tile(uxa[:, None], (1, npad//2+1))
         It *= np.exp(-2.0*np.pi**2 * (np.square(ux*sigma) + np.square(uy*sigma))) \
             * np.sinc(ux*tophat_conv) * np.sinc(uy*tophat_conv)
-        I = np.fft.irfft2(It, s=(npad, npad))
+        I = numpy_fft.irfft2(It, s=(npad, npad))
         del It, uxa, ux, uy
 
         return I[kp:-kp, kp:-kp]
@@ -165,13 +169,13 @@ class OutPSF:
             del Icopy
 
         # now convovle
-        It = np.fft.rfft2(I)
+        It = numpy_fft.rfft2(I)
         uxa = np.linspace(0, 1-1/npad, npad); uxa[-(npad//2):] -= 1
         ux = np.tile(uxa[None, :npad//2+1], (npad, 1))
         uy = np.tile(uxa[:, None], (1, npad//2+1))
         It *= np.exp(-2.0*np.pi**2 * (np.square(ux*sigma) + np.square(uy*sigma))) \
             * np.sinc(ux*tophat_conv) * np.sinc(uy*tophat_conv)
-        I = np.fft.irfft2(It, s=(npad, npad))
+        I = numpy_fft.irfft2(It, s=(npad, npad))
         del It, uxa, ux, uy
 
         return I[kp:-kp, kp:-kp]
@@ -198,13 +202,12 @@ class PSFGrp:
     '''
 
     # some default settings, will be overwritten by PSFGrp.setup
-    nsample = 527
-    nc = nsample // 2  # 263
-    nsp = nsample + 2*5  # 537
-    nfft = 1280
+    nsamp = 383
+    nc = nsamp // 2  # 191
+    nfft = 768
 
     @classmethod
-    def setup(cls, npixpsf: int = 64, oversamp: int = 8, kpad: int = 5) -> None:
+    def setup(cls, npixpsf: int = 48, oversamp: int = 8) -> None:
         '''
         Set up class attributes.
 
@@ -223,20 +226,19 @@ class PSFGrp:
         '''
 
         cls.oversamp = oversamp
-        cls.nsample = npixpsf * oversamp + 15  # 527 by default
-        # sampling matrix has shape (..., nsample, nsample)
-
-        cls.nc = cls.nsample // 2  # 263 by default
-        cls.nsp = cls.nsample + 2*kpad  # 537 by default
+        cls.nsamp = npixpsf * oversamp - 1  # 383 by default
+        # sampling matrix has shape (..., nsamp, nsamp)
+        cls.nc = cls.nsamp // 2  # 191 by default
 
         # unrotated grid of sampling positions
         # never modified (but frequently referred to) after initialization
-        cls.xyo = np.mgrid[(1-cls.nsp)/2:(cls.nsp-1)/2:cls.nsp*1j,
-                           (1-cls.nsp)/2:(cls.nsp-1)/2:cls.nsp*1j]
+        cls.xyo = np.mgrid[(1-cls.nsamp)/2:(cls.nsamp-1)/2:cls.nsamp*1j,
+                           (1-cls.nsamp)/2:(cls.nsamp-1)/2:cls.nsamp*1j]
         # dsample (sampling rate of overlap matrices) has been fixed to 1.0.
 
-        nfft0div8 = 2**(int(np.ceil(np.log2(cls.nsp-0.5)))-2)
-        cls.nfft = nfft0div8 * int(np.ceil(2*cls.nsp/nfft0div8))  # 1280 by default
+        # nfft0div8 = 2**(int(np.ceil(np.log2(cls.nsamp-0.5)))-2)
+        # cls.nfft = nfft0div8 * int(np.ceil(2*cls.nsamp/nfft0div8))  # 1280 by default
+        cls.nfft = npixpsf * oversamp * 2
 
     def __init__(self, in_or_out: bool = True,
                  inst: 'coadd.InStamp' = None, blk: 'coadd.Block' = None,
@@ -351,16 +353,16 @@ class PSFGrp:
                     PSFGrp.visualize_psf(psf_, xyco, xctr, yctr)
 
         if idx is not None:
-            out_arr = np.zeros((1, PSFGrp.nsp**2))
+            out_arr = np.zeros((1, PSFGrp.nsamp**2))
             iD5512C(psf.reshape((1, ny, nx)),
                     xyco[1].ravel()+xctr, xyco[0].ravel()+yctr, out_arr)
-            self.psf_arr[idx] = out_arr.reshape((PSFGrp.nsp, PSFGrp.nsp))
+            self.psf_arr[idx] = out_arr.reshape((PSFGrp.nsamp, PSFGrp.nsamp))
             del out_arr
 
         else:  # sample a group of output PSFs at the same time
-            out_arr = np.zeros((self.n_psf, PSFGrp.nsp**2))
+            out_arr = np.zeros((self.n_psf, PSFGrp.nsamp**2))
             iD5512C(psf, xyco[1].ravel()+xctr, xyco[0].ravel()+yctr, out_arr)
-            self.psf_arr = out_arr.reshape((self.n_psf, PSFGrp.nsp, PSFGrp.nsp))
+            self.psf_arr = out_arr.reshape((self.n_psf, PSFGrp.nsamp, PSFGrp.nsamp))
             del out_arr
 
     def _build_inpsfgrp(self, visualize: bool = False) -> None:
@@ -397,7 +399,7 @@ class PSFGrp:
                 self.idx_grp2blk[self.n_psf] = idx_b
                 self.n_psf += 1
 
-        self.psf_arr = np.zeros((self.n_psf, PSFGrp.nsp, PSFGrp.nsp))
+        self.psf_arr = np.zeros((self.n_psf, PSFGrp.nsamp, PSFGrp.nsamp))
         for idx in range(self.n_psf):
             self._sample_psf(idx, *self.inst.blk.inimages[self.idx_grp2blk[idx]].\
                              get_psf_and_distort_mat(self.inst.j_st, self.inst.i_st), visualize=visualize)
@@ -424,27 +426,27 @@ class PSFGrp:
         '''
 
         self.n_psf = 1
-        psf_orig = np.zeros((self.n_psf, PSFGrp.nsample, PSFGrp.nsample))
+        psf_orig = np.zeros((self.n_psf, PSFGrp.nsamp, PSFGrp.nsamp))
 
         for idx in range(self.n_psf):
-            psf_orig[idx] = OutPSF.psf_simple_airy(PSFGrp.nsample,
+            psf_orig[idx] = OutPSF.psf_simple_airy(PSFGrp.nsamp,
                 Stn.QFilterNative[self.blk.cfg.use_filter] * PSFGrp.oversamp,
                 obsc=Stn.obsc, tophat_conv=0.0, sigma=self.blk.cfg.sigmatarget * PSFGrp.oversamp)
         self._sample_psf(None, psf_orig)  # this produces self.psf_arr
 
         # save the output PSFs to a file
-        OutputPSFHDU = fits.HDUList([fits.PrimaryHDU()] + [fits.ImageHDU(x) for x in psf_orig])
-        for i in range(self.n_psf):
-            OutputPSFHDU[i+1].header['WHICHPSF'] = 'Output {:d}'.format(i)
-        OutputPSFHDU.writeto(self.blk.cfg.outstem+'_outputpsfs.fits', overwrite=True)
-        del OutputPSFHDU
+        # OutputPSFHDU = fits.HDUList([fits.PrimaryHDU()] + [fits.ImageHDU(x) for x in psf_orig])
+        # for i in range(self.n_psf):
+        #     OutputPSFHDU[i+1].header['WHICHPSF'] = 'Output {:d}'.format(i)
+        # OutputPSFHDU.writeto(self.blk.cfg.outstem+'_outputpsfs.fits', overwrite=True)
+        # del OutputPSFHDU
 
     @staticmethod
     def accel_pad_and_rfft2(psf_arr: np.array) -> np.array:
         '''
         Accelerated version of zero-padding and rfft2.
 
-        For nsp = 537 and nfft = 1280, this saves
+        For nsamp = 537 and nfft = 1280, this saves
         about 20% of the time compared to simply using rfft2.
 
         Diagram of the steps involved here:
@@ -458,7 +460,7 @@ class PSFGrp:
 
         Parameters
         ----------
-        psf_arr : np.array, shape : (..., PSFGrp.nsp, PSFGrp.nsp)
+        psf_arr : np.array, shape : (..., PSFGrp.nsamp, PSFGrp.nsamp)
             PSF array to be padded and Fourier transformed.
 
         Returns
@@ -469,12 +471,12 @@ class PSFGrp:
         '''
 
         n_arr = psf_arr.shape[0]
-        pad_m1 = np.zeros((n_arr, PSFGrp.nsp,  PSFGrp.nfft))
+        pad_m1 = np.zeros((n_arr, PSFGrp.nsamp,  PSFGrp.nfft))
         pad_m2 = np.zeros((n_arr, PSFGrp.nfft, PSFGrp.nfft//2+1), dtype=np.complex128)
 
-        pad_m1[:, :, :PSFGrp.nsp] = psf_arr
-        pad_m2[:, :PSFGrp.nsp, :] = np.fft.rfft(pad_m1, axis=-1)
-        res = np.fft.fft(pad_m2, axis=-2)
+        pad_m1[:, :, :PSFGrp.nsamp] = psf_arr
+        pad_m2[:, :PSFGrp.nsamp, :] = numpy_fft.rfft(pad_m1, axis=-1)
+        res = numpy_fft.fft(pad_m2, axis=-2)
         del pad_m1, pad_m2
 
         return res
@@ -493,7 +495,7 @@ class PSFGrp:
         '''
 
         if self.in_or_out:
-            print(f'clearing input PSFGrp attached to InStamp {(self.inst.j_st, self.inst.i_st)}',
+            print(f'--> clearing input PSFGrp attached to InStamp {(self.inst.j_st, self.inst.i_st)}',
                   '@', self.inst.blk.timer(), 's')
             # the following instance attributes should not be removed
             # as they will be referred to in PSFOvl.__call__:
@@ -575,7 +577,7 @@ class PSFOvl:
         the overlap between psf_arr[idx2] and psf_arr[idx1] is simply
         the flipped version of the overlap between psf_arr[idx1] and psf_arr[idx2].
         Therefore, we only need to compute the latter, and the results
-        are stored in a np.array of shape (n_psf*(n_psf+1)//2, nsample, nsample).
+        are stored in a np.array of shape (n_psf*(n_psf+1)//2, nsamp, nsamp).
 
         For example, in the n_psf == 3 case:
          \idx2  0   1   2
@@ -609,7 +611,7 @@ class PSFOvl:
 
         This acceleration is based on the fact that we only need
         less than (1/2) x (1/2) of the irfft2 results.
-        For nsp = 537 and nfft = 1280, this saves about 40%
+        For nsamp = 537 and nfft = 1280, this saves about 40%
         of the time compared to simply using irfft2 and ifftshift.
 
         Diagram of the steps involved here (ext. stands for extraction):
@@ -628,22 +630,22 @@ class PSFOvl:
 
         Returns
         -------
-        np.array, shape : (..., nsample, nsample)
+        np.array, shape : (..., nsamp, nsamp)
             The PSF overlap array we want.
 
         '''
 
         n_arr = ovl_rft.shape[0]
-        ovl_m2 = np.zeros((n_arr, PSFGrp.nsample, PSFGrp.nfft//2+1), dtype=np.complex128)
-        ovl_m1 = np.zeros((n_arr, PSFGrp.nsample, PSFGrp.nsample))
+        ovl_m2 = np.zeros((n_arr, PSFGrp.nsamp, PSFGrp.nfft//2+1), dtype=np.complex128)
+        ovl_m1 = np.zeros((n_arr, PSFGrp.nsamp, PSFGrp.nsamp))
         nc = PSFGrp.nc  # shortcut
 
-        ift_m2 = np.fft.ifft(ovl_rft, axis=-2)
+        ift_m2 = numpy_fft.ifft(ovl_rft, axis=-2)
         ovl_m2[:,   :nc, :] = ift_m2[:, -nc:    , :]
         ovl_m2[:, nc:  , :] = ift_m2[:,    :nc+1, :]
         del ift_m2
 
-        ift_m1 = np.fft.irfft(ovl_m2, axis=-1, n=PSFGrp.nfft)
+        ift_m1 = numpy_fft.irfft(ovl_m2, axis=-1, n=PSFGrp.nfft)
         ovl_m1[:, :,   :nc] = ift_m1[:, :, -nc:    ]
         ovl_m1[:, :, nc:  ] = ift_m1[:, :,    :nc+1]
         del ovl_m2, ift_m1
@@ -661,7 +663,7 @@ class PSFOvl:
         '''
 
         if self.grp2 is not None:  # cross-overlap
-            self.ovl_arr = np.zeros((self.grp1.n_psf, self.grp2.n_psf, PSFGrp.nsample, PSFGrp.nsample))
+            self.ovl_arr = np.zeros((self.grp1.n_psf, self.grp2.n_psf, PSFGrp.nsamp, PSFGrp.nsamp))
 
             for idx in range(self.grp1.n_psf):
                 ovl_rft = self.grp1.psf_rft[idx] * self.grp2.psf_rft.conjugate()
@@ -670,7 +672,7 @@ class PSFOvl:
 
         elif self.grp1.in_or_out:  # input-self overlap
             n_psf = self.grp1.n_psf  # shortcut
-            self.ovl_arr = np.zeros((n_psf*(n_psf+1)//2, PSFGrp.nsample, PSFGrp.nsample))
+            self.ovl_arr = np.zeros((n_psf*(n_psf+1)//2, PSFGrp.nsamp, PSFGrp.nsamp))
 
             for idx in range(n_psf):
                 start = self._idx_square2triangle(idx, idx)
@@ -827,7 +829,7 @@ class PSFOvl:
 
                 out_arr = np.zeros((1, st1.pix_count[j_im] * st2.pix_count[i_im]))
                 iD5512C(self.ovl_arr[self.grp1.idx_blk2grp[j_im], self.grp2.idx_blk2grp[i_im]].\
-                        reshape((1, PSFGrp.nsample, PSFGrp.nsample)),
+                        reshape((1, PSFGrp.nsamp, PSFGrp.nsamp)),
                         ddx[slice_].ravel(), ddy[slice_].ravel(), out_arr)
 
                 res[slice_] = out_arr.reshape((st1.pix_count[j_im], st2.pix_count[i_im]))
@@ -993,7 +995,7 @@ class PSFOvl:
 
                 out_arr = np.zeros((1, st1.pix_count[j_im] * st2.pix_count[i_im]))
                 interpolator = iD5512C_sym if same_inst and j_im == i_im else iD5512C
-                interpolator(ovl_arr_.reshape((1, PSFGrp.nsample, PSFGrp.nsample)),
+                interpolator(ovl_arr_.reshape((1, PSFGrp.nsamp, PSFGrp.nsamp)),
                              ddx[slice_].ravel(), ddy[slice_].ravel(), out_arr)
 
                 res[slice_] = out_arr.reshape((st1.pix_count[j_im], st2.pix_count[i_im]))
@@ -1038,7 +1040,7 @@ class PSFOvl:
         '''
 
         if self.grp2 is not None and not self.grp2.in_or_out:
-            print(f'clearing input-output PSFOvl for InStamp {(self.grp1.inst.j_st, self.grp1.inst.i_st)}',
+            print(f'--> clearing input-output PSFOvl for InStamp {(self.grp1.inst.j_st, self.grp1.inst.i_st)}',
                   f'and Block this_sub={self.grp2.blk.this_sub}', '@', self.grp1.inst.blk.timer(), 's')
 
         del self.grp1, self.grp2, self.ovl_arr
@@ -1068,6 +1070,7 @@ class SysMatA:
         Parameters
         ----------
         blk : coadd.Block
+            The Block instance to which this SysMatA instance is attached to.
 
         Returns
         -------
@@ -1339,6 +1342,7 @@ class SysMatB:
         Parameters
         ----------
         blk : coadd.Block
+            The Block instance to which this SysMatB instance is attached to.
 
         Returns
         -------

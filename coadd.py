@@ -1,5 +1,5 @@
 from os.path import exists
-import shutil
+# import shutil
 from itertools import combinations, product
 import gc
 
@@ -12,6 +12,7 @@ import fitsio
 import matplotlib.pyplot as plt
 
 from .config import Timer, Settings as Stn, Config
+from .layer import get_all_data, Mask
 from .psfutil import PSFGrp, PSFOvl, SysMatA, SysMatB
 from .lakernel import LAKernel
 
@@ -160,7 +161,7 @@ class InImage:
         # if self.idsca not in [(95060, 12), (132154, 12)]:
         #     self.is_relevant = False  # for testing purposes
         if not self.is_relevant:
-            del self.inwcs, sp_arr, relevant_matrix
+            del sp_arr, relevant_matrix
             return
 
         # maximum number of input pixels per postage stamp (from this InImage)
@@ -178,7 +179,19 @@ class InImage:
         self.pix_count = np.zeros((self.blk.cfg.n1+2, self.blk.cfg.n1+2), dtype=np.uint16)
 
         # load masks here
-        mask = np.ones((Stn.sca_nside, Stn.sca_nside), dtype=bool)
+        if self.blk.pmask is not None:
+            mask = self.blk.pmask[self.idsca[1]-1]
+        else:
+            mask = np.ones((Stn.sca_nside, Stn.sca_nside), dtype=bool)
+
+        # with fits.open(self.infile) as f:
+        #     indata = f['SCI'].data - float(f['SCI'].header['SKY_MEAN'])
+        get_all_data(self)  # shape : (n_inframe, Stn.sca_nside, Stn.sca_nside)
+
+        cr_mask = Mask.load_cr_mask(self)
+        if cr_mask is not None:
+            mask = np.logical_and(mask, cr_mask)
+        del cr_mask
 
         # now loop over the regions set by the sparce grid
         for j_sp in range(sp_res):
@@ -232,18 +245,13 @@ class InImage:
         self.data = np.zeros((self.blk.cfg.n_inframe, self.blk.cfg.n1+2,
                               self.blk.cfg.n1+2, self.max_count), dtype=np.float32)
 
-        with fits.open(self.infile) as f:
-            indata = f['SCI'].data - float(f['SCI'].header['SKY_MEAN'])
-
         for j_st in range(self.blk.cfg.n1+2):
             for i_st in range(self.blk.cfg.n1+2):
                 n_pix = self.pix_count[j_st, i_st]
-                self.data[0, j_st, i_st, :n_pix] =\
-                indata[self.y_idx[j_st, i_st, :n_pix], self.x_idx[j_st, i_st, :n_pix]]
+                self.data[:, j_st, i_st, :n_pix] =\
+                self.indata[:, self.y_idx[j_st, i_st, :n_pix], self.x_idx[j_st, i_st, :n_pix]]
 
-        # advanced layers to be made and extracted here
-
-        del indata, self.y_idx, self.x_idx
+        del self.indata, self.y_idx, self.x_idx
         print(f'--> finished extracting layers for InImage {self.idsca}', '@', self.blk.timer(), 's')
 
     def clear(self) -> None:
@@ -1009,7 +1017,7 @@ class Block:
         self.cfg = cfg
         if cfg is None: self.cfg = Config()  # use the default config
 
-        PSFGrp.setup(npixpsf=cfg.inpsf_npix, oversamp=cfg.inpsf_oversamp)
+        PSFGrp.setup(npixpsf=cfg.npixpsf, oversamp=cfg.inpsf_oversamp)
         self.this_sub = this_sub
         if run_coadd: self()
 
@@ -1191,13 +1199,16 @@ class Block:
         print('')
         assert any_exists, 'No candidate observations found to stack. Exiting now.'
 
+        self.pmask = Mask.load_permanent_mask(self)
         for inimage in self.inimages:
             inimage.partition_pixels()
             if not inimage.is_relevant: continue
             inimage.extract_layers()
         print()
+        del self.pmask
 
         # remove irrelevant input images
+        self.obslist = [self.obslist[i] for i, inimage in enumerate(self.inimages) if inimage.is_relevant]
         self.inimages = [inimage for inimage in self.inimages if inimage.is_relevant]
         self.n_inimage = len(self.inimages)
 
