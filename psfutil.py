@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.special import jv
+from astropy import wcs
 import matplotlib.pyplot as plt
 
 try:
@@ -242,7 +243,7 @@ class PSFGrp:
 
     def __init__(self, in_or_out: bool = True,
                  inst: 'coadd.InStamp' = None, blk: 'coadd.Block' = None,
-                 visualize: bool = False) -> None:
+                 verbose: bool = False, visualize: bool = False) -> None:
         '''
         Constructor.
 
@@ -265,8 +266,9 @@ class PSFGrp:
 
         if in_or_out:  # input PSF group
             assert inst is not None, 'inst must be specified for an input PSF group'
-            print(f'--> building input PSFGrp for InStamp {(inst.j_st, inst.i_st)}',
-                  '@', inst.blk.timer(), 's')
+            if verbose:
+                print(f'--> building input PSFGrp for InStamp {(inst.j_st, inst.i_st)}',
+                      '@', inst.blk.timer(), 's')
             self.inst = inst
             self._build_inpsfgrp(visualize)
             # this produces the following instance attributes:
@@ -274,7 +276,8 @@ class PSFGrp:
 
         else:  # output PSF group
             assert blk is not None, 'block must be specified for an output PSF group'
-            print(f'--> building output PSFGrp for Block {blk.this_sub=}', '@', blk.timer(), 's')
+            if verbose:
+                print(f'--> building output PSFGrp for Block {blk.this_sub=}', '@', blk.timer(), 's')
             self.blk = blk
             self._build_outpsfgrp(visualize)
             # this produces the following instance attributes:
@@ -399,13 +402,26 @@ class PSFGrp:
                 self.idx_grp2blk[self.n_psf] = idx_b
                 self.n_psf += 1
 
+        # get where to compute the PSF and the camera distortion matrix
+        # compute the psf at the center of the 2x2 group of postage stamps
+        blk = self.inst.blk  # shortcut
+        psf_compute_point_pix = [(blk.cfg.postage_pad+self.inst.i_st) * blk.cfg.n2 - 0.5,
+                                 (blk.cfg.postage_pad+self.inst.j_st) * blk.cfg.n2 - 0.5]
+        psf_compute_point = blk.outwcs.all_pix2world(np.array([psf_compute_point_pix]), 0)[0]
+        dWdp_out = wcs.utils.local_partial_pixel_derivatives(blk.outwcs, *psf_compute_point_pix)
+        print('INPUT/PSF computation at RA={:8.4f}, Dec={:8.4f}'.format(*psf_compute_point))
+        print(' --> partial derivatives, ', dWdp_out)
+
         self.psf_arr = np.zeros((self.n_psf, PSFGrp.nsamp, PSFGrp.nsamp))
         for idx in range(self.n_psf):
-            self._sample_psf(idx, *self.inst.blk.inimages[self.idx_grp2blk[idx]].\
-                             get_psf_and_distort_mat(self.inst.j_st, self.inst.i_st), visualize=visualize)
+            print('PSF info -->', self.idx_grp2blk[idx], end=' ')
+            this_psf, distort_matrice = self.inst.blk.inimages[self.idx_grp2blk[idx]].\
+                get_psf_and_distort_mat(psf_compute_point, dWdp_out)            
+            self._sample_psf(idx, this_psf, distort_matrice, visualize=visualize)
             if visualize:
                 print(f'The above PSF is from InImage {(self.inst.blk.inimages[self.idx_grp2blk[idx]].idsca)}',
                       f'at the upper right corner of InStamp {(self.inst.j_st, self.inst.i_st)}')
+        print('using input exposures:', [self.idx_grp2blk[idx] for idx in range(self.n_psf)])
 
     def _build_outpsfgrp(self, visualize: bool = False) -> None:
         '''
@@ -438,7 +454,7 @@ class PSFGrp:
         # OutputPSFHDU = fits.HDUList([fits.PrimaryHDU()] + [fits.ImageHDU(x) for x in psf_orig])
         # for i in range(self.n_psf):
         #     OutputPSFHDU[i+1].header['WHICHPSF'] = 'Output {:d}'.format(i)
-        # OutputPSFHDU.writeto(self.blk.cfg.outstem+'_outputpsfs.fits', overwrite=True)
+        # OutputPSFHDU.writeto(self.blk.outstem+'_outputpsfs.fits', overwrite=True)
         # del OutputPSFHDU
 
     @staticmethod
@@ -481,7 +497,7 @@ class PSFGrp:
 
         return res
 
-    def clear(self) -> None:
+    def clear(self, verbose: bool = False) -> None:
         '''
         Free up memory space.
 
@@ -495,8 +511,9 @@ class PSFGrp:
         '''
 
         if self.in_or_out:
-            print(f'--> clearing input PSFGrp attached to InStamp {(self.inst.j_st, self.inst.i_st)}',
-                  '@', self.inst.blk.timer(), 's')
+            if verbose:
+                print(f'--> clearing input PSFGrp attached to InStamp {(self.inst.j_st, self.inst.i_st)}',
+                      '@', self.inst.blk.timer(), 's')
             # the following instance attributes should not be removed
             # as they will be referred to in PSFOvl.__call__:
             # self.use_inimage, self.idx_blk2grp, self.idx_grp2blk
@@ -526,7 +543,8 @@ class PSFOvl:
     flat_penalty = 1e-6  # amount by which to penalize
     # having different contributions to the output from different input images
 
-    def __init__(self, psfgrp1: PSFGrp, psfgrp2: PSFGrp = None) -> None:
+    def __init__(self, psfgrp1: PSFGrp, psfgrp2: PSFGrp = None,
+                 verbose: bool = False) -> None:
         '''
         Constructor.
 
@@ -547,21 +565,22 @@ class PSFOvl:
         self.grp1 = psfgrp1
         self.grp2 = psfgrp2  # None if self-overlap
 
-        if psfgrp2 is not None:  # cross-overlap
-            if psfgrp2.in_or_out:  # input-input cross-overlap
-                print(f'--> building input-input PSFOvl for InStamp {(psfgrp1.inst.j_st, psfgrp1.inst.i_st)}',
-                      f'and InStamp {(psfgrp2.inst.j_st, psfgrp2.inst.i_st)}', '@', psfgrp1.inst.blk.timer(), 's')
-            else:  # input-output cross-overlap
-                print(f'--> building input-output PSFOvl for InStamp {(psfgrp1.inst.j_st, psfgrp1.inst.i_st)}',
-                      f'and Block this_sub={psfgrp2.blk.this_sub}', '@', psfgrp1.inst.blk.timer(), 's')
+        if verbose:
+            if psfgrp2 is not None:  # cross-overlap
+                if psfgrp2.in_or_out:  # input-input cross-overlap
+                    print(f'--> building input-input PSFOvl for InStamp {(psfgrp1.inst.j_st, psfgrp1.inst.i_st)}',
+                          f'and InStamp {(psfgrp2.inst.j_st, psfgrp2.inst.i_st)}', '@', psfgrp1.inst.blk.timer(), 's')
+                else:  # input-output cross-overlap
+                    print(f'--> building input-output PSFOvl for InStamp {(psfgrp1.inst.j_st, psfgrp1.inst.i_st)}',
+                          f'and Block this_sub={psfgrp2.blk.this_sub}', '@', psfgrp1.inst.blk.timer(), 's')
 
-        else:  # self-overlap
-            if psfgrp1.in_or_out:  # input-self overlap
-                print(f'--> building input-self PSFOvl for InStamp {(psfgrp1.inst.j_st, psfgrp1.inst.i_st)}',
-                      '@', psfgrp1.inst.blk.timer(), 's')
-            else:  # output-self overlap
-                print(f'--> building output-self PSFOvl for Block this_sub={psfgrp1.blk.this_sub}',
-                      '@', psfgrp1.blk.timer(), 's')
+            else:  # self-overlap
+                if psfgrp1.in_or_out:  # input-self overlap
+                    print(f'--> building input-self PSFOvl for InStamp {(psfgrp1.inst.j_st, psfgrp1.inst.i_st)}',
+                          '@', psfgrp1.inst.blk.timer(), 's')
+                else:  # output-self overlap
+                    print(f'--> building output-self PSFOvl for Block this_sub={psfgrp1.blk.this_sub}',
+                          '@', psfgrp1.blk.timer(), 's')
 
         self._build_psfovl()  # this produces self.ovl_arr
 
@@ -1026,7 +1045,7 @@ class PSFOvl:
 
         return res
 
-    def clear(self) -> None:
+    def clear(self, verbose: bool = False) -> None:
         '''
         Free up memory space.
 
@@ -1039,9 +1058,10 @@ class PSFOvl:
 
         '''
 
-        if self.grp2 is not None and not self.grp2.in_or_out:
-            print(f'--> clearing input-output PSFOvl for InStamp {(self.grp1.inst.j_st, self.grp1.inst.i_st)}',
-                  f'and Block this_sub={self.grp2.blk.this_sub}', '@', self.grp1.inst.blk.timer(), 's')
+        if verbose:
+            if self.grp2 is not None and not self.grp2.in_or_out:
+                print(f'--> clearing input-output PSFOvl for InStamp {(self.grp1.inst.j_st, self.grp1.inst.i_st)}',
+                      f'and Block this_sub={self.grp2.blk.this_sub}', '@', self.grp1.inst.blk.timer(), 's')
 
         del self.grp1, self.grp2, self.ovl_arr
 
@@ -1183,7 +1203,7 @@ class SysMatA:
         return (*ji_st1, dist)
 
     def _compute_iisubmats(self, ji_st1: (int, int), ji_st2: (int, int),
-                           sim_mode: bool = False) -> None:
+                           sim_mode: bool = False, verbose: bool = False) -> None:
         '''
         Make input-input PSFOvl and compute A submatrices.
 
@@ -1275,7 +1295,8 @@ class SysMatA:
             del psfgrp1, psfgrp2
 
             iipsfovl.clear(); del iipsfovl
-            print(f'--> finished computing {counter} input-input sub-matrices', '@', self.blk.timer(), 's')
+            if verbose:
+                print(f'--> finished computing {counter} input-input sub-matrices', '@', self.blk.timer(), 's')
 
     def get_iisubmat(self, ji_st1: (int, int), ji_st2: (int, int),
                      sim_mode: bool = False) -> np.array:

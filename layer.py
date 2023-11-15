@@ -21,6 +21,8 @@ class GalSimInject:
     '''
     fluffy-garbanzo/inject_galsim_obj.py
 
+    # This file will contain routines to make an input image of injected objects using GalSim.
+
     '''
 
     @staticmethod
@@ -507,7 +509,7 @@ class Mask:
 
     @staticmethod
     def load_cr_mask(inimage: 'coadd.InImage'):
-        config = inimage.blk.cfg
+        config = inimage.blk.cfg  # shortcut
         # cr_mask_rate = inimage.blk.cfg.cr_mask_rate
         # extrainput = inimage.blk.cfg.extrainput
 
@@ -516,11 +518,21 @@ class Mask:
             cr_mask = Mask.randmask(inimage.idsca, config.cr_mask_rate)
             print('Cosmic ray mask:')
             print('good pix --> ', np.count_nonzero(cr_mask), '/', 4088**2)
-            for i, slice_ in enumerate(config.extrainput):
-                if slice_ == 'labnoise':
-                    cr_mask = np.logical_and(cr_mask, np.abs(
-                        inimage.indata[i]) < config.labnoisethreshold)
-            print('good pix --> ', np.count_nonzero(cr_mask), '/', 4088**2)
+
+            # for i, slice_ in enumerate(config.extrainput):
+            #     if slice_ == 'labnoise':
+            #         cr_mask = np.logical_and(cr_mask, np.abs(
+            #             inimage.indata[i]) < config.labnoisethreshold)
+            # print('good pix --> ', np.count_nonzero(cr_mask), '/', 4088**2)
+            try:
+                idx = config.extrainput.index('labnoise')
+            except:
+                pass
+            else:
+                cr_mask = np.logical_and(cr_mask, np.abs(
+                    inimage.indata[idx]) < config.labnoisethreshold)
+                print('good pix --> ', np.count_nonzero(cr_mask), '/', 4088**2)
+
         else:
             cr_mask = None
 
@@ -564,8 +576,8 @@ def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
 
 def get_all_data(inimage: 'coadd.InImage'):
     '''
-    makes a 4D array of the image data
-      axes of the output = [input type (e.g., 0=sci or sim), exposure index, y, x]
+    OUTDATED --> makes a 4D array of the image data
+    OUTDATED -->   axes of the output = [input type (e.g., 0=sci or sim), exposure index, y, x]
 
     Inputs:
       n_inframe = number of input frames
@@ -590,7 +602,7 @@ def get_all_data(inimage: 'coadd.InImage'):
     path = inimage.blk.cfg.inpath
     format_ = inimage.blk.cfg.informat
     inwcs = inimage.inwcs  # only one inwcs!
-    inpsf = inimage.get_psf_and_distort_mat(0, 0)[0]  # the actual PSF array!
+    inpsf = inimage.get_psf_and_distort_mat((0, 0), None)[0]  # the actual PSF array!
     inpsf_oversamp = inimage.blk.cfg.inpsf_oversamp
     extrainput = inimage.blk.cfg.extrainput
 

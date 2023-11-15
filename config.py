@@ -131,7 +131,7 @@ class Config:
         self.fname = fname
         if fname is not None:
             if fname == '':
-                print('> Using default_config.json', flush=True)
+                # print('> Using default_config.json', flush=True)
                 self.fname = files(__package__).joinpath('default_config.json')
             self._from_file()
         else:
@@ -183,7 +183,7 @@ class Config:
         # stop bulding the tile after a certain number of postage stamps
         self.stoptile = cfg.get('STOP', None)
 
-        # input stamp size padding, aka acceptance radius
+        # input stamp size padding (aka acceptance radius)
         self.instamp_pad = cfg.get('INPAD', 1.055) * Settings.arcsec
 
         # width of PSF sampling/overlap arrays in native pixels
@@ -225,11 +225,12 @@ class Config:
 
         print('General input information:')
         print('number of input frames = ', self.n_inframe, 'type =', self.extrainput)
-        rpix_search_in = int(np.ceil((self.n2 * self.dtheta * Settings.degree / np.sqrt(2.0)
-                                      + self.instamp_pad) / Settings.pixscale_native + 1))
-        insize = rpix_search_in * 2
-        print('input stamp radius -->', rpix_search_in,
-              'native pixels   stamp={:3d}x{:3d}'.format(insize, insize))
+        # search radius for input pixels (not used in the new framework)
+        # rpix_search_in = int(np.ceil((self.n2 * self.dtheta * Settings.degree / np.sqrt(2.0)
+        #                               + self.instamp_pad) / Settings.pixscale_native + 1))
+        # insize = rpix_search_in * 2
+        # print('input stamp radius -->', rpix_search_in,
+        #       'native pixels   stamp={:3d}x{:3d}'.format(insize, insize))
         print()
 
     def _get_attrs_wrapper(self, code: str, newline: bool = True) -> None:
@@ -325,11 +326,12 @@ class Config:
             "STOP = input('STOP (int) [default: None]: ')" '\n'
             "self.stoptile = int(STOP) if STOP else None")
 
-        print('# input stamp size padding in arcsec', flush=True)
+        print('# input stamp size padding (aka acceptance radius) in arcsec', flush=True)
         self._get_attrs_wrapper(
             "INPAD = input('INPAD (float) [default: 1.055]: ')" '\n'
             "self.instamp_pad = (float(INPAD) if INPAD else 1.055) * Settings.arcsec")
 
+        # print('# size of PSF postage stamp in native pixels')
         print('# width of PSF sampling/overlap arrays in native pixels', flush=True)
         self._get_attrs_wrapper(
             "NPIXPSF = input('NPIXPSF (int) [default: 48]: ')" '\n'
@@ -346,7 +348,7 @@ class Config:
             "EXTRASMOOTH = input('EXTRASMOOTH (float) [default: 1.5 / 2.355]: ')" '\n'
             "self.sigmatarget = float(EXTRASMOOTH) if EXTRASMOOTH else (1.5 / 2.355)")
 
-        print('# extra inputs' '\n'
+        print('# extra inputs (input images to stack at once)' '\n'
               '# (use names for each one, space-delimited; meaning of names must be coded into' '\n'
               '# coadd_utils.py, with the meaning based on the naming convention in INDATA)', flush=True)
         self._get_attrs_wrapper(
@@ -357,7 +359,8 @@ class Config:
         print('# mask options:' '\n'
               '# PMASK --> permanent mask (from file)' '\n'
               '# default: no permanent pixel mask' '\n'
-              '# CMASK --> cosmic ray mask (hit probability per pixel)', flush=True)
+              '# CMASK --> cosmic ray hit probability for stochastic mask', flush=True)
+        # '# CMASK --> cosmic ray mask (hit probability per pixel)', flush=True)
         self._get_attrs_wrapper(
             "PMASK = input('PMASK (str) [default: None]: ')" '\n'
             "self.permanent_mask = PMASK if PMASK else None", newline=False)
