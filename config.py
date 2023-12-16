@@ -189,8 +189,14 @@ class Config:
         # width of PSF sampling/overlap arrays in native pixels
         self.npixpsf = cfg.get('NPIXPSF', 48)
 
+        # amount by which to penalize having different contributions
+        # to the output from different input images
+        self.flat_penalty = cfg.get('FLATPEN', 0.0)
+
         # pad this many IMCOM postage stamps around the edge
         self.postage_pad = cfg.get('PAD', 0)
+        # accordingto the strategy or on the sides specified by the user
+        self.pad_sides = cfg.get('PADSIDES', 'auto')
 
         # output target PSF extra smearing
         self.sigmatarget = cfg.get('EXTRASMOOTH', 1.5 / 2.355)
@@ -220,7 +226,6 @@ class Config:
 
         self.NsideP = self.Nside + self.postage_pad * self.n2 * 2
         self.n1P = self.n1 + self.postage_pad * 2
-        assert self.n1 % 2 == 0, 'Error: n1 must be even since PSF computations are in 2x2 groups'
         self.n2f = self.n2 + self.fade_kernel * 2
 
         print('General input information:')
@@ -254,7 +259,8 @@ class Config:
         while status:
             try:
                 exec(code)
-            except:
+            except Exception as error:
+                print(error)
                 print('# Invalid input, please try again.', flush=True)
             else:
                 status = False
@@ -289,6 +295,7 @@ class Config:
             "self.ra, self.dec = map(float, input('CTR (float float): ').split(' '))", newline=False)
         self._get_attrs_wrapper(
             "self.n1, self.n2, self.dtheta = map(eval, input('OUTSIZE (int int float): ').split(' '))" '\n'
+            "assert self.n1 % 2 == 0, 'Error: n1 must be even since PSF computations are in 2x2 groups'" '\n'
             "self.dtheta *= u.arcsec.to('degree')" '\n'
             "self.Nside = self.n1 * self.n2", newline=False)
         self._get_attrs_wrapper(
@@ -337,10 +344,27 @@ class Config:
             "NPIXPSF = input('NPIXPSF (int) [default: 48]: ')" '\n'
             "self.npixpsf = (int(NPIXPSF) if NPIXPSF else 48)")
 
+        print('# amount by which to penalize having different contributions' '\n'
+              '# to the output from different input images', flush=True)
+        self._get_attrs_wrapper(
+            "FLATPEN = input('FLATPEN (float) [default: 1e-7]: ')" '\n'
+            "self.flat_penalty = (float(FLATPEN) if FLATPEN else 1e-7)")
+
         print('# number of IMCOM postage stamps to pad around each output region', flush=True)
         self._get_attrs_wrapper(
             "PAD = input('PAD (int) [default: 0]: ')" '\n'
             "self.postage_pad = float(PAD) if PAD else 0")
+
+        print('# on which side(s) to pad IMCOM postage stamps' '\n'
+              '# "all" means to pad on all sides;' '\n'
+              '# "auto" means to pad on mosaic boundaries only;' '\n'
+              '# "none" means pad pad on none of the sides;' '\n'
+              '# otherwise, please specify which side(s) to pad on' '\n'
+              '# using CAPITAL letters "B" (bottom), "T" (top),'
+              '# "L" (left), and "R" (right); the order does not matter', flush=True)
+        self._get_attrs_wrapper(
+            "PADSIDES = input('PADSIDES (str) [default: \"auto\"]: ')" '\n'
+            "self.pad_sides = PADSIDES if PADSIDES else 'auto'")
 
         print('# smoothing of output PSF (units: input pixels, 1 sigma)' '\n'
               '# default: FWHM Gaussian smoothing divided by 2.355 to be a sigma', flush=True)
@@ -413,8 +437,11 @@ class Config:
 
         cfg['NPIXPSF'] = self.npixpsf
 
+        cfg['FLATPEN'] = self.flat_penalty
+
         if self.postage_pad != 0:
             cfg['PAD'] = self.postage_pad
+        cfg['PADSIDES'] = self.pad_sides
 
         # if self.sigmatarget != 1.5 / 2.355:
         cfg['EXTRASMOOTH'] = self.sigmatarget

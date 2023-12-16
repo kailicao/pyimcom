@@ -42,7 +42,7 @@ class InImage:
         Parameters
         ----------
         blk : Block
-            The Block instance to which this InImage instance is attached to.
+            The Block instance to which this InImage instance is attached.
         idsca : (int, int)
             ID of observation and SCA used.
 
@@ -130,28 +130,33 @@ class InImage:
         sp_outxys = self._inpix2world2outpix(sp_inxys).T.reshape(2, sp_res+1, sp_res+1)
         del sp_inxys
 
+        # limits for input pixel positions in output pixel coordinates
+        pix_lower =                     - self.blk.cfg.n2 - 0.5
+        pix_upper = self.blk.cfg.NsideP + self.blk.cfg.n2 - 0.5
+
         if visualize:
             for i in range(2):
                 plt.imshow(sp_outxys[i], origin='lower')
                 plt.colorbar()
-                plt.contour(sp_outxys[i], levels=[50, 2550], colors='r')
+                plt.contour(sp_outxys[i], levels=[pix_lower, pix_upper], colors='r')
                 plt.show()
-
-        # limits for stamp indices
-        pix_lower = (                 self.blk.cfg.postage_pad-1) * self.blk.cfg.n2 - 0.5  #  1 x n2 by default
-        pix_upper = (self.blk.cfg.n1P-self.blk.cfg.postage_pad+1) * self.blk.cfg.n2 - 0.5  # 51 x n2 by default
 
         self.is_relevant = False  # whether the input image is relevant to the output block
         relevant_matrix = np.zeros((sp_res, sp_res), dtype=bool)
         for j in range(1, sp_res):
             for i in range(1, sp_res):
-                if pix_lower < sp_outxys[0, j, i] < pix_upper\
-                and pix_lower < sp_outxys[1, j, i] < pix_upper:
+                if not (pix_lower < sp_outxys[0, j, i] < pix_upper\
+                    and pix_lower < sp_outxys[1, j, i] < pix_upper): continue
+                i_st = int((sp_outxys[0, j, i]-pix_lower) // self.blk.cfg.n2)  # st stands for stamp
+                j_st = int((sp_outxys[1, j, i]-pix_lower) // self.blk.cfg.n2)
+
+                if np.any(self.blk.use_instamps[max(j_st-2, 0):min(j_st+3, self.blk.cfg.n1P+2),
+                                                max(i_st-2, 0):min(i_st+3, self.blk.cfg.n1P+2)]):
                     # at least some of the input pixels are relevant
                     self.is_relevant = True
                     # we will study all the adjacent input pixels
-                    relevant_matrix[max(j-2, 0):min(j+2, sp_res-1),
-                                    max(i-2, 0):min(i+2, sp_res-1)] = True
+                    relevant_matrix[max(j-2, 0):min(j+3, sp_res),
+                                    max(i-2, 0):min(i+3, sp_res)] = True
         del sp_outxys
 
         if visualize:
@@ -159,8 +164,6 @@ class InImage:
             plt.colorbar()
             plt.show()
 
-        # if self.idsca not in [(95060, 12), (132154, 12)]:
-        #     self.is_relevant = False  # for testing purposes
         if not self.is_relevant:
             del sp_arr, relevant_matrix
             return
@@ -172,13 +175,13 @@ class InImage:
                        (Stn.pixscale_native / Stn.arcsec) + 1) ** 2 * relax_coef)  # default: about 160
 
         # arrays for indices (in the input image grid),
-        self.y_idx = np.zeros((self.blk.cfg.n1+2, self.blk.cfg.n1+2, npixmax), dtype=np.uint16)
-        self.x_idx = np.zeros((self.blk.cfg.n1+2, self.blk.cfg.n1+2, npixmax), dtype=np.uint16)
+        self.y_idx = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2, npixmax), dtype=np.uint16)
+        self.x_idx = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2, npixmax), dtype=np.uint16)
         # positions (in the output block coordinates),
-        self.y_val = np.zeros((self.blk.cfg.n1+2, self.blk.cfg.n1+2, npixmax), dtype=np.float32)
-        self.x_val = np.zeros((self.blk.cfg.n1+2, self.blk.cfg.n1+2, npixmax), dtype=np.float32)
+        self.y_val = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2, npixmax), dtype=np.float32)
+        self.x_val = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2, npixmax), dtype=np.float32)
         # and number of pixels in each postage stamp (from this InImage)
-        self.pix_count = np.zeros((self.blk.cfg.n1+2, self.blk.cfg.n1+2), dtype=np.uint16)
+        self.pix_count = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2), dtype=np.uint16)
 
         # load masks here
         if self.blk.pmask is not None:
@@ -207,11 +210,13 @@ class InImage:
                 for j in range(top-bottom):
                     for i in range(right-left):
                         my_x, my_y = outxys[:, j, i]
-                        if not (pix_lower < my_x < pix_upper and pix_lower < my_y < pix_upper): continue
+                        if not (pix_lower < my_x < pix_upper and
+                                pix_lower < my_y < pix_upper): continue
                         if not mask[bottom+j, left+i]: continue
 
                         i_st = int((my_x-pix_lower) // self.blk.cfg.n2)  # st stands for stamp
                         j_st = int((my_y-pix_lower) // self.blk.cfg.n2)
+                        if not self.blk.use_instamps[j_st, i_st]: continue
 
                         my_idx = self.pix_count[j_st, i_st]
                         self.y_idx[j_st, i_st, my_idx] = bottom+j
@@ -246,11 +251,11 @@ class InImage:
 
         assert self.exists, 'Error: input image and/or input psf do(es) not exist'
 
-        self.data = np.zeros((self.blk.cfg.n_inframe, self.blk.cfg.n1+2,
-                              self.blk.cfg.n1+2, self.max_count), dtype=np.float32)
+        self.data = np.zeros((self.blk.cfg.n_inframe, self.blk.cfg.n1P+2,
+                              self.blk.cfg.n1P+2, self.max_count), dtype=np.float32)
 
-        for j_st in range(self.blk.cfg.n1+2):
-            for i_st in range(self.blk.cfg.n1+2):
+        for j_st in range(self.blk.cfg.n1P+2):
+            for i_st in range(self.blk.cfg.n1P+2):
                 n_pix = self.pix_count[j_st, i_st]
                 self.data[:, j_st, i_st, :n_pix] =\
                 self.indata[:, self.y_idx[j_st, i_st, :n_pix], self.x_idx[j_st, i_st, :n_pix]]
@@ -284,7 +289,7 @@ class InImage:
             Input PSF array to be smeared.
         tophatwidth : float, optional
         gaussiansigma : float, optional
-            For both: In units of the pixels given (not native pixel). The default is 0.0.
+            Both in units of the pixels given (not native pixel). The default is 0.0.
 
         Returns
         -------
@@ -393,7 +398,7 @@ class InStamp:
         Parameters
         ----------
         blk : Block
-            The Block instance to which this InStamp instance is attached to.
+            The Block instance to which this InStamp instance is attached.
         j_st, i_st : int, int
             InStamp index.
 
@@ -425,8 +430,13 @@ class InStamp:
             self.data[:, self.pix_cumsum[i_im]:self.pix_cumsum[i_im+1]] =\
                 inimage.data[:, j_st, i_st, :self.pix_count[i_im]]
 
-        self.inpsfgrp = None
-        self.inpsfgrp_ref = 0
+        if j_st % 2 == 0 and i_st % 2 == 0:
+            # get where to compute the PSF and the camera distortion matrix
+            # (the center of the 2x2 group of postage stamps)
+            self.psf_compute_point_pix = [i_st * blk.cfg.n2 - 0.5,
+                                          j_st * blk.cfg.n2 - 0.5]
+            self.inpsfgrp = None
+            self.inpsfgrp_ref = 0
 
     def make_selection(self, pivot: (float, float) = (None, None),
                        radius: float = None) -> np.array:
@@ -440,7 +450,7 @@ class InStamp:
         pivot : (float, float), optional
             Pivot position in the output block coordinates.
             If None in one direction, select input pixels according to the other;
-            if None in both direction, select all input pixels.
+            if None in both directions, select all input pixels.
             The default is (None, None).
         radius : float, optional
             Select input pixels within this radius. The default is None.
@@ -545,7 +555,7 @@ class OutStamp:
         Parameters
         ----------
         blk : Block
-            The Block instance to which this InStamp instance is attached to.
+            The Block instance to which this InStamp instance is attached.
         j_st, i_st : int, int
             OutStamp index.
 
@@ -573,11 +583,11 @@ class OutStamp:
 
         # limit y and x positions of this output postage stamp, all integers
         # not including the transition pixels (of which the number
-        # of columns or row on each side is set by fade_kernel)
-        self.bottom = (blk.cfg.postage_pad-1+j_st) * blk.cfg.n2
+        # of columns or rows on each side is set by fade_kernel)
+        self.bottom = (j_st - 1)  * blk.cfg.n2
         self.top    = self.bottom + blk.cfg.n2-1
-        self.left   = (blk.cfg.postage_pad-1+i_st) * blk.cfg.n2
-        self.right  = self.left + blk.cfg.n2-1
+        self.left   = (i_st - 1)  * blk.cfg.n2
+        self.right  = self.left   + blk.cfg.n2-1
 
         fade_kernel = blk.cfg.fade_kernel  # shortcut
         # output pixel positions, all integers
@@ -621,8 +631,8 @@ class OutStamp:
 
         # acceptance radius in units of output pixels
         radius = (self.blk.cfg.instamp_pad / Stn.arcsec) \
-        / (self.blk.cfg.dtheta * u.degree.to('arcsec')) \
-        + self.blk.cfg.fade_kernel * np.sqrt(2.0)
+        / (self.blk.cfg.dtheta * u.degree.to('arcsec'))  # \
+        # + self.blk.cfg.fade_kernel * np.sqrt(2.0)
 
         # now select input pixels
         for idx, ji_st_in in enumerate(self.ji_st_in_s):
@@ -1044,8 +1054,12 @@ class Block:
     __call__ : Coadd this block.
     parse_config : Parse the configuration.
     _get_obs_cover: Get observations relevant to this Block.
+
+    _build_use_instamps : Build the Boolean array use_instamps.
+    _handle_postage_pad : Handle the postage padding.
     process_input_images : Process input images.
     build_input_stamps : Build input stamps from input images.
+
     _output_stamp_wrapper : Wrapper for output stamp coaddition.
     coadd_output_stamps : Coadd output stamps using input stamps.
     build_output_file : Build the output FITS file.
@@ -1079,6 +1093,7 @@ class Block:
         if cfg is None: self.cfg = Config()  # use the default config
 
         PSFGrp.setup(npixpsf=cfg.npixpsf, oversamp=cfg.inpsf_oversamp)
+        PSFOvl.setup(flat_penalty=cfg.flat_penalty)
         self.this_sub = this_sub
         if run_coadd: self()
 
@@ -1113,7 +1128,7 @@ class Block:
         # this produces: out_map, fidelity_map, kappamin, kappamax, T_weightmap
 
         # print('> Block.build_output_file', '@', self.timer(), 's')
-        self.build_output_file()
+        self.build_output_file(is_final=True)
         # print('> Block.clear_all', '@', self.timer(), 's')
         self.clear_all()
 
@@ -1149,7 +1164,7 @@ class Block:
         print()
 
         # block information
-        ibx, iby = divmod(self.this_sub, self.cfg.nblock)
+        iby, ibx = divmod(self.this_sub, self.cfg.nblock)
         print('sub-block {:4d} <{:2d},{:2d}> of {:2d}x{:2d}={:2d}'.format(self.this_sub,
               ibx, iby, self.cfg.nblock, self.cfg.nblock, self.cfg.nblock**2))
         self.outstem = self.cfg.outstem + '_{:02d}_{:02d}'.format(ibx, iby)
@@ -1245,6 +1260,67 @@ class Block:
 
         self.obslist.sort()
 
+    def _build_use_instamps(self) -> None:
+        '''
+        Build use_instamps, Boolean array indicating
+        whether to use each input postage stamp.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        self.use_instamps = np.zeros((self.cfg.n1P+2, self.cfg.n1P+2), dtype=bool)
+
+        n_coadded = 0  # number of output postage stamps to be coadded
+        for j_st in range(self.j_st_min, self.j_st_max+1, 2):
+            for i_st in range(self.i_st_min, self.i_st_max+1, 2):
+                for dj, di in product(range(2), range(2)):
+                    self.use_instamps[j_st+dj-1:j_st+dj+2, i_st+di-1:i_st+di+2] = True
+
+                    n_coadded += 1
+                    if n_coadded == self.nrun: return
+
+    def _handle_postage_pad(self) -> None:
+        '''
+        Handle the postage padding.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        postage_pad = self.cfg.postage_pad  # shortcut
+        self.j_st_min = self.i_st_min = postage_pad + 1  # 3 by default
+        self.j_st_max = self.i_st_max = self.j_st_min + self.cfg.n1 - 1  # 50 by default
+
+        # adjust these based on which side(s) to pad on
+        if self.cfg.pad_sides == 'all':  # pad on all sides
+            self.j_st_min -= postage_pad; self.i_st_min -= postage_pad
+            self.j_st_max += postage_pad; self.i_st_max += postage_pad
+
+        elif self.cfg.pad_sides == 'auto':  # pad on mosaic boundaries only
+            nblock = self.cfg.nblock  # shortcut
+            iby, ibx = divmod(self.this_sub, self.cfg.nblock)
+            if iby == 0: self.j_st_min -= postage_pad
+            elif iby == nblock - 1: self.j_st_max += postage_pad
+            if ibx == 0: self.i_st_min -= postage_pad
+            elif ibx == nblock - 1: self.i_st_max += postage_pad
+
+        elif self.cfg.pad_sides != 'none':  # pad on sides specified by the user
+            pad_sides = self.cfg.pad_sides  # shortcut
+            if 'B' in pad_sides: self.j_st_min -= postage_pad
+            if 'T' in pad_sides: self.j_st_max += postage_pad
+            if 'L' in pad_sides: self.i_st_min -= postage_pad
+            if 'R' in pad_sides: self.i_st_max += postage_pad
+
+        self.nrun = (self.j_st_max - self.j_st_min + 1) \
+                  * (self.i_st_max - self.i_st_min + 1)
+        if self.cfg.stoptile is not None: self.nrun = self.cfg.stoptile
+        self._build_use_instamps()
+
     def process_input_images(self) -> None:
         '''
         Process input images.
@@ -1290,6 +1366,7 @@ class Block:
         self.pmask = Mask.load_permanent_mask(self)
         print()
 
+        self._handle_postage_pad()
         for inimage in self.inimages:
             inimage.partition_pixels()
             if not inimage.is_relevant: continue
@@ -1313,12 +1390,14 @@ class Block:
         '''
 
         # current version only works when acceptance radius <= postage stamp size
-        self.instamps = [[None for i_st in range(self.cfg.n1+2)]
-                               for j_st in range(self.cfg.n1+2)]  # st stands for stamp
+        self.instamps = [[None for i_st in range(self.cfg.n1P+2)]
+                               for j_st in range(self.cfg.n1P+2)]  # st stands for stamp
 
-        for j_st in range(self.cfg.n1+2):
-            for i_st in range(self.cfg.n1+2):
-                self.instamps[j_st][i_st] = InStamp(self, j_st, i_st)
+        for j_st in range(self.cfg.n1P+2):
+            for i_st in range(self.cfg.n1P+2):
+                if self.use_instamps[j_st, i_st]:
+                    self.instamps[j_st][i_st] = InStamp(self, j_st, i_st)
+        del self.use_instamps
 
         for inimage in self.inimages:
             inimage.clear()
@@ -1342,24 +1421,24 @@ class Block:
 
         '''
 
-        assert 0 < i_st < self.cfg.n1+1 and 0 < j_st < self.cfg.n1+1, 'outstamp out of boundary'
+        assert 1 <= i_st <= self.cfg.n1P and 1 <= j_st <= self.cfg.n1P, 'outstamp out of boundary'
 
         if sim_mode:  # count references to PSF overlaps and system matrices
             self.outstamps[j_st][i_st] = OutStamp(self, j_st, i_st)
         else:
             print('postage stamp {:2d},{:2d}  {:6.3f}% t= {:9.2f} s'.format(
-                i_st, j_st, 100*n_coadded/self.cfg.n1P**2, self.timer()), flush=True)
+                i_st, j_st, 100*n_coadded/self.nrun, self.timer()), flush=True)
             outst = self.outstamps[j_st][i_st]; outst()
 
-            bottom = (j_st+self.cfg.postage_pad-1) * self.cfg.n2
-            top    = (j_st+self.cfg.postage_pad)   * self.cfg.n2 + self.cfg.fade_kernel*2
-            left   = (i_st+self.cfg.postage_pad-1) * self.cfg.n2
-            right  = (i_st+self.cfg.postage_pad)   * self.cfg.n2 + self.cfg.fade_kernel*2
+            bottom = (j_st-1) * self.cfg.n2
+            top    =  j_st    * self.cfg.n2 + self.cfg.fade_kernel*2
+            left   = (i_st-1) * self.cfg.n2
+            right  =  i_st    * self.cfg.n2 + self.cfg.fade_kernel*2
 
             self.out_map[:, :, bottom:top, left:right] += outst.outimage
 
             # weight computations
-            self.T_weightmap[:, :, j_st+self.cfg.postage_pad-1, i_st+self.cfg.postage_pad-1] = outst.Tsum
+            self.T_weightmap[:, :, j_st-1, i_st-1] = outst.Tsum
 
             # fidelity map
             self.fidelity_map[:, bottom:top, left:right] = np.minimum(
@@ -1390,8 +1469,8 @@ class Block:
         if sim_mode:  # count references to PSF overlaps and system matrices
             self.sysmata = SysMatA(self)
             self.sysmatb = SysMatB(self)
-            self.outstamps = [[None for i_st in range(self.cfg.n1+2)]
-                                    for j_st in range(self.cfg.n1+2)]
+            self.outstamps = [[None for i_st in range(self.cfg.n1P+2)]
+                                    for j_st in range(self.cfg.n1P+2)]
 
         else:
             n_out   = self.outpsfgrp.n_psf
@@ -1411,45 +1490,48 @@ class Block:
 
         ### Begin loop over all the postage stamps we want to create ###
 
-        nrun = self.cfg.n1 ** 2  # to be determined based on which side(s) to pad
-        if self.cfg.stoptile is not None:
-            nrun = self.cfg.stoptile
-
         n_coadded = 0  # number of coadded postage stamps
-        for j_st, i_st in product(range(1, self.cfg.n1+1, 2), range(1, self.cfg.n1+1, 2)):
-            for dj, di in product(range(2), range(2)):
-                # if i_st+di > 4: continue  # for testing purposes
-                # <-- also for testing, just to do the first few columns
-                self._output_stamp_wrapper(i_st+di, j_st+dj, n_coadded, sim_mode)
-                n_coadded += 1
+        for j_st in range(self.j_st_min, self.j_st_max+1, 2):
+            for i_st in range(self.i_st_min, self.i_st_max+1, 2):
+                for dj, di in product(range(2), range(2)):
+                    self._output_stamp_wrapper(i_st+di, j_st+dj, n_coadded, sim_mode)
+                    n_coadded += 1
 
-                if n_coadded == nrun:
-                    if sim_mode:
-                        # print(self.sysmata.iisubmats_ref)
-                        self.sysmata.iisubmats.clear()
-                        # print(self.sysmatb.iopsfovls_ref)
-                        self.sysmatb.iopsfovls.clear()
-                    else:
-                        assert len(self.sysmata.iisubmats) == 0, 'self.sysmata.iisubmats is not empty'
-                        assert len(self.sysmatb.iopsfovls) == 0, 'self.sysmatb.iopsfovls is not empty'
-                    return
+                    if n_coadded == self.nrun:
+                        if sim_mode:
+                            # print(self.sysmata.iisubmats_ref)
+                            self.sysmata.iisubmats.clear()
+                            # print(self.sysmatb.iopsfovls_ref)
+                            self.sysmatb.iopsfovls.clear()
+                        else:
+                            assert len(self.sysmata.iisubmats) == 0, 'self.sysmata.iisubmats is not empty'
+                            assert len(self.sysmatb.iopsfovls) == 0, 'self.sysmatb.iopsfovls is not empty'
+                        return
+
+                if not sim_mode:
+                    gc.collect()  # force a garbage collection
 
             if not sim_mode:
-                gc.collect()  # force a garbage collection
-
                 # Write an intermediate map
                 print('  --> intermediate output -->\n')
-                fk = self.cfg.fade_kernel  # shortcut
-                maphdu = fits.PrimaryHDU(self.out_map[:, :, fk:-fk, fk:-fk], header=self.outwcs.to_header())
-                hdu_list = fits.HDUList([maphdu])
-                hdu_list.writeto(self.outstem+'_map.fits', overwrite=True)
+                self.build_output_file(is_final=False)
+                # fk = self.cfg.fade_kernel  # shortcut
+                # maphdu = fits.PrimaryHDU(self.out_map[:, :, fk:-fk, fk:-fk], header=self.outwcs.to_header())
+                # hdu_list = fits.HDUList([maphdu])
+                # hdu_list.writeto(self.outstem+'_map.fits', overwrite=True)
 
-    def build_output_file(self) -> None:
+    def build_output_file(self, is_final: bool = False) -> None:
         '''
         Build the output FITS file.
 
         Currently the kappa maps are in a separate file.
         Those will be merged into the main FITS file.
+
+        Parameters
+        ----------
+        is_final : bool, optional
+            Whether this is the final (i.e., not intermediate) output.
+            If so, recover the faded block boundaries. The default is False.
 
         Returns
         -------
@@ -1457,8 +1539,9 @@ class Block:
 
         '''
 
-        fk = self.cfg.fade_kernel  # shortcut
-        OutStamp.trapezoid(self.out_map, fk, recover_mode=True)  # recover block boundaries
+        if is_final:
+            fk = self.cfg.fade_kernel  # shortcut
+            OutStamp.trapezoid(self.out_map, fk, recover_mode=True)  # recover block boundaries
 
         maphdu = fits.PrimaryHDU(self.out_map[:, :, fk:-fk, fk:-fk], header=self.outwcs.to_header())
         config_hdu = fits.TableHDU.from_columns(
@@ -1505,12 +1588,9 @@ class Block:
         del self.outpsfgrp, self.outpsfovl, self.sysmata, self.sysmatb
         del self.out_map, self.fidelity_map, self.kappamin, self.kappamax, self.T_weightmap
 
-        for j_st in range(self.cfg.n1+2):
-            for i_st in range(self.cfg.n1+2):
-                self.instamps[j_st][i_st].clear()
-
-        for j_st in range(self.cfg.n1+2):
-            for i_st in range(self.cfg.n1+2):
+        for j_st in range(self.cfg.n1P+2):
+            for i_st in range(self.cfg.n1P+2):
+                inst = self.instamps[j_st][i_st]
+                if inst is not None: inst.clear()
                 outst = self.outstamps[j_st][i_st]
-                if outst is None: continue
-                outst.clear()
+                if outst is not None: outst.clear()

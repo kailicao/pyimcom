@@ -3,7 +3,6 @@ import re
 import sys
 
 import numpy as np
-# import scipy
 import scipy.linalg
 from scipy.ndimage import convolve
 
@@ -441,20 +440,20 @@ class Noise:
     def noise_1f_frame(seed):
         this_array = np.zeros((4096, 4096))
         rng = np.random.default_rng(seed)
-        len = 8192*128
+        len_ = 8192*128
 
         # get frequencies and amplitude ~ sqrt{power}
-        freq = np.linspace(0, 1-1./len, len)
-        freq[len//2:] -= 1.
-        amp = (1.e-99+np.abs(freq*len))**(-.5)
+        freq = np.linspace(0, 1-1./len_, len_)
+        freq[len_//2:] -= 1.
+        amp = (1.e-99+np.abs(freq*len_))**(-.5)
         amp[0] = 0.
         for ch in range(32):
             # get array
-            ftsignal = np.zeros((len,), dtype=np.complex128)
-            ftsignal[:] = rng.normal(loc=0., scale=1., size=(len,))
-            ftsignal[:] += 1j*rng.normal(loc=0., scale=1., size=(len,))
+            ftsignal = np.zeros((len_,), dtype=np.complex128)
+            ftsignal[:] = rng.normal(loc=0., scale=1., size=(len_,))
+            ftsignal[:] += 1j*rng.normal(loc=0., scale=1., size=(len_,))
             ftsignal *= amp
-            block = np.fft.fft(ftsignal).real[:len//2]/np.sqrt(2.)
+            block = np.fft.fft(ftsignal).real[:len_//2]/np.sqrt(2.)
             block -= np.mean(block)
 
             xmin = ch*128

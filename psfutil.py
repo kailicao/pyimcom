@@ -215,10 +215,9 @@ class PSFGrp:
         Parameters
         ----------
         npixpsf : int, optional
-            Size of PSF postage stamp in native pixels. The default is 64.
+            Size of PSF postage stamp in native pixels. The default is 48.
         oversamp : int, optional
             PSF oversampling factor relative to native pixel scale. The default is 8.
-        kpad : int, optional. The default is 5.
 
         Returns
         -------
@@ -239,7 +238,7 @@ class PSFGrp:
 
         # nfft0div8 = 2**(int(np.ceil(np.log2(cls.nsamp-0.5)))-2)
         # cls.nfft = nfft0div8 * int(np.ceil(2*cls.nsamp/nfft0div8))  # 1280 by default
-        cls.nfft = npixpsf * oversamp * 2
+        cls.nfft = npixpsf * oversamp * 2  # 768 by default
 
     def __init__(self, in_or_out: bool = True,
                  inst: 'coadd.InStamp' = None, blk: 'coadd.Block' = None,
@@ -402,13 +401,9 @@ class PSFGrp:
                 self.idx_grp2blk[self.n_psf] = idx_b
                 self.n_psf += 1
 
-        # get where to compute the PSF and the camera distortion matrix
-        # compute the psf at the center of the 2x2 group of postage stamps
         blk = self.inst.blk  # shortcut
-        psf_compute_point_pix = [(blk.cfg.postage_pad+self.inst.i_st) * blk.cfg.n2 - 0.5,
-                                 (blk.cfg.postage_pad+self.inst.j_st) * blk.cfg.n2 - 0.5]
-        psf_compute_point = blk.outwcs.all_pix2world(np.array([psf_compute_point_pix]), 0)[0]
-        dWdp_out = wcs.utils.local_partial_pixel_derivatives(blk.outwcs, *psf_compute_point_pix)
+        psf_compute_point = blk.outwcs.all_pix2world(np.array([self.inst.psf_compute_point_pix]), 0)[0]
+        dWdp_out = wcs.utils.local_partial_pixel_derivatives(blk.outwcs, *self.inst.psf_compute_point_pix)
         print('INPUT/PSF computation at RA={:8.4f}, Dec={:8.4f}'.format(*psf_compute_point))
         print(' --> partial derivatives, ', dWdp_out)
 
@@ -442,10 +437,10 @@ class PSFGrp:
         '''
 
         self.n_psf = 1
-        psf_orig = np.zeros((self.n_psf, PSFGrp.nsamp, PSFGrp.nsamp))
+        psf_orig = np.zeros((self.n_psf, PSFGrp.nsamp+1, PSFGrp.nsamp+1))
 
         for idx in range(self.n_psf):
-            psf_orig[idx] = OutPSF.psf_simple_airy(PSFGrp.nsamp,
+            psf_orig[idx] = OutPSF.psf_simple_airy(PSFGrp.nsamp+1,
                 Stn.QFilterNative[self.blk.cfg.use_filter] * PSFGrp.oversamp,
                 obsc=Stn.obsc, tophat_conv=0.0, sigma=self.blk.cfg.sigmatarget * PSFGrp.oversamp)
         self._sample_psf(None, psf_orig)  # this produces self.psf_arr
@@ -526,6 +521,7 @@ class PSFOvl:
 
     Methods
     -------
+    setup (classmethod) : Set up class attribute.
     __init__ : Constructor.
     _idx_square2triangle : Convert a 2-d square index to a 1-d triangle index.
     accel_irfft2_and_extract (staticmethod) : irfft2 and extraction.
@@ -540,8 +536,27 @@ class PSFOvl:
 
     '''
 
-    flat_penalty = 1e-6  # amount by which to penalize
-    # having different contributions to the output from different input images
+    # default setting, will be overwritten by PSFOvl.setup
+    flat_penalty = 1e-7
+
+    @classmethod
+    def setup(cls, flat_penalty: float = 1e-7) -> None:
+        '''
+        Set up class attribute.
+
+        Parameters
+        ----------
+        flat_penalty : float, optional
+            Amount by which to penalize having different contributions
+            to the output from different input images. The default is 1e-7.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        cls.flat_penalty = flat_penalty
 
     def __init__(self, psfgrp1: PSFGrp, psfgrp2: PSFGrp = None,
                  verbose: bool = False) -> None:
@@ -575,10 +590,10 @@ class PSFOvl:
                           f'and Block this_sub={psfgrp2.blk.this_sub}', '@', psfgrp1.inst.blk.timer(), 's')
 
             else:  # self-overlap
-                if psfgrp1.in_or_out:  # input-self overlap
+                if psfgrp1.in_or_out:  # input self-overlap
                     print(f'--> building input-self PSFOvl for InStamp {(psfgrp1.inst.j_st, psfgrp1.inst.i_st)}',
                           '@', psfgrp1.inst.blk.timer(), 's')
-                else:  # output-self overlap
+                else:  # output self-overlap
                     print(f'--> building output-self PSFOvl for Block this_sub={psfgrp1.blk.this_sub}',
                           '@', psfgrp1.blk.timer(), 's')
 
@@ -592,7 +607,7 @@ class PSFOvl:
         '''
         Convert a 2-d square index to a 1-d triangle index.
 
-        The motivation is that, in the input-self overlap case,
+        The motivation is that, in the input self-overlap case,
         the overlap between psf_arr[idx2] and psf_arr[idx1] is simply
         the flipped version of the overlap between psf_arr[idx1] and psf_arr[idx2].
         Therefore, we only need to compute the latter, and the results
@@ -632,6 +647,8 @@ class PSFOvl:
         less than (1/2) x (1/2) of the irfft2 results.
         For nsamp = 537 and nfft = 1280, this saves about 40%
         of the time compared to simply using irfft2 and ifftshift.
+        Note: Because of the ifftshift part, this function is *not*
+        the inverse function of PSFGrp.accel_pad_and_rfft2.
 
         Diagram of the steps involved here (ext. stands for extraction):
         +---+      +---+
@@ -689,7 +706,7 @@ class PSFOvl:
                 self.ovl_arr[idx] = PSFOvl.accel_irfft2_and_extract(ovl_rft)
                 del ovl_rft
 
-        elif self.grp1.in_or_out:  # input-self overlap
+        elif self.grp1.in_or_out:  # input self-overlap
             n_psf = self.grp1.n_psf  # shortcut
             self.ovl_arr = np.zeros((n_psf*(n_psf+1)//2, PSFGrp.nsamp, PSFGrp.nsamp))
 
@@ -699,7 +716,7 @@ class PSFOvl:
                 self.ovl_arr[start:start+n_psf-idx] = PSFOvl.accel_irfft2_and_extract(ovl_rft)
                 del ovl_rft
 
-        else:  # output-self overlap
+        else:  # output self-overlap
             ovl_rft = self.grp1.psf_rft * self.grp1.psf_rft.conjugate()
             # we do not need overlaps between different output PSFs
             self.ovl_arr = PSFOvl.accel_irfft2_and_extract(ovl_rft)
@@ -708,7 +725,7 @@ class PSFOvl:
             # extract C value(s)
             self.outovlc = self.ovl_arr[:, PSFGrp.nc, PSFGrp.nc]
             del self.ovl_arr  # move this to PSFOvl.clear
-            # if the entire output-self overlap array is needed
+            # if the entire output self-overlap array is needed
 
     def visualize_psfovl(self) -> None:
         '''
@@ -792,9 +809,9 @@ class PSFOvl:
             else:  # input-output cross-overlap
                 return self._call_io_cross(st1, st2, visualize)
 
-        else:  # input-self overlap
+        else:  # input self-overlap
             assert self.grp1.in_or_out, f'{self.grp1.in_or_out=} in a self-overlap case'
-            # this method never deals with output-self overlap!
+            # this method never deals with output self-overlap!
             return self._call_ii_self(st1, st2, visualize)
 
     def _call_ii_cross(self, st1: 'coadd.InStamp', st2: 'coadd.InStamp',
@@ -821,9 +838,10 @@ class PSFOvl:
         ddy = st1.y_val[:, None] - st2.y_val[None, :]
         ddy /= self.dscale; ddy += PSFGrp.nc
 
+        n_psf1, n_psf2 = self.ovl_arr.shape[:2]
         if visualize:
-            n_psf1, n_psf2 = self.ovl_arr.shape[:2]
             fig, axs = plt.subplots(n_psf1, n_psf2, figsize=(6.4*n_psf2, 4.8*n_psf1))
+        n_in = (n_psf1 * n_psf2) ** 0.5  # for flat_penalty
 
         for j_im in range(st1.blk.n_inimage):
             if st1.pix_count[j_im] == 0: continue
@@ -855,10 +873,8 @@ class PSFOvl:
                 del out_arr
 
                 # flat penalty
-                if j_im == i_im:
-                    res[slice_] += PSFOvl.flat_penalty
-                else:
-                    res[slice_] -= PSFOvl.flat_penalty / self.grp1.inst.blk.n_inimage / 2.0
+                res[slice_] -= PSFOvl.flat_penalty / n_in
+                if j_im == i_im: res[slice_] += PSFOvl.flat_penalty
                 del slice_
 
         if visualize:
@@ -955,8 +971,8 @@ class PSFOvl:
         Interpolations in the input-input self-overlap case.
 
         Note that the self-overlap of an input PSF group can be used to compute
-        either the block-diagonal sub-matrices for a single input stamp
-            or the sub-matrices for a pair of input stamps within a 2x2 group.
+        either the block-diagonal submatrices for a single input stamp
+            or the submatrices for a pair of input stamps within a 2x2 group.
 
         Parameters
         ----------
@@ -1020,10 +1036,8 @@ class PSFOvl:
                 res[slice_] = out_arr.reshape((st1.pix_count[j_im], st2.pix_count[i_im]))
 
                 # flat penalty
-                if j_im == i_im:
-                    res[slice_] += PSFOvl.flat_penalty
-                else:
-                    res[slice_] -= PSFOvl.flat_penalty / self.grp1.inst.blk.n_inimage / 2.0
+                res[slice_] -= PSFOvl.flat_penalty / self.grp1.n_psf
+                if j_im == i_im: res[slice_] += PSFOvl.flat_penalty
 
                 if same_inst and j_im < i_im:
                     res[st2.pix_cumsum[i_im]:st2.pix_cumsum[i_im+1],
@@ -1090,7 +1104,7 @@ class SysMatA:
         Parameters
         ----------
         blk : coadd.Block
-            The Block instance to which this SysMatA instance is attached to.
+            The Block instance to which this SysMatA instance is attached.
 
         Returns
         -------
@@ -1296,7 +1310,7 @@ class SysMatA:
 
             iipsfovl.clear(); del iipsfovl
             if verbose:
-                print(f'--> finished computing {counter} input-input sub-matrices', '@', self.blk.timer(), 's')
+                print(f'--> finished computing {counter} input-input submatrices', '@', self.blk.timer(), 's')
 
     def get_iisubmat(self, ji_st1: (int, int), ji_st2: (int, int),
                      sim_mode: bool = False) -> np.array:
@@ -1363,7 +1377,7 @@ class SysMatB:
         Parameters
         ----------
         blk : coadd.Block
-            The Block instance to which this SysMatB instance is attached to.
+            The Block instance to which this SysMatB instance is attached.
 
         Returns
         -------
