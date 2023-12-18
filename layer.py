@@ -546,13 +546,23 @@ def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
     idsca = tuple (obsid, sca) (sca in 1..18)
     obsdata = observation data table (information needed for some formats)
     format = string describing type of file name
+      Right now the valid formats are:
+      dc2_imsim, anlsim
     extraargs = dictionary of extra arguments
 
     returns None if unrecognized format
 
     '''
+    
+    # for the ANL sims
+    if format_ == 'anlsim':
+      out = path+'/simple/Roman_WAS_simple_model_{:s}_{:d}_{:d}.fits'.format(
+        Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
 
-    # right now this is the only type defined
+      # insert ANL sim layers here
+      return out
+
+    # right now this is the only other type defined
     if format_ != 'dc2_imsim':
         return None
 
@@ -571,6 +581,24 @@ def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
                     Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
 
     return out
+
+def check_if_idsca_exists(cfg, obsdata, idsca):
+   '''
+   Determines whether an observation (id,sca) pair exists.
+   
+   Inputs:
+     cfg = configuration information; must have inpath, informat
+     obsdata = observation table
+   
+   Returns:
+     is_exists = True or False
+     fname = file name
+   '''
+
+   fname = _get_sca_imagefile(cfg.inpath, idsca, obsdata, cfg.informat)
+
+   is_exists = exists(fname)
+   return is_exists, fname
 
 
 def get_all_data(inimage: 'coadd.InImage'):
@@ -601,7 +629,7 @@ def get_all_data(inimage: 'coadd.InImage'):
     path = inimage.blk.cfg.inpath
     format_ = inimage.blk.cfg.informat
     inwcs = inimage.inwcs  # only one inwcs!
-    inpsf = inimage.get_psf_and_distort_mat((0, 0), None)[0]  # the actual PSF array!
+    inpsf = inimage.get_psf_and_distort_mat((10, -44), None)[0]  # the actual PSF array!
     inpsf_oversamp = inimage.blk.cfg.inpsf_oversamp
     extrainput = inimage.blk.cfg.extrainput
 
