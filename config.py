@@ -102,7 +102,6 @@ class Config:
     -------
     __init__ : Constructor.
     _from_file : Build a configuration from a JSON file.
-    _calc_deriv_qties: Calculate derived quantities (NsideP, n1P, n2f, etc.).
     _get_attrs_wrapper: Wrapper for getting an attribute or a set of attributes.
     _build_config : Terminal interface to build a configuration from scratch.
     to_file : Save the configuration to a JSON file.
@@ -136,7 +135,11 @@ class Config:
             self._from_file()
         else:
             self._build_config()
-        self._calc_deriv_qties()
+
+        # calculate derived quantities, previously self._calc_deriv_qties()
+        self.NsideP = self.Nside + self.postage_pad * self.n2 * 2
+        self.n1P = self.n1 + self.postage_pad * 2
+        self.n2f = self.n2 + self.fade_kernel * 2
 
     def _from_file(self) -> None:
         '''
@@ -161,6 +164,7 @@ class Config:
         # output array size will be (n1 x n2 x dtheta) on a side
         # with padding, it is (n1 + 2*postage_pad) n2 x dtheta on a side
         self.n1, self.n2, self.dtheta = cfg['OUTSIZE']
+        assert self.n1 % 2 == 0, 'Error: n1 must be even since PSF computations are in 2x2 groups'
         self.dtheta *= u.arcsec.to('degree')
         self.Nside = self.n1 * self.n2
         # if we are doing a nblock x nblock array on the same projection
@@ -179,6 +183,9 @@ class Config:
 
         # output stem
         self.outstem = cfg['OUT']
+
+        # whether to use virtual memory
+        self.use_virmem = cfg.get('VIRMEM', True)
 
         # stop bulding the tile after a certain number of postage stamps
         self.stoptile = cfg.get('STOP', None)
@@ -213,30 +220,6 @@ class Config:
         self.labnoisethreshold = cfg.get('LABNOISETHRESHOLD', 1.)
 
         cfg.clear(); del cfg
-
-    def _calc_deriv_qties(self) -> None:
-        '''
-        Calculate derived quantities (NsideP, n1P, n2f, etc.).
-
-        Returns
-        -------
-        None.
-
-        '''
-
-        self.NsideP = self.Nside + self.postage_pad * self.n2 * 2
-        self.n1P = self.n1 + self.postage_pad * 2
-        self.n2f = self.n2 + self.fade_kernel * 2
-
-        print('General input information:')
-        print('number of input frames = ', self.n_inframe, 'type =', self.extrainput)
-        # search radius for input pixels (not used in the new framework)
-        # rpix_search_in = int(np.ceil((self.n2 * self.dtheta * Settings.degree / np.sqrt(2.0)
-        #                               + self.instamp_pad) / Settings.pixscale_native + 1))
-        # insize = rpix_search_in * 2
-        # print('input stamp radius -->', rpix_search_in,
-        #       'native pixels   stamp={:3d}x{:3d}'.format(insize, insize))
-        print()
 
     def _get_attrs_wrapper(self, code: str, newline: bool = True) -> None:
         '''
@@ -323,6 +306,12 @@ class Config:
 
         print('### OPTIONAL PARAMETERS ###' '\n'
               '### INPUT NOTHING TO USE DEFAULT ###' '\n', flush=True)
+
+        print('# whether to use virtual memory' '\n'
+              '# default: True', flush=True)
+        self._get_attrs_wrapper(
+            "VIRMEM = input('VIRMEM (bool) [default: True]: ')" '\n'
+            "self.use_virmem = bool(eval(STOP)) if VIRMEM else True")
 
         print('# stop execution after a certain number of postage stamps' '\n'
               '# (for testing so we don\'t have to wait for all the postage stamps)' '\n'
@@ -428,6 +417,8 @@ class Config:
 
         cfg['INPSF'] = [self.inpsf_path, self.inpsf_format, self.inpsf_oversamp]
         cfg['OUT'] = self.outstem
+
+        cfg['VIRMEM'] = self.use_virmem
 
         if self.stoptile is not None:
             cfg['STOP'] = self.stoptile

@@ -1,5 +1,6 @@
 from os.path import exists
 # import shutil
+import pathlib
 from itertools import combinations, product
 import gc
 
@@ -151,8 +152,9 @@ class InImage:
             for i in range(1, sp_res):
                 if not (pix_lower < sp_outxys[0, j, i] < pix_upper\
                     and pix_lower < sp_outxys[1, j, i] < pix_upper): continue
-                i_st = int((sp_outxys[0, j, i]-pix_lower) // self.blk.cfg.n2)  # st stands for stamp
-                j_st = int((sp_outxys[1, j, i]-pix_lower) // self.blk.cfg.n2)
+                i_st = int((sp_outxys[0, j, i] - pix_lower) // self.blk.cfg.n2)  # st stands for stamp
+                j_st = int((sp_outxys[1, j, i] - pix_lower) // self.blk.cfg.n2)
+                # assert i_st >= 0 and j_st >= 0, 'i_st < 0 or j_st < 0'
 
                 if np.any(self.blk.use_instamps[max(j_st-2, 0):min(j_st+3, self.blk.cfg.n1P+2),
                                                 max(i_st-2, 0):min(i_st+3, self.blk.cfg.n1P+2)]):
@@ -664,7 +666,7 @@ class OutStamp:
         self.inpix_count = np.zeros((9,), dtype=np.uint16)
 
         # acceptance radius in units of output pixels
-        radius = (self.blk.cfg.instamp_pad / Stn.arcsec) \
+        rpix_search = (self.blk.cfg.instamp_pad / Stn.arcsec) \
         / (self.blk.cfg.dtheta * u.degree.to('arcsec'))  # \
         # + self.blk.cfg.fade_kernel * np.sqrt(2.0)
 
@@ -674,7 +676,7 @@ class OutStamp:
 
             x_pivot = [self.left-0.5, None, self.right+0.5][ji_st_in[1]-self.i_st+1]
             y_pivot = [self.bottom-0.5, None, self.top+0.5][ji_st_in[0]-self.j_st+1]
-            self.selections[idx] = self.instamps[idx].make_selection((x_pivot, y_pivot), radius)
+            self.selections[idx] = self.instamps[idx].make_selection((x_pivot, y_pivot), rpix_search)
             if self.selections[idx] is None:
                 self.inpix_count[idx] = self.instamps[idx].pix_cumsum[-1]
             else:
@@ -754,9 +756,11 @@ class OutStamp:
 
         # the A-matrix first
         self.sysmata = np.zeros((self.inpix_cumsum[-1], self.inpix_cumsum[-1]))  # dtype=np.float64
+        use_virmem = self.blk.cfg.use_virmem  # shortcut
 
         for idx, ji_st_in, selection in zip(range(9), self.ji_st_in_s, self.selections):
-            iisubmat = self.blk.sysmata.get_iisubmat(ji_st_in, ji_st_in)
+            iisubmat = self.blk.sysmata.get_iisubmat(ji_st_in, ji_st_in,
+                ji_st_out=(self.j_st, self.i_st) if use_virmem else None)
             if selection is not None: iisubmat = iisubmat[np.ix_(selection, selection)]
 
             self.sysmata[self.inpix_cumsum[idx]:self.inpix_cumsum[idx+1],
@@ -765,7 +769,8 @@ class OutStamp:
         for idx_s, ji_st_pair, selections_ in zip(combinations(range(9), 2),
                                                   combinations(self.ji_st_in_s, 2),
                                                   combinations(self.selections, 2)):
-            iisubmat = self.blk.sysmata.get_iisubmat(*ji_st_pair)
+            iisubmat = self.blk.sysmata.get_iisubmat(*ji_st_pair,
+                ji_st_out=(self.j_st, self.i_st) if use_virmem else None)
             if selections_[0] is not None:
                 if selections_[1] is not None:
                     iisubmat = iisubmat[np.ix_(selections_[0], selections_[1])]
@@ -1180,6 +1185,15 @@ class Block:
 
         '''
 
+        print('General input information:')
+        print('number of input frames = ', self.cfg.n_inframe, 'type =', self.cfg.extrainput)
+        # search radius for input pixels
+        rpix_search_ = self.cfg.instamp_pad / Stn.arcsec
+        dtheta_ = self.cfg.dtheta * u.degree.to('arcsec')
+        print(f'acceptance radius --> {rpix_search_:.6f} arcsec '
+              f'or {rpix_search_/dtheta_:.6f} output pixels')
+        print()
+
         # Get observation table
         assert self.cfg.obsfile is not None, 'Error: no obsfile found'
         print('Getting observations from {:s}'.format(self.cfg.obsfile))
@@ -1217,6 +1231,8 @@ class Block:
               ibx, iby, self.cfg.nblock, self.cfg.nblock, self.cfg.nblock**2))
         self.outstem = self.cfg.outstem + '_{:02d}_{:02d}'.format(ibx, iby)
         print('outputs directed to -->', self.outstem)
+        self.cache_dir = pathlib.Path(self.outstem + '_cache')
+        self.cache_dir.mkdir(exist_ok=True)
 
         # make the WCS
         self.outwcs = wcs.WCS(naxis=2)
@@ -1590,8 +1606,8 @@ class Block:
 
         '''
 
+        fk = self.cfg.fade_kernel  # shortcut
         if is_final:
-            fk = self.cfg.fade_kernel  # shortcut
             OutStamp.trapezoid(self.out_map, fk, recover_mode=True)  # recover block boundaries
 
         maphdu = fits.PrimaryHDU(self.out_map[:, :, fk:-fk, fk:-fk], header=self.outwcs.to_header())
@@ -1634,6 +1650,8 @@ class Block:
         None.
 
         '''
+
+        self.cache_dir.rmdir()
 
         del self.obsdata, self.obslist, self.outwcs
         del self.outpsfgrp, self.outpsfovl, self.sysmata, self.sysmatb

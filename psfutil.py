@@ -873,8 +873,9 @@ class PSFOvl:
                 del out_arr
 
                 # flat penalty
-                res[slice_] -= PSFOvl.flat_penalty / n_in
-                if j_im == i_im: res[slice_] += PSFOvl.flat_penalty
+                if PSFOvl.flat_penalty != 0:
+                    res[slice_] -= PSFOvl.flat_penalty / n_in
+                    if j_im == i_im: res[slice_] += PSFOvl.flat_penalty
                 del slice_
 
         if visualize:
@@ -1036,8 +1037,9 @@ class PSFOvl:
                 res[slice_] = out_arr.reshape((st1.pix_count[j_im], st2.pix_count[i_im]))
 
                 # flat penalty
-                res[slice_] -= PSFOvl.flat_penalty / self.grp1.n_psf
-                if j_im == i_im: res[slice_] += PSFOvl.flat_penalty
+                if PSFOvl.flat_penalty != 0:
+                    res[slice_] -= PSFOvl.flat_penalty / self.grp1.n_psf
+                    if j_im == i_im: res[slice_] += PSFOvl.flat_penalty
 
                 if same_inst and j_im < i_im:
                     res[st2.pix_cumsum[i_im]:st2.pix_cumsum[i_im+1],
@@ -1118,7 +1120,7 @@ class SysMatA:
         self.iisubmats = {}
         # reference counts for the A submatrices
         # see the static method iisubmat_dist defined below for why 13
-        self.iisubmats_ref = np.zeros((blk.cfg.n1+2, blk.cfg.n1+2, 13), dtype=np.uint8)
+        self.iisubmats_ref = np.zeros((blk.cfg.n1P+2, blk.cfg.n1P+2, 13), dtype=np.uint8)
 
     @staticmethod
     def ji_st2psf(ji_st: (int, int)) -> (int, int):
@@ -1313,7 +1315,7 @@ class SysMatA:
                 print(f'--> finished computing {counter} input-input submatrices', '@', self.blk.timer(), 's')
 
     def get_iisubmat(self, ji_st1: (int, int), ji_st2: (int, int),
-                     sim_mode: bool = False) -> np.array:
+                     sim_mode: bool = False, ji_st_out: (int, int) = None) -> np.array:
         '''
         Return the requested A submatrix.
 
@@ -1329,6 +1331,8 @@ class SysMatA:
         sim_mode : bool, optional
             Whether to count references without actually computing submatrices.
             The default is False.
+        ji_st_out : (int, int)
+            Index of the OutStamp. Needed for virtual memory.
 
         Returns
         -------
@@ -1341,19 +1345,36 @@ class SysMatA:
         ji_dist = SysMatA.iisubmat_dist(ji_st1, ji_st2)
         assert ji_dist is not None, f'distance between InStamps {ji_st1} and {ji_st2} is out of range'
 
-        if sim_mode: self.iisubmats_ref[ji_dist] += 1
+        if sim_mode:
+            self.iisubmats_ref[ji_dist] += 1
+            if (ji_st1, ji_st2) not in self.iisubmats:
+                self._compute_iisubmats(ji_st1, ji_st2, sim_mode)
+            return
+
         if (ji_st1, ji_st2) not in self.iisubmats:
-            self._compute_iisubmats(ji_st1, ji_st2, sim_mode)
-        if sim_mode: return
+            # load virtual memory when available
+            fname = 'iisubmat_' + '_'.join(f'{ji:02d}' for ji in ji_st1 + ji_st2) + '.npy'
+            fpath = self.blk.cache_dir / fname; print(f'VIRMEM: loading {fname}')
+            if fpath.exists():
+                self.iisubmats[(ji_st1, ji_st2)] = np.load(str(fpath))
+                fpath.unlink(); del fname, fpath
+            else:
+                self._compute_iisubmats(ji_st1, ji_st2, sim_mode)
+        arr = self.iisubmats[(ji_st1, ji_st2)]
 
         self.iisubmats_ref[ji_dist] -= 1
-        if self.iisubmats_ref[ji_dist] > 0:
-            return self.iisubmats[(ji_st1, ji_st2)]
-        else:
+        if self.iisubmats_ref[ji_dist] == 0:
             # remove this A submatrix from iisubmats if it will never be referred to again
-            arr = self.iisubmats[(ji_st1, ji_st2)]
             del self.iisubmats[(ji_st1, ji_st2)]
-            return arr
+        elif ji_st_out is not None and (ji_st_out[0] % 2 == 0) \
+            and (ji_st_out[1] == min(ji_st1[1], ji_st2[1]) + 1):
+            # save virtual memory when needed
+            fname = 'iisubmat_' + '_'.join(f'{ji:02d}' for ji in ji_st1 + ji_st2) + '.npy'
+            fpath = self.blk.cache_dir / fname; print(f'VIRMEM: saving {fname}')
+            with open(str(fpath), 'wb') as f: np.save(f, arr)
+            del self.iisubmats[(ji_st1, ji_st2)], fname, fpath
+
+        return arr
 
 
 class SysMatB:
@@ -1392,7 +1413,7 @@ class SysMatB:
         # is more economical than storing submatrices (which are never reused)
         self.iopsfovls = {}
         # reference counts for the input-output PSFOvl's
-        self.iopsfovls_ref = np.zeros((blk.cfg.n1//2+1, blk.cfg.n1//2+1), dtype=np.uint8)
+        self.iopsfovls_ref = np.zeros((blk.cfg.n1P//2+1, blk.cfg.n1P//2+1), dtype=np.uint8)
 
     def get_iosubmat(self, ji_st_in: (int, int), ji_st_out: (int, int),
                      sim_mode: bool = False) -> np.array:
