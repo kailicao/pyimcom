@@ -648,7 +648,8 @@ def get_all_data(inimage: 'coadd.InImage'):
     # (missing files are blank)
     filename = _get_sca_imagefile(path, idsca, obsdata, format_)
     if exists(filename):
-        if format_ == 'dc2_imsim':
+        # these input formats both use the SCI data frame and have the sky embedded in the header
+        if format_ in ['dc2_imsim', 'anlsim']:
             with fits.open(filename) as f:
                 inimage.indata[0, :, :] = f['SCI'].data - float(f['SCI'].header['SKY_MEAN'])
     #
