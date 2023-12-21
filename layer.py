@@ -55,6 +55,8 @@ class GalSimInject:
                    (y_sca >= -d) & (y_sca <= 4087+d))
         x_sca = x_sca[msk_sca]
         y_sca = y_sca[msk_sca]
+        my_ra = ra_hpix[msk_sca]
+        my_dec = dec_hpix[msk_sca]
         num_obj = len(x_sca)
 
         n_in_stamp = 280
@@ -62,9 +64,7 @@ class GalSimInject:
         sca_image = galsim.ImageF(sca_nside+pad, sca_nside+pad, scale=0.11)
 
         for n in range(num_obj):
-            # psf = get_psf_pos(inpsf, idsca, obsdata,
-            #                   (x_sca[n], y_sca[n]), extraargs=None)
-            psf = inpsf  # this needs to be upgraded when we have PSF variation
+            psf = inpsf((my_ra[n],my_dec[n]), None)[0]  # now with PSF variation
             psf_image = galsim.Image(psf, scale=0.11/inpsf_oversamp)
             interp_psf = galsim.InterpolatedImage(psf_image, x_interpolant='lanczos50')
 
@@ -219,7 +219,7 @@ class GalSimInject:
                    (y_sca >= -d) & (y_sca <= 4087+d))
         x_sca = x_sca[msk_sca]; y_sca = y_sca[msk_sca]
         ipix = qp[msk_sca]  # pixel index of the objects within the SCA
-        # my_ra = ra_hpix[msk_sca]
+        my_ra = ra_hpix[msk_sca]
         my_dec = dec_hpix[msk_sca]
         num_obj = len(x_sca)
 
@@ -232,10 +232,7 @@ class GalSimInject:
         pad = n_in_stamp+2*(d+1)
         sca_image = galsim.ImageF(sca_nside+pad, sca_nside+pad, scale=refscale)
         for n in range(num_obj):
-            # PSF
-            # psf = get_psf_pos(inpsf, idsca, obsdata,
-            #                   (x_sca[n], y_sca[n]), extraargs=None)
-            psf = inpsf  # this needs to be upgraded when we have PSF variation
+            psf = inpsf((my_ra[n],my_dec[n]), None)[0]  # now with PSF variation
             psf_image = galsim.Image(psf, scale=0.11/inpsf_oversamp)
             interp_psf = galsim.InterpolatedImage(
                 psf_image, x_interpolant='lanczos50')
@@ -358,6 +355,8 @@ class GridInject:
           ipix = array of HEALPix indices
           xsca = array of x positions on the SCA
           ysca = array of y positions on the SCA
+          rapix = array of RA
+          decpix = array of DEC
 
         '''
 
@@ -377,7 +376,7 @@ class GridInject:
         # and positions in the SCA image
         px, py = myWCS.all_world2pix(stargrid['rapix']/degree, stargrid['decpix']/degree, 0)
 
-        return (stargrid['ipix'], px, py)
+        return (stargrid['ipix'], px, py, stargrid['rapix']/degree, stargrid['decpix']/degree)
 
     @staticmethod
     def make_image_from_grid(res, inpsf, idsca, obsdata, mywcs, nside_sca, inpsf_oversamp):
@@ -395,14 +394,12 @@ class GridInject:
         '''
 
         thisimage = np.zeros((nside_sca, nside_sca))
-        ipix, xsca, ysca = GridInject.generate_star_grid(res, mywcs)
+        ipix, xsca, ysca, rapix, decpix = GridInject.generate_star_grid(res, mywcs)
         p = 6  # padding for interpolation (n/2+1 for nxn interpolation kernel)
         d = 64  # region to draw
 
         for istar in range(len(ipix)):
-            # thispsf = psf_utils.get_psf_pos(
-            #     inpsf, idsca, obsdata, (xsca[istar], ysca[istar]))
-            thispsf = inpsf  # this needs to be upgraded when we have PSF variation
+            thispsf = inpsf((rapix[istar], decpix[istar]), None)[0]  # now with PSF variation
             this_xmax = min(nside_sca, int(xsca[istar])+d)
             this_xmin = max(0, int(xsca[istar])-d)
             this_ymax = min(nside_sca, int(ysca[istar])+d)
@@ -629,7 +626,7 @@ def get_all_data(inimage: 'coadd.InImage'):
     path = inimage.blk.cfg.inpath
     format_ = inimage.blk.cfg.informat
     inwcs = inimage.inwcs  # only one inwcs!
-    inpsf = inimage.get_psf_and_distort_mat((10, -44), None)[0]  # the actual PSF array!
+    inpsf = inimage.get_psf_and_distort_mat # now this is a **function**
     inpsf_oversamp = inimage.blk.cfg.inpsf_oversamp
     extrainput = inimage.blk.cfg.extrainput
 

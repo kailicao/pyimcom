@@ -377,7 +377,6 @@ class InImage:
         # get the pixel location on the input image
         # (moved this up since some PSF models need it)
         pixloc = self.inwcs.all_world2pix(np.array([[psf_compute_point[0], psf_compute_point[1]]]).astype(np.float64), 0)[0]
-        print('  .. pixloc in ', self.idsca, ' => ', pixloc)
 
         if self.blk.cfg.inpsf_format=='dc2_imsim':
             fname = self.blk.cfg.inpsf_path+'/dc2_psf_{:d}.fits'.format(self.idsca[0])
