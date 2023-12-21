@@ -553,11 +553,16 @@ def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
     
     # for the ANL sims
     if format_ == 'anlsim':
-      out = path+'/simple/Roman_WAS_simple_model_{:s}_{:d}_{:d}.fits'.format(
-        Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+        out = path+'/simple/Roman_WAS_simple_model_{:s}_{:d}_{:d}.fits'.format(
+            Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
 
-      # insert ANL sim layers here
-      return out
+        # insert ANL sim layers here
+        if extraargs is not None:
+            if 'type' in extraargs:
+                if extraargs['type'] == 'labnoise':
+                    out = path+'/labnoise/slope_{:d}_{:d}.fits'.format(idsca[0], idsca[1])
+
+        return out
 
     # right now this is the only other type defined
     if format_ != 'dc2_imsim':
@@ -683,7 +688,13 @@ def get_all_data(inimage: 'coadd.InImage'):
             filename = _get_sca_imagefile(path, idsca, obsdata, format_, extraargs={'type': 'labnoise'})
             print('lab noise: searching for ' + filename)
             if exists(filename):
-                with fits.open(filename) as f: inimage.indata[i, :, :] = f[0].data
+                with fits.open(filename) as f:
+                    try:
+                        inimage.indata[i, :, :] = f[0].data
+                    except:
+                        inimage.indata[i, :, :] = f[0].data[4:4092,4:4092]
+                        print('  -> pulled out 4088x4088 subregion: 10th & 90th percentiles = {:6.3f} {:6.3f}'.format(
+                            np.percentile(f[0].data[4:4092,4:4092], 10), np.percentile(f[0].data[4:4092,4:4092], 90)))
             else:
                 print('Warning: labnoise file not found, skipping ...')
 
