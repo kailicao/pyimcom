@@ -14,6 +14,9 @@ from astropy import wcs
 import fitsio
 import matplotlib.pyplot as plt
 
+import datetime
+import pytz
+
 from .config import Timer, Settings as Stn, Config
 from .layer import check_if_idsca_exists, get_all_data, Mask
 from .psfutil import PSFGrp, PSFOvl, SysMatA, SysMatB
@@ -184,8 +187,8 @@ class InImage:
         self.y_idx = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2, npixmax), dtype=np.uint16)
         self.x_idx = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2, npixmax), dtype=np.uint16)
         # positions (in the output block coordinates),
-        self.y_val = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2, npixmax), dtype=np.float32)
-        self.x_val = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2, npixmax), dtype=np.float32)
+        self.y_val = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2, npixmax), dtype=np.float64)
+        self.x_val = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2, npixmax), dtype=np.float64)
         # and number of pixels in each postage stamp (from this InImage)
         self.pix_count = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2), dtype=np.uint16)
 
@@ -453,8 +456,8 @@ class InStamp:
         self.pix_cumsum = np.cumsum([0] + list(self.pix_count), dtype=np.uint16)
 
         # input pixel positions and signals
-        self.y_val = np.empty((self.pix_cumsum[-1],), dtype=np.float32)
-        self.x_val = np.empty((self.pix_cumsum[-1],), dtype=np.float32)
+        self.y_val = np.empty((self.pix_cumsum[-1],), dtype=np.float64)
+        self.x_val = np.empty((self.pix_cumsum[-1],), dtype=np.float64)
         self.data = np.empty((blk.cfg.n_inframe, self.pix_cumsum[-1]), dtype=np.float32)
 
         for i_im, inimage in enumerate(blk.inimages):
@@ -1230,7 +1233,12 @@ class Block:
               ibx, iby, self.cfg.nblock, self.cfg.nblock, self.cfg.nblock**2))
         self.outstem = self.cfg.outstem + '_{:02d}_{:02d}'.format(ibx, iby)
         print('outputs directed to -->', self.outstem)
-        self.cache_dir = pathlib.Path(self.outstem + '_cache')
+        if self.cfg.tempfile is None:
+            self.cache_dir = pathlib.Path(self.outstem + '_cache')
+        else:
+            self.cache_dir = pathlib.Path(self.cfg.tempfile + '_{:04d}_{:s}_cache'.format(self.this_sub,
+                datetime.datetime.now(pytz.timezone('UTC')).strftime("%Y%m%d%H%M%S%f")))
+        print('temporary storage directed to -->', self.cache_dir)
         self.cache_dir.mkdir(exist_ok=True)
 
         # make the WCS

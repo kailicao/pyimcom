@@ -713,6 +713,24 @@ def get_all_data(inimage: 'coadd.InImage'):
             inimage.indata[i, :, :] = GridInject.make_image_from_grid(
                 res, inpsf, idsca, obsdata, inwcs, Stn.sca_nside, inpsf_oversamp)
 
+        # noisy star grid
+        # nstar<resolution>,<star_intensity>,<background>,<seed_index>
+        m = re.search(r'^nstar(\d+),', extrainput[i], re.IGNORECASE)
+        if m:
+            res = int(m.group(1))
+            extargs = extrainput[i].split(',')[1:]
+            tot_int = float(extargs[0])
+            bg = float(extargs[1])
+            q = int(extargs[2])
+            seed = 1000000*(18*q+idsca[1]) + idsca[0]
+       	    print('noise rng: frame_q={:d}, seed={:d}'.format(q, seed))
+       	    rng = np.random.default_rng(seed)
+            print('making noisy stars: ', res, idsca, ' total brightness =', tot_int, 'background =', bg, 'seed index =', q)
+            brightness = GridInject.make_image_from_grid(
+                res, inpsf, idsca, obsdata, inwcs, Stn.sca_nside, inpsf_oversamp)
+            inimage.indata[i, :, :] = rng.poisson(lam=brightness*tot_int+bg)-bg
+            del rng
+
         # galsim star grid
         m = re.search(r'^gsstar(\d+)$', extrainput[i], re.IGNORECASE)
         if m:
