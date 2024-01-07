@@ -495,8 +495,14 @@ class Mask:
             permanent_mask = None
 
         else:
+            # permanent mask is 'True' if the pixel should be used.
+            # 'GOODVAL' keyword in the input FITS file allows us to indicate
+            # whether an unflagged pixel is all 0's (GOODVAL=0) or 1's (GOODVAL!=0 or missing)
             with fits.open(block.cfg.permanent_mask) as f:
-                permanent_mask = np.where(f[0].data, True, False)
+                if f[0].header.get('GOODVAL')==0:
+                    permanent_mask = np.where(f[0].data==0, True, False)
+                else:
+                    permanent_mask = np.where(f[0].data, True, False)
             nonzero_count = np.count_nonzero(permanent_mask)
             print('Permanent mask loaded --> ', nonzero_count,
                   'good pixels', nonzero_count/(18*4088**2)*100, '%')
