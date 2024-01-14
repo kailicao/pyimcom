@@ -446,7 +446,7 @@ class Config:
         cfg['EXTRASMOOTH'] = self.sigmatarget
 
         if self.n_inframe > 1:
-            cfg['EXTRAINPUT']: self.extrainput[1:]
+            cfg['EXTRAINPUT'] = self.extrainput[1:]
 
         if self.permanent_mask is not None:
             cfg['PMASK'] = self.permanent_mask
