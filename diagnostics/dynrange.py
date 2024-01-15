@@ -42,7 +42,7 @@ for iby in range(nblockmax):
         for g in f['CONFIG'].data['text'].tolist(): config += g+' '
         configStruct = json.loads(config)
 
-        blocksize = int(configStruct['OUTSIZE'][1]) * float(configStruct['OUTSIZE'][2]) / 3600. *numpy.pi/180 # radians
+        blocksize = int(configStruct['OUTSIZE'][0]) * int(configStruct['OUTSIZE'][1]) * float(configStruct['OUTSIZE'][2]) / 3600. *numpy.pi/180 # radians
         rs = 1.5*blocksize/numpy.sqrt(2.) # search radius
 
         # padding region around the edge
@@ -56,6 +56,7 @@ for iby in range(nblockmax):
             framenumber = i
             res = int(m.group(1))
         print('# using layer', framenumber, 'resolution', res)
+        print('# rs=', rs)
 
     # now we know this file exists
     with fits.open(infile) as f:

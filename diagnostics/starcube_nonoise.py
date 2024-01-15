@@ -53,7 +53,7 @@ for iblock in range(nstart,nstart+nblockuse):
       for g in f['CONFIG'].data['text'].tolist(): config += g+' '
       configStruct = json.loads(config)
 
-      blocksize = int(configStruct['OUTSIZE'][1]) * float(configStruct['OUTSIZE'][2]) / 3600. *numpy.pi/180 # radians
+      blocksize = int(configStruct['OUTSIZE'][0]) * int(configStruct['OUTSIZE'][1]) * float(configStruct['OUTSIZE'][2]) / 3600. *numpy.pi/180 # radians
       rs = 1.5*blocksize/numpy.sqrt(2.) # search radius
 
       outscale = float(configStruct['OUTSIZE'][2]) # in arcsec
@@ -71,6 +71,7 @@ for iblock in range(nstart,nstart+nblockuse):
           use_slice = i
           res = int(m.group(1))
       print('# using layer', use_slice, 'resolution', res, 'output pix =', outscale, 'arcsec   n=',n)
+      print('# rs=', rs)
 
   if not exists(infile): continue
   with fits.open(infile) as f:
@@ -161,10 +162,6 @@ image = image[1:,:,:]
 fits.HDUList([fits.PrimaryHDU(image.astype(numpy.float32))]).writeto(outfile_g, overwrite=True)
 
 numpy.savetxt(outstem + '_StarCat_{:s}.txt'.format(filter), pos)
-
-print(numpy.sqrt(pos[:,14]**2+pos[:,15]**2)/numpy.sqrt(2))
-print(numpy.sqrt(pos[:,16]**2+pos[:,17]**2)/numpy.sqrt(2))
-print(numpy.sqrt(pos[:,18]**2+pos[:,19]**2)/numpy.sqrt(2))
 
 for fy in range(20,61):
   print('{:2d} {:8.6f} {:8.6f}'.format(fy, fhist[fy]/numpy.sum(fhist), numpy.sum(fhist[:fy+1])/numpy.sum(fhist)))
