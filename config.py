@@ -219,6 +219,9 @@ class Config:
         # threshold for masking lab noise data
         self.labnoisethreshold = cfg.get('LABNOISETHRESHOLD', 1.)
 
+        # temporary storage
+        self.tempfile = cfg.get('TEMPFILE', None)
+
         cfg.clear(); del cfg
 
     def _get_attrs_wrapper(self, code: str, newline: bool = True) -> None:
@@ -381,6 +384,11 @@ class Config:
             "CMASK = input('CMASK (float) [default: 0.]: ')" '\n'
             "self.cr_mask_rate = float(CMASK) if CMASK else 0.")
 
+        print('# temporary storage location (prefix):' '\n', flush=True)
+        self._get_attrs_wrapper(
+            "TEMPFILE = input('TEMPFILE (str) [default: None]: ')" '\n'
+            "self.tempfile = TEMPFILE if TEMPFILE else None", newline=False)
+
         print('### END OPTIONAL PARAMETERS ###' '\n', flush=True)
         print('# To save this configuration, call Config.to_file.' '\n', flush=True)
 
@@ -438,12 +446,15 @@ class Config:
         cfg['EXTRASMOOTH'] = self.sigmatarget
 
         if self.n_inframe > 1:
-            cfg['EXTRAINPUT']: self.extrainput[1:]
+            cfg['EXTRAINPUT'] = self.extrainput[1:]
 
         if self.permanent_mask is not None:
             cfg['PMASK'] = self.permanent_mask
         if self.cr_mask_rate != 0.0:
             cfg['CMASK'] = self.cr_mask_rate
+
+        if self.tempfile is not None:
+            cfg['TEMPFILE'] = self.tempfile
 
         if fname is not None:
             if fname == '':

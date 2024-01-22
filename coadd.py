@@ -5,15 +5,20 @@ from itertools import combinations, product
 import gc
 
 from astropy import units as u
+from astropy.table import Table
 import numpy as np
+from scipy.special import legendre
 
 from astropy.io import fits
 from astropy import wcs
 import fitsio
 import matplotlib.pyplot as plt
 
+import datetime
+import pytz
+
 from .config import Timer, Settings as Stn, Config
-from .layer import get_all_data, Mask
+from .layer import check_if_idsca_exists, get_all_data, Mask
 from .psfutil import PSFGrp, PSFOvl, SysMatA, SysMatB
 from .lakernel import LAKernel
 
@@ -56,12 +61,14 @@ class InImage:
         self.blk = blk
         self.idsca = idsca
 
-        self.infile = blk.cfg.inpath+'/simple/dc2_{:s}_{:d}_{:d}.fits'.format(
-            Stn.RomanFilters[blk.obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
-        self.exists = exists(self.infile) and exists(blk.cfg.inpsf_path+'/dc2_psf_{:d}.fits'.format(idsca[0]))
+        #self.infile = blk.cfg.inpath+'/simple/dc2_{:s}_{:d}_{:d}.fits'.format(
+        #    Stn.RomanFilters[blk.obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+        #self.exists = exists(self.infile) and exists(blk.cfg.inpsf_path+'/dc2_psf_{:d}.fits'.format(idsca[0]))
+        self.exists, self.infile = check_if_idsca_exists(blk.cfg, blk.obsdata, idsca)
         if self.exists:
             with fits.open(self.infile) as f:
                 self.inwcs = wcs.WCS(f[Stn.hdu_with_wcs].header)
+                print('read WCS:', self.infile, 'HDU', Stn.hdu_with_wcs)
 
     @staticmethod
     def generate_idx_grid(xs: np.array, ys: np.array) -> np.array:
@@ -180,8 +187,8 @@ class InImage:
         self.y_idx = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2, npixmax), dtype=np.uint16)
         self.x_idx = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2, npixmax), dtype=np.uint16)
         # positions (in the output block coordinates),
-        self.y_val = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2, npixmax), dtype=np.float32)
-        self.x_val = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2, npixmax), dtype=np.float32)
+        self.y_val = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2, npixmax), dtype=np.float64)
+        self.x_val = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2, npixmax), dtype=np.float64)
         # and number of pixels in each postage stamp (from this InImage)
         self.pix_count = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2), dtype=np.uint16)
 
@@ -320,6 +327,37 @@ class InImage:
         outArray = np.real(np.fft.ifft2(outArrayFT))
         return outArray
 
+    @staticmethod
+    def LPolyArr(PORDER,u_,v_):
+        '''
+        Generates a length (PORDER+1)**2 array of the Legendre polynomials
+        for n=0..PORDER { for m=0..PORDER { coef P_m(u_) P_n(v_) }}
+
+        Parameters
+        ----------
+        PORDER : int
+          >=0, order in each axis
+        u_ : float
+          x-position on chip scaled to -1..+1
+        v_ : float
+          y-position on chip scaled to -1..+1
+
+        Returns
+        -------
+        arr: np.array, shape : ((PORDER+1)**2)
+          the array of Legendre polynomial products
+          constant (1) is first, then increasing x-order, then increasing y-order
+        '''
+
+        ua = np.ones(PORDER+1)
+        va = np.ones(PORDER+1)
+        for m in range(1,PORDER+1):
+            L = legendre(m)
+            ua[m] = L(u_)
+            va[m] = L(v_)
+        arr = np.outer(va,ua).flatten()
+        return arr
+
     def get_psf_and_distort_mat(self, psf_compute_point, dWdp_out) -> tuple:
         '''
         Get input PSF array and the corresponding distortion matrix.
@@ -339,30 +377,29 @@ class InImage:
 
         '''
 
-        # Get PSF information
-        #
-        # Inputs:
-        #   inpsf = PSF dictionary
-        #   idsca = tuple (obsid, sca) (sca in 1..18)
-        #   obsdata = observation data table (information needed for some formats)
-        #   pos = (x,y) tuple or list containing the position where the PSF is to be interpolated
-        #   extraargs = for future compatibility
-        #
-        # Returns the PSF at that position
-        # 'effective' PSF is returned, some formats may include extra smoothing
-        #
-        # Returns None if can't find the file.
+        # get the pixel location on the input image
+        # (moved this up since some PSF models need it)
+        pixloc = self.inwcs.all_world2pix(np.array([[psf_compute_point[0], psf_compute_point[1]]]).astype(np.float64), 0)[0]
 
-        # if inpsf['format']=='dc2_imsim':
-        #   fname = inpsf['path'] + '/dc2_psf_{:d}.fits'.format(idsca[0])
-        #   if not exists(fname): return None
-
-        fname = self.blk.cfg.inpsf_path+'/dc2_psf_{:d}.fits'.format(self.idsca[0])
-        assert exists(fname), 'Error: input psf does not exist'
-
-        fileh = fitsio.FITS(fname)
-        this_psf = InImage.smooth_and_pad(fileh[self.idsca[1]][:, :], tophatwidth=self.blk.cfg.inpsf_oversamp)
-        fileh.close()
+        if self.blk.cfg.inpsf_format=='dc2_imsim':
+            fname = self.blk.cfg.inpsf_path+'/dc2_psf_{:d}.fits'.format(self.idsca[0])
+            assert exists(fname), 'Error: input psf does not exist'
+            fileh = fitsio.FITS(fname)
+            this_psf = InImage.smooth_and_pad(fileh[self.idsca[1]][:, :], tophatwidth=self.blk.cfg.inpsf_oversamp)
+            fileh.close()
+        elif self.blk.cfg.inpsf_format=='anlsim':
+            fname = self.blk.cfg.inpsf_path+'/psf_polyfit_{:d}.fits'.format(self.idsca[0])
+            assert exists(fname), 'Error: input psf does not exist'
+            fileh = fitsio.FITS(fname)
+            # order = 1
+            lpoly = InImage.LPolyArr(1, (pixloc[0]-2043.5)/2044., (pixloc[1]-2043.5)/2044.)
+                # pixels are in C/Python convention since pixloc was set this way
+            cube = fileh[self.idsca[1]][:, :, :]
+            this_psf = InImage.smooth_and_pad(np.einsum('a,aij->ij', lpoly, cube), tophatwidth=self.blk.cfg.inpsf_oversamp)/64
+                # divide by 64=8**2 since anlsim files are in fractional intensity per s_in**2 instead of per (s_in/8)**2
+            fileh.close()
+        else:
+            raise RuntimeError('Error: input psf does not exist')
 
         # temporary measure to work with layer.get_all_data
         if dWdp_out is None: return this_psf, None
@@ -371,7 +408,6 @@ class InImage:
         # Note that rotations and magnifications are included in the distortion matrix, as well as shear
         # Also the distortion is relative to the output grid, not to the tangent plane to the celestial sphere
         # (although we really don't want the difference to be large ...)
-        pixloc = self.inwcs.all_world2pix(np.array([psf_compute_point.tolist()]), 0)[0]
         distort_matrice = np.linalg.inv(dWdp_out) \
             @ wcs.utils.local_partial_pixel_derivatives(self.inwcs, pixloc[0], pixloc[1]) \
             * self.blk.cfg.dtheta*Stn.degree/Stn.pixscale_native
@@ -420,8 +456,8 @@ class InStamp:
         self.pix_cumsum = np.cumsum([0] + list(self.pix_count), dtype=np.uint16)
 
         # input pixel positions and signals
-        self.y_val = np.empty((self.pix_cumsum[-1],), dtype=np.float32)
-        self.x_val = np.empty((self.pix_cumsum[-1],), dtype=np.float32)
+        self.y_val = np.empty((self.pix_cumsum[-1],), dtype=np.float64)
+        self.x_val = np.empty((self.pix_cumsum[-1],), dtype=np.float64)
         self.data = np.empty((blk.cfg.n_inframe, self.pix_cumsum[-1]), dtype=np.float32)
 
         for i_im, inimage in enumerate(blk.inimages):
@@ -1164,6 +1200,20 @@ class Block:
         assert self.cfg.obsfile is not None, 'Error: no obsfile found'
         print('Getting observations from {:s}'.format(self.cfg.obsfile))
         with fits.open(self.cfg.obsfile) as myf:
+            # if the filter column is a string, replace with the number
+            if myf[1].columns['filter'].format[-1]=='A':
+                print('converting filter from names to integers:', myf[1].data['filter'])
+                n_obs_tot = len(myf[1].data.field(0))
+                mytable = Table(myf[1].data)
+                fdata = np.zeros(n_obs_tot, dtype=np.uint16)
+                for j in range(len(Stn.RomanFilters)):
+                    s = Stn.RomanFilters[j]
+                    for i in range(n_obs_tot):
+                        if myf[1].data['filter'][i] == s:
+                            fdata[i]=j
+                mytable.replace_column('filter', fdata)
+                myf[1] = fits.BinTableHDU(mytable)
+
             self.obsdata = myf[1].data
             obscols = myf[1].columns
             n_obs_tot = len(self.obsdata.field(0))
@@ -1183,7 +1233,12 @@ class Block:
               ibx, iby, self.cfg.nblock, self.cfg.nblock, self.cfg.nblock**2))
         self.outstem = self.cfg.outstem + '_{:02d}_{:02d}'.format(ibx, iby)
         print('outputs directed to -->', self.outstem)
-        self.cache_dir = pathlib.Path(self.outstem + '_cache')
+        if self.cfg.tempfile is None:
+            self.cache_dir = pathlib.Path(self.outstem + '_cache')
+        else:
+            self.cache_dir = pathlib.Path(self.cfg.tempfile + '_{:04d}_{:s}_cache'.format(self.this_sub,
+                datetime.datetime.now(pytz.timezone('UTC')).strftime("%Y%m%d%H%M%S%f")))
+        print('temporary storage directed to -->', self.cache_dir)
         self.cache_dir.mkdir(exist_ok=True)
 
         # make the WCS
@@ -1384,6 +1439,9 @@ class Block:
 
         self._handle_postage_pad()
         for inimage in self.inimages:
+            if not inimage.exists:
+                inimage.is_relevant = False
+                continue
             inimage.partition_pixels()
             if not inimage.is_relevant: continue
             inimage.extract_layers()

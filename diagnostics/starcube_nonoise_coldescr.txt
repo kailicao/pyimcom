@@ -1,0 +1,24 @@
+Columns in output file:
+
+ 0: right ascension
+ 1: declination
+ 2: block ix
+ 3: block iy
+ 4: x position in block image (float)
+ 5: y position in block image (float)
+ 6: int part of x
+ 7: int part of y
+ 8: frac part of x
+ 9: frac part of y
+10: star fit -> amplitude
+11: star fit -> centroid offset (in output pixels), x
+12: star fit -> centroid offset (in output pixels), y
+13: star fit -> sigma (in output pixels)
+14: star fit -> g1 shape
+15: star fit -> g2 shape
+16: star 4th moment Re M42 (Zhang et al. 2023 MNRAS 525, 2441 convention)
+17: star 4th moment Im M42
+18: star moment with forced sigma=0.40 arcsec scale length [+ component] (in units of forced sigma**2)
+19: star moment with forced sigma=0.40 arcsec scale length [x component]
+20: fidelity (mean in 0.5 arcsec box)
+21: coverage at star center

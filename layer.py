@@ -55,6 +55,8 @@ class GalSimInject:
                    (y_sca >= -d) & (y_sca <= 4087+d))
         x_sca = x_sca[msk_sca]
         y_sca = y_sca[msk_sca]
+        my_ra = ra_hpix[msk_sca]
+        my_dec = dec_hpix[msk_sca]
         num_obj = len(x_sca)
 
         n_in_stamp = 280
@@ -62,9 +64,7 @@ class GalSimInject:
         sca_image = galsim.ImageF(sca_nside+pad, sca_nside+pad, scale=0.11)
 
         for n in range(num_obj):
-            # psf = get_psf_pos(inpsf, idsca, obsdata,
-            #                   (x_sca[n], y_sca[n]), extraargs=None)
-            psf = inpsf  # this needs to be upgraded when we have PSF variation
+            psf = inpsf((my_ra[n],my_dec[n]), None)[0]  # now with PSF variation
             psf_image = galsim.Image(psf, scale=0.11/inpsf_oversamp)
             interp_psf = galsim.InterpolatedImage(psf_image, x_interpolant='lanczos50')
 
@@ -219,7 +219,7 @@ class GalSimInject:
                    (y_sca >= -d) & (y_sca <= 4087+d))
         x_sca = x_sca[msk_sca]; y_sca = y_sca[msk_sca]
         ipix = qp[msk_sca]  # pixel index of the objects within the SCA
-        # my_ra = ra_hpix[msk_sca]
+        my_ra = ra_hpix[msk_sca]
         my_dec = dec_hpix[msk_sca]
         num_obj = len(x_sca)
 
@@ -232,10 +232,7 @@ class GalSimInject:
         pad = n_in_stamp+2*(d+1)
         sca_image = galsim.ImageF(sca_nside+pad, sca_nside+pad, scale=refscale)
         for n in range(num_obj):
-            # PSF
-            # psf = get_psf_pos(inpsf, idsca, obsdata,
-            #                   (x_sca[n], y_sca[n]), extraargs=None)
-            psf = inpsf  # this needs to be upgraded when we have PSF variation
+            psf = inpsf((my_ra[n],my_dec[n]), None)[0]  # now with PSF variation
             psf_image = galsim.Image(psf, scale=0.11/inpsf_oversamp)
             interp_psf = galsim.InterpolatedImage(
                 psf_image, x_interpolant='lanczos50')
@@ -358,6 +355,8 @@ class GridInject:
           ipix = array of HEALPix indices
           xsca = array of x positions on the SCA
           ysca = array of y positions on the SCA
+          rapix = array of RA
+          decpix = array of DEC
 
         '''
 
@@ -377,7 +376,7 @@ class GridInject:
         # and positions in the SCA image
         px, py = myWCS.all_world2pix(stargrid['rapix']/degree, stargrid['decpix']/degree, 0)
 
-        return (stargrid['ipix'], px, py)
+        return (stargrid['ipix'], px, py, stargrid['rapix']/degree, stargrid['decpix']/degree)
 
     @staticmethod
     def make_image_from_grid(res, inpsf, idsca, obsdata, mywcs, nside_sca, inpsf_oversamp):
@@ -395,14 +394,12 @@ class GridInject:
         '''
 
         thisimage = np.zeros((nside_sca, nside_sca))
-        ipix, xsca, ysca = GridInject.generate_star_grid(res, mywcs)
+        ipix, xsca, ysca, rapix, decpix = GridInject.generate_star_grid(res, mywcs)
         p = 6  # padding for interpolation (n/2+1 for nxn interpolation kernel)
         d = 64  # region to draw
 
         for istar in range(len(ipix)):
-            # thispsf = psf_utils.get_psf_pos(
-            #     inpsf, idsca, obsdata, (xsca[istar], ysca[istar]))
-            thispsf = inpsf  # this needs to be upgraded when we have PSF variation
+            thispsf = inpsf((rapix[istar], decpix[istar]), None)[0]  # now with PSF variation
             this_xmax = min(nside_sca, int(xsca[istar])+d)
             this_xmin = max(0, int(xsca[istar])-d)
             this_ymax = min(nside_sca, int(ysca[istar])+d)
@@ -498,8 +495,14 @@ class Mask:
             permanent_mask = None
 
         else:
+            # permanent mask is 'True' if the pixel should be used.
+            # 'GOODVAL' keyword in the input FITS file allows us to indicate
+            # whether an unflagged pixel is all 0's (GOODVAL=0) or 1's (GOODVAL!=0 or missing)
             with fits.open(block.cfg.permanent_mask) as f:
-                permanent_mask = np.where(f[0].data, True, False)
+                if f[0].header.get('GOODVAL')==0:
+                    permanent_mask = np.where(f[0].data==0, True, False)
+                else:
+                    permanent_mask = np.where(f[0].data, True, False)
             nonzero_count = np.count_nonzero(permanent_mask)
             print('Permanent mask loaded --> ', nonzero_count,
                   'good pixels', nonzero_count/(18*4088**2)*100, '%')
@@ -546,13 +549,28 @@ def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
     idsca = tuple (obsid, sca) (sca in 1..18)
     obsdata = observation data table (information needed for some formats)
     format = string describing type of file name
+      Right now the valid formats are:
+      dc2_imsim, anlsim
     extraargs = dictionary of extra arguments
 
     returns None if unrecognized format
 
     '''
+    
+    # for the ANL sims
+    if format_ == 'anlsim':
+        out = path+'/simple/Roman_WAS_simple_model_{:s}_{:d}_{:d}.fits'.format(
+            Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
 
-    # right now this is the only type defined
+        # insert ANL sim layers here
+        if extraargs is not None:
+            if 'type' in extraargs:
+                if extraargs['type'] == 'labnoise':
+                    out = path+'/labnoise/slope_{:d}_{:d}.fits'.format(idsca[0], idsca[1])
+
+        return out
+
+    # right now this is the only other type defined
     if format_ != 'dc2_imsim':
         return None
 
@@ -571,6 +589,24 @@ def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
                     Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
 
     return out
+
+def check_if_idsca_exists(cfg, obsdata, idsca):
+   '''
+   Determines whether an observation (id,sca) pair exists.
+   
+   Inputs:
+     cfg = configuration information; must have inpath, informat
+     obsdata = observation table
+   
+   Returns:
+     is_exists = True or False
+     fname = file name
+   '''
+
+   fname = _get_sca_imagefile(cfg.inpath, idsca, obsdata, cfg.informat)
+
+   is_exists = exists(fname)
+   return is_exists, fname
 
 
 def get_all_data(inimage: 'coadd.InImage'):
@@ -601,7 +637,7 @@ def get_all_data(inimage: 'coadd.InImage'):
     path = inimage.blk.cfg.inpath
     format_ = inimage.blk.cfg.informat
     inwcs = inimage.inwcs  # only one inwcs!
-    inpsf = inimage.get_psf_and_distort_mat((0, 0), None)[0]  # the actual PSF array!
+    inpsf = inimage.get_psf_and_distort_mat # now this is a **function**
     inpsf_oversamp = inimage.blk.cfg.inpsf_oversamp
     extrainput = inimage.blk.cfg.extrainput
 
@@ -620,7 +656,8 @@ def get_all_data(inimage: 'coadd.InImage'):
     # (missing files are blank)
     filename = _get_sca_imagefile(path, idsca, obsdata, format_)
     if exists(filename):
-        if format_ == 'dc2_imsim':
+        # these input formats both use the SCI data frame and have the sky embedded in the header
+        if format_ in ['dc2_imsim', 'anlsim']:
             with fits.open(filename) as f:
                 inimage.indata[0, :, :] = f['SCI'].data - float(f['SCI'].header['SKY_MEAN'])
     #
@@ -657,7 +694,13 @@ def get_all_data(inimage: 'coadd.InImage'):
             filename = _get_sca_imagefile(path, idsca, obsdata, format_, extraargs={'type': 'labnoise'})
             print('lab noise: searching for ' + filename)
             if exists(filename):
-                with fits.open(filename) as f: inimage.indata[i, :, :] = f[0].data
+                with fits.open(filename) as f:
+                    try:
+                        inimage.indata[i, :, :] = f[0].data
+                    except:
+                        inimage.indata[i, :, :] = f[0].data[4:4092,4:4092]
+                        print('  -> pulled out 4088x4088 subregion: 10th & 90th percentiles = {:6.3f} {:6.3f}'.format(
+                            np.percentile(f[0].data[4:4092,4:4092], 10), np.percentile(f[0].data[4:4092,4:4092], 90)))
             else:
                 print('Warning: labnoise file not found, skipping ...')
 
@@ -675,6 +718,24 @@ def get_all_data(inimage: 'coadd.InImage'):
             print('making grid using C routines: ', res, idsca)
             inimage.indata[i, :, :] = GridInject.make_image_from_grid(
                 res, inpsf, idsca, obsdata, inwcs, Stn.sca_nside, inpsf_oversamp)
+
+        # noisy star grid
+        # nstar<resolution>,<star_intensity>,<background>,<seed_index>
+        m = re.search(r'^nstar(\d+),', extrainput[i], re.IGNORECASE)
+        if m:
+            res = int(m.group(1))
+            extargs = extrainput[i].split(',')[1:]
+            tot_int = float(extargs[0])
+            bg = float(extargs[1])
+            q = int(extargs[2])
+            seed = 1000000*(18*q+idsca[1]) + idsca[0]
+       	    print('noise rng: frame_q={:d}, seed={:d}'.format(q, seed))
+       	    rng = np.random.default_rng(seed)
+            print('making noisy stars: ', res, idsca, ' total brightness =', tot_int, 'background =', bg, 'seed index =', q)
+            brightness = GridInject.make_image_from_grid(
+                res, inpsf, idsca, obsdata, inwcs, Stn.sca_nside, inpsf_oversamp)
+            inimage.indata[i, :, :] = rng.poisson(lam=brightness*tot_int+bg)-bg
+            del rng
 
         # galsim star grid
         m = re.search(r'^gsstar(\d+)$', extrainput[i], re.IGNORECASE)
