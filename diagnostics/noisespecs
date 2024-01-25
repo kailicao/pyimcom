@@ -1,4 +1,4 @@
-# usage: python noisespecs.py <filter> <input prefix> <outstem>
+# usage: python noisespecs.py <filter> <noisetype> <input prefix> <outstem> 
 # input file name is <input prefix><filter>_DD_DD_map.fits
 
 import sys
@@ -23,10 +23,11 @@ nradbins = 162
 nstart = 0
 
 #Check input format
-if len(sys.argv) < 4:
+if len(sys.argv) < 5:
     print('Missing an argument. Usage format is python noisespecs.py <filter> <input prefix> <outstem>\n')
     exit()
 
+# Determine filter to use
 filter = sys.argv[1]; nblockuse = 4 # first 4
 
 if filter=='Y': 
@@ -42,12 +43,18 @@ if filter=='F':
   filtername='F184'
   area= 3929
 
+# Determine type of noise to use (white or 1/f)
+if sys.argv[2] == 'white' or sys.argv[2] == 'w' or sys.argv[2] == 'White' or sys.argv[2] == 'W':
+    noisetype = 'WN'
+elif sys.argv[2] == 'f' or sys.argv[2] == '1f' or sys.argv[2] == 'F' or sys.argv[2] == '1F':
+    noisetype = 'FN'
+
 pos = numpy.zeros((1,ncol))
 image = numpy.zeros((1,bd*2-1,bd*2-1))
 
 # prefix and suffix
-in1 = sys.argv[2]
-outstem = sys.argv[3]
+in1 = sys.argv[3]
+outstem = sys.argv[4]
 
 #Set useful constants
 tfr = 3.08 #sec
@@ -55,7 +62,7 @@ gain = 1.458 #electrons/DN
 ABstd = 3.631*10**(-20) #erg/cm^2
 h = 6.626*10**(-27) #erg/Hz
 m_ab = 23.9 #sample mag for PS
-s_out = 0.11 #output pixel scale
+s_in = 0.11 #input pixel scale
 
 #Want to save plots? T/F
 plot = True
@@ -68,10 +75,44 @@ for iblock in range(nstart,nstart+nblockuse):
 
   #Combine in1 with block ID to get input file and block label
   label = '{:s}_{:02d}_{:02d}'.format(filter,ibx,iby)
-  infile = in1 + label + '_map.fits'
+  infile = in1 + label + '_' + noisetype + '_map.fits'
 
-  print('Running file: ' + infile +'\n')
-  
+############################################
+ # extract information from the header of the first file
+  if iblock==nstart:
+    with fits.open(infile) as f:
+
+      n = numpy.shape(f[0].data)[-1] # size of output images
+
+      config = ''
+      for g in f['CONFIG'].data['text'].tolist(): config += g+' '
+      configStruct = json.loads(config)
+
+      blocksize = int(configStruct['OUTSIZE'][0]) * int(configStruct['OUTSIZE'][1]) * float(configStruct['OUTSIZE'][2]) / 3600. *numpy.pi/180 # radians
+
+      outscale = float(configStruct['OUTSIZE'][2]) # in arcsec
+      force_scale = .40/outscale # in output pixels
+
+      # padding region around the edge
+      bdpad = int(configStruct['OUTSIZE'][1]) * int(configStruct['PAD'])
+
+      # figure out which layer we want
+      layers = [''] + configStruct['EXTRAINPUT']
+      print('#', layers)
+      for i in range(len(layers))[::-1]:
+        if noisetype = 'WN':
+            m = re.match(r'^whitenoise(\d+)$', layers[i])
+            if m:
+              use_slice = i
+        elif noisetype = 'FN':
+            m = re.match(r'^1fnoise(\d+)$', layers[i])
+            if m:
+              use_slice = i
+      print('# Analyzing ', noisetype, ' using layer', use_slice, ', output pix =', outscale, ', arcsec   n=',n)
+
+  print('# Running file: ' + infile +'\n')
+
+  if not exists(infile): continue
   f = fits.open(infile)
   indata = np.copy(f[0].data[0]).astype(np.float32)
   mean_coverage = np.mean(np.sum(np.where(f['INWEIGHT'].data[0, :, :, :] > 0, 1, 0), axis=0)[2:-2, 2:-2])
@@ -79,7 +120,7 @@ for iblock in range(nstart,nstart+nblockuse):
   
   norm = tfr/gain * ABstd/h * configInfo.AREA * 10**(-0.4*m_ab) * s_out**2
   
-  def _measure_power_spectrum(noiseframe):
+  def measure_power_spectrum(noiseframe, bin):
       """
       Measure the 2D power spectrum of image.
       :param noiseframe: 2D ndarray
@@ -91,8 +132,11 @@ for iblock in range(nstart,nstart+nblockuse):
       noiseframe = noiseframe/norm
       fft = np.fft.fftshift(np.fft.fft2(noiseframe))
       ps = ((np.abs(fft)) ** 2) / ((2600 * 4.4) ** 2)
-      binned_ps = np.average(np.reshape(ps, (325, 8, 325, 8)), axis = (1,3))
-      return binned_ps
+      if bin == True:
+          binned_ps = np.average(np.reshape(ps, (325, 8, 325, 8)), axis = (1,3))
+          return binned_ps
+      else:
+          return ps
   
   
   def _get_wavenumbers(window_length, num_radial_bins=nradbins):
@@ -155,7 +199,7 @@ for iblock in range(nstart,nstart+nblockuse):
       radial_err = radial_stddev / np.sqrt(npix)
       return r, radial_mean, radial_err
   
-  def pspec_results(result, save_fn, subplots=None, xlabel='Wave number',
+  def plot_results(result, save_fn, subplots=None, xlabel='Wave number',
                   ylabel='Power', xscale='linear', percentiles=[0.1, 99.9],
                   yscale='log', plot_errors=False,
                   cmap='plasma'):
@@ -205,7 +249,7 @@ for iblock in range(nstart,nstart+nblockuse):
   )
   
   
-  def measure_pspec(noiseframe, num_radial_bins=nradbins):
+  def get_powerspectra(noiseframe, num_radial_bins=nradbins):
       """
       Calculate the azimuthally-averaged 1D power spectrum of the image
       :param noiseframe: 2D ndarray
@@ -217,15 +261,12 @@ for iblock in range(nstart,nstart+nblockuse):
   
       noise = noiseframe.copy()
   
-      ps_image = _measure_power_spectrum(noise)
-      pspec_2d = np.copy(ps_image)
-      # print('ps image shape: ', ps_image.shape)
+      ps_image = measure_power_spectrum(noise, bin=True)
+      ps_2d = np.copy(ps_image)
   
       ps_r, ps_image, ps_image_err = azimuthal_average(ps_image, num_radial_bins)
-      # print('ps r shape: ', ps_r.shape)
   
       wavenumbers = _get_wavenumbers(noise.shape[0], num_radial_bins)
-      # print('wavenumbers shape: ', wavenumbers.shape)
   
       npix = np.product(noiseframe.shape)
   
@@ -234,16 +275,16 @@ for iblock in range(nstart,nstart+nblockuse):
                              ps_image_err=ps_image_err,
                              npix=npix,
                              k=wavenumbers,
-                             pspec_2d = pspec_2d
+                             ps_2d = ps_2d
                              )
   
       return results
   
   print('Calculating noise power spectrum...\n')
-  powerspectrum = measure_pspec(indata[7,:,:]) #KL: Make sure 7 is right OR calc/read this
+  powerspectrum = get_powerspectra(indata[7,:,:]) #KL: Make sure 7 is right OR calc/read this
   ps_data = np.column_stack((powerspectrum.k, powerspectrum.ps_image))
 
   #Save power spectra
   np.savetxt(outstem + label + '_noiseps', ps_data)
   if plot =='True':
-    pspec_results(powerspectrum,'_noiseps')
+    plot_results(powerspectrum,'_noiseps')
