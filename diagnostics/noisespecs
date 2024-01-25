@@ -14,17 +14,12 @@ import galsim
 import json
 import re
 
-bd = 40 # padding size
-bd2 = 8
-
 nblock = 48
-ncol = 22
-nradbins = 162
 nstart = 0
 
 #Check input format
 if len(sys.argv) < 5:
-    print('Missing an argument. Usage format is python noisespecs.py <filter> <input prefix> <outstem>\n')
+    print('Missing an argument. Usage format is python noisespecs.py <filter> <noisetype> <input prefix> <outstem>\n')
     exit()
 
 # Determine filter to use
@@ -49,9 +44,6 @@ if sys.argv[2] == 'white' or sys.argv[2] == 'w' or sys.argv[2] == 'White' or sys
 elif sys.argv[2] == 'f' or sys.argv[2] == '1f' or sys.argv[2] == 'F' or sys.argv[2] == '1F':
     noisetype = 'FN'
 
-pos = numpy.zeros((1,ncol))
-image = numpy.zeros((1,bd*2-1,bd*2-1))
-
 # prefix and suffix
 in1 = sys.argv[3]
 outstem = sys.argv[4]
@@ -62,10 +54,6 @@ gain = 1.458 #electrons/DN
 ABstd = 3.631*10**(-20) #erg/cm^2
 h = 6.626*10**(-27) #erg/Hz
 m_ab = 23.9 #sample mag for PS
-s_in = 0.11 #input pixel scale
-
-#Want to save plots? T/F
-plot = True
 
 #Loop through all the blocks
 for iblock in range(nstart,nstart+nblockuse):
@@ -74,8 +62,8 @@ for iblock in range(nstart,nstart+nblockuse):
   ibx = j%nblock; iby = j//nblock
 
   #Combine in1 with block ID to get input file and block label
-  label = '{:s}_{:02d}_{:02d}'.format(filter,ibx,iby)
-  infile = in1 + label + '_' + noisetype + '_map.fits'
+  label = '{:s}_{:02d}_{:02d}'.format(filter,ibx,iby) + '_' + noisetype
+  infile = in1 + label + '_map.fits'
 
 ############################################
  # extract information from the header of the first file
@@ -90,7 +78,7 @@ for iblock in range(nstart,nstart+nblockuse):
 
       blocksize = int(configStruct['OUTSIZE'][0]) * int(configStruct['OUTSIZE'][1]) * float(configStruct['OUTSIZE'][2]) / 3600. *numpy.pi/180 # radians
 
-      outscale = float(configStruct['OUTSIZE'][2]) # in arcsec
+      s_out = float(configStruct['OUTSIZE'][2]) # in arcsec
       force_scale = .40/outscale # in output pixels
 
       # padding region around the edge
@@ -114,9 +102,12 @@ for iblock in range(nstart,nstart+nblockuse):
 
   if not exists(infile): continue
   f = fits.open(infile)
-  indata = np.copy(f[0].data[0]).astype(np.float32)
+  indata = np.copy(f[0].data[0, use_slice, :, :]).astype(np.float32)
   mean_coverage = np.mean(np.sum(np.where(f['INWEIGHT'].data[0, :, :, :] > 0, 1, 0), axis=0)[2:-2, 2:-2])
   f.close()
+
+  L = indata.shape[0] #side length of blocks
+  nradbins = L//16 # Number of radial bins is side length div. into 8 from binning and then (floor) div. by 2.
   
   norm = tfr/gain * ABstd/h * configInfo.AREA * 10**(-0.4*m_ab) * s_out**2
   
@@ -126,14 +117,18 @@ for iblock in range(nstart,nstart+nblockuse):
       :param noiseframe: 2D ndarray
        the input image to measure the power spectrum of.
        in this case, a noise frame from the simulations
+      :param bin: True/False
+       Whether to bin the 2D spectrum.
+       Default=True, bins spectrum into L/8 x L/8 image.
       :return: 2D ndarray, ps
        the 2D power spectrum of the image.
       """
       noiseframe = noiseframe/norm
       fft = np.fft.fftshift(np.fft.fft2(noiseframe))
-      ps = ((np.abs(fft)) ** 2) / ((2600 * 4.4) ** 2)
+      ps = ((np.abs(fft)) ** 2) / ((L * (s_in/s_out) ** 2)
       if bin == True:
-          binned_ps = np.average(np.reshape(ps, (325, 8, 325, 8)), axis = (1,3))
+          print('# 2D spectrum is 8x8 binned\n')
+          binned_ps = np.average(np.reshape(ps, (L/8, 8, L/8, 8)), axis = (1,3))
           return binned_ps
       else:
           return ps
@@ -198,54 +193,10 @@ for iblock in range(nstart,nstart+nblockuse):
   
       radial_err = radial_stddev / np.sqrt(npix)
       return r, radial_mean, radial_err
-  
-  def plot_results(result, save_fn, subplots=None, xlabel='Wave number',
-                  ylabel='Power', xscale='linear', percentiles=[0.1, 99.9],
-                  yscale='log', plot_errors=False,
-                  cmap='plasma'):
-      '''
-      Plot the results of our power spectrum analysis, Plots a 2D and 1D power spectrum
-      :param result: 1D ndarray
-          the returned result of measure_oned_pspec
-      '''
-  
-      if subplots is None:
-          fig, ax = plt.subplots(1, 2, figsize=(15, 5))
-          fig.subplots_adjust(wspace=0.2)
-      else:
-          fig, ax = subplots
-  
-      vmin, vmax = np.nanpercentile(result.pspec_2d, percentiles)
-  
-      ax[0].imshow(result.pspec_2d, origin='lower', cmap=cmap,
-                   vmin=vmin, vmax=vmax)
-  
-  
-  
-      if plot_errors:
-          ax[1].errorbar(result.k, result.ps_image,
-                         yerr=result.ps_image_err,
-                         fmt='k.', lw=2, capsize=3, capthick=1.5, zorder=10)  # Measured power spectrum - points with errorbars
-      else:
-          ax[1].plot(result.k, result.ps_image, 'k-', lw=1)              # Measured power spectrum - line
-  
-  
-      ax[1].set_xscale(xscale)
-      ax[1].set_yscale(yscale)
-      ax[1].set_xlabel(xlabel, fontsize=15)
-      ax[1].set_ylabel(ylabel, fontsize=15)
-      ax[0].set_xlabel('Power (px)',fontsize=15)
-      ax[0].set_ylabel('Power (px)',fontsize=15)
-      ax[1].tick_params(labelsize=20)
-      ax[1].minorticks_on()
-      if save_fn is not None:
-          fig.savefig(outstem+label+save_fn, bbox_inches='tight', dpi=500)
-  
-      return fig, ax
-  
-  
+ 
+  # Set up a named tuple for the results that will contain relevant information
   PspecResults = namedtuple(
-      'PspecResults', 'ps_image ps_image_err npix k pspec_2d'
+      'PspecResults', 'ps_image ps_image_err npix k ps_2d'
   )
   
   
@@ -261,17 +212,16 @@ for iblock in range(nstart,nstart+nblockuse):
   
       noise = noiseframe.copy()
   
-      ps_image = measure_power_spectrum(noise, bin=True)
-      ps_2d = np.copy(ps_image)
+      ps_2d = measure_power_spectrum(noise, bin=True)
   
-      ps_r, ps_image, ps_image_err = azimuthal_average(ps_image, num_radial_bins)
+      ps_r, ps_1d, ps_image_err = azimuthal_average(ps_2d, num_radial_bins)
   
       wavenumbers = _get_wavenumbers(noise.shape[0], num_radial_bins)
   
       npix = np.product(noiseframe.shape)
   
       # consolidate results
-      results = PspecResults(ps_image=ps_image,
+      results = PspecResults(ps_image=ps_1d,
                              ps_image_err=ps_image_err,
                              npix=npix,
                              k=wavenumbers,
@@ -280,11 +230,17 @@ for iblock in range(nstart,nstart+nblockuse):
   
       return results
   
-  print('Calculating noise power spectrum...\n')
-  powerspectrum = get_powerspectra(indata[7,:,:]) #KL: Make sure 7 is right OR calc/read this
+  print('# Calculating noise power spectrum...\n')
+  powerspectrum = get_powerspectra(indata)
   ps_data = np.column_stack((powerspectrum.k, powerspectrum.ps_image))
 
-  #Save power spectra
-  np.savetxt(outstem + label + '_noiseps', ps_data)
-  if plot =='True':
-    plot_results(powerspectrum,'_noiseps')
+# Save power spectra data in a fits file
+#  np.savetxt(outstem + label + '_noiseps', ps_data)
+hdu_ps2d = fits.PrimaryHDU(PspecResults['ps_2d'])
+col1 = fits.Column(name='Wavenumber', format='E', array=PspecResults['k'])
+col2 = fits.Column(name='Power', format='E', array=PspecResults['ps_image']
+col3 = fits.Column(name='Error', format='E', array=PspecResults['ps_image_err']
+p1d_cols = fits.ColDefs([col1, col2, col3])
+hdu_ps1d = fits.BinTableHDU.from_columns(coldefs, name='P1D_TABLE)
+hdul = fits.HDUList([hdu_ps2d, hdu_ps1d])
+hdul.writeto(outstem + label + 'ps.fits', overwrite=True)
