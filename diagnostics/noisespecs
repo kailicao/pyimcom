@@ -91,7 +91,8 @@ for iblock in range(nstart,nstart+nblockuse):
       noiseframe = noiseframe/norm
       fft = np.fft.fftshift(np.fft.fft2(noiseframe))
       ps = ((np.abs(fft)) ** 2) / ((2600 * 4.4) ** 2)
-      return ps
+      binned_ps = np.average(np.reshape(ps, (325, 8, 325, 8)), axis = (1,3))
+      return binned_ps
   
   
   def _get_wavenumbers(window_length, num_radial_bins=nradbins):
