@@ -14,11 +14,11 @@ import re
 bd = 40 # padding size
 bd2 = 8
 
-nblock = 48
+nblockmax = 100 # maximum 
 ncol = 22
 nstart = 0
 
-filter = sys.argv[1]; nblockuse = 4 # first 4
+filter = sys.argv[1]
 
 if filter=='Y': filtername='Y106'
 if filter=='J': filtername='J129'
@@ -36,10 +36,10 @@ outfile_g = outstem + '_StarCat_galsim_{:s}.fits'.format(filter)
 
 fhist = numpy.zeros((61,),dtype=numpy.uint32)
 
-for iblock in range(nstart,nstart+nblockuse):
+for iblock in range(nstart,nblockmax**2):
 
   j = iblock
-  ibx = j%nblock; iby = j//nblock
+  ibx = j%nblockmax; iby = j//nblockmax
 
   infile = in1 + '{:s}_{:02d}_{:02d}_map.fits'.format(filter,ibx,iby)
 
