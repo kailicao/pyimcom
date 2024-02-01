@@ -13,6 +13,7 @@ from collections import namedtuple
 import galsim
 import json
 import re
+import numpy as np
 
 nblock = 48
 nstart = 0
@@ -23,7 +24,7 @@ if len(sys.argv) < 5:
     exit()
 
 # Determine filter to use
-filter = sys.argv[1]; nblockuse = 4 # first 4
+filter = sys.argv[1]; nblockuse = 500
 
 if filter=='Y': 
   filtername='Y106'
@@ -56,6 +57,7 @@ gain = 1.458 #electrons/DN
 ABstd = 3.631*10**(-20) #erg/cm^2
 h = 6.626*10**(-27) #erg/Hz
 m_ab = 23.9 #sample mag for PS
+s_in = 0.11 #arcsec
 
 #Loop through all the blocks
 for iblock in range(nstart,nstart+nblockuse):
@@ -79,39 +81,44 @@ for iblock in range(nstart,nstart+nblockuse):
       configStruct = json.loads(config)
       configdata = f['CONFIG'].data
 
+      mean_coverage = np.mean(np.sum(np.where(f['INWEIGHT'].data[0, :, :, :] > 0, 1, 0), axis=0)[2:-2, 2:-2])
+      configdata = np.append(configdata, np.array([('    "MEANCOVG:" '+str(mean_coverage))], dtype=configdata.dtype))
+
       blocksize = int(configStruct['OUTSIZE'][0]) * int(configStruct['OUTSIZE'][1]) * float(configStruct['OUTSIZE'][2]) / 3600. *numpy.pi/180 # radians
 
       s_out = float(configStruct['OUTSIZE'][2]) # in arcsec
-      force_scale = .40/outscale # in output pixels
+      force_scale = .40/s_out # in output pixels
 
       # padding region around the edge
       bdpad = int(configStruct['OUTSIZE'][1]) * int(configStruct['PAD'])
 
       # figure out which layer we want
       layers = [''] + configStruct['EXTRAINPUT']
-      print('#', layers)
+      print('# Layers:', layers)
       for i in range(len(layers))[::-1]:
-        if noisetype = 'W':
+        if noisetype == 'W':
             m = re.match(r'^whitenoise(\d+)$', layers[i])
             if m:
               use_slice = i
-        elif noisetype = 'F':
+        elif noisetype == 'F':
             m = re.match(r'^1fnoise(\d+)$', layers[i])
             if m:
               use_slice = i
-        elif noisetype = 'L':
+        elif noisetype == 'L':
             m = re.match(r'^labnoise$', layers[i])
             if m:
               use_slice = i
 
-  print('# Analyzing ', noisetype, ' using layer', use_slice, ', output pix =', outscale, ', arcsec   n=',n)
+#  print('# Analyzing ', noisetype, ' using layer', use_slice, ', output pix =', s_out, ' arcsec,   n=', n)
+
+
+  if not exists(infile): 
+    continue
 
   print('# Running file: ' + infile +'\n')
 
-  if not exists(infile): continue
   f = fits.open(infile)
   indata = np.copy(f[0].data[0, use_slice, :, :]).astype(np.float32)
-  mean_coverage = np.mean(np.sum(np.where(f['INWEIGHT'].data[0, :, :, :] > 0, 1, 0), axis=0)[2:-2, 2:-2])
   f.close()
 
   L = indata.shape[0] #side length of blocks
@@ -119,7 +126,7 @@ for iblock in range(nstart,nstart+nblockuse):
   
   norm = tfr/gain * ABstd/h * area * 10**(-0.4*m_ab) * s_out**2
   
-  def measure_power_spectrum(noiseframe, bin):
+  def measure_power_spectrum(noiseframe, bin=True):
       """
       Measure the 2D power spectrum of image.
       :param noiseframe: 2D ndarray
@@ -134,10 +141,11 @@ for iblock in range(nstart,nstart+nblockuse):
       """
       noiseframe = noiseframe/norm
       fft = np.fft.fftshift(np.fft.fft2(noiseframe))
-      ps = ((np.abs(fft)) ** 2) / ((L * (s_in/s_out) ** 2)
-      if bin == True:
+      ps = ((np.abs(fft)) ** 2) / ((L * (s_in/s_out) ** 2))
+      if bin:
           print('# 2D spectrum is 8x8 binned\n')
           binned_ps = np.average(np.reshape(ps, (L//8, 8, L//8, 8)), axis = (1,3))
+          print('# Binned PS has shape ', np.shape(binned_ps))
           return binned_ps
       else:
           return ps
@@ -189,7 +197,7 @@ for iblock in range(nstart,nstart+nblockuse):
       center = np.array(image.shape) / 2
   
       r = np.hypot(xx - center[1], yy - center[0])
-      rbin = (num_radial_bins * r / r.max()).astype(np.int)
+      rbin = (num_radial_bins * r / r.max()).astype(int)
   
       radial_mean = ndimage.mean(
           image, labels=rbin, index=np.arange(1, rbin.max() + 1))
@@ -205,7 +213,7 @@ for iblock in range(nstart,nstart+nblockuse):
  
   # Set up a named tuple for the results that will contain relevant information
   PspecResults = namedtuple(
-      'PspecResults', 'ps_image ps_image_err npix k ps_2d mc'
+      'PspecResults', 'ps_image ps_image_err npix k ps_2d'
   )
   
   
@@ -228,31 +236,34 @@ for iblock in range(nstart,nstart+nblockuse):
       wavenumbers = _get_wavenumbers(noise.shape[0], num_radial_bins)
   
       npix = np.product(noiseframe.shape)
-  
+
       # consolidate results
       results = PspecResults(ps_image=ps_1d,
                              ps_image_err=ps_image_err,
                              npix=npix,
                              k=wavenumbers,
-                             ps_2d = ps_2d, mc = mean_coverage
+                             ps_2d = ps_2d
                              )
   
       return results
   
-  print('# Calculating noise power spectrum...\n')
   powerspectrum = get_powerspectra(indata)
   ps_data = np.column_stack((powerspectrum.k, powerspectrum.ps_image))
 
 # Save power spectra data in a fits file
 # Two HDUs: Primary contains 2D spectrum, second is a table with 1D spectrum and MC values
 
-hdu_ps2d = fits.PrimaryHDU(PspecResults['ps_2d'])
-col1 = fits.Column(name='Wavenumber', format='E', array=PspecResults['k'])
-col2 = fits.Column(name='Power', format='E', array=PspecResults['ps_image']
-col3 = fits.Column(name='Error', format='E', array=PspecResults['ps_image_err']
-col4 = fits.Column(name='Mean_Covg', format='E', array=PspecResults['mc']
-p1d_cols = fits.ColDefs([col1, col2, col3, col4])
-hdu_ps1d = fits.BinTableHDU.from_columns(coldefs, name='P1D_TABLE')
-hdu_config = fits.BinTableHDU(data=configdata)
-hdul = fits.HDUList([ hdu_ps2d, hdu_config, hdu_ps1d])
-hdul.writeto(outstem + label + 'ps.fits', overwrite=True)
+#  print('# K shape: ', powerspectrum.k.shape)
+#  print('# 1D image shape: ', powerspectrum.ps_image.shape)
+#  print('# Image Err shape: ', powerspectrum.ps_image_err.shape)
+
+  hdu_ps2d = fits.PrimaryHDU(powerspectrum.ps_2d)
+  col1 = fits.Column(name='Wavenumber', format='E', array=powerspectrum.k)
+  col2 = fits.Column(name='Power', format='E', array=powerspectrum.ps_image)
+  col3 = fits.Column(name='Error', format='E', array=powerspectrum.ps_image_err)
+  p1d_cols = fits.ColDefs([col1, col2, col3])
+  hdu_ps1d = fits.BinTableHDU.from_columns(p1d_cols, name='P1D_TABLE')
+  hdu_config = fits.BinTableHDU(data=configdata, name='CONFIG')
+  hdul = fits.HDUList([ hdu_ps2d, hdu_config, hdu_ps1d])
+  hdul.writeto(outstem + label + 'ps.fits', overwrite=True)
+  print('# Results saved to ', outstem, label, 'ps.fits')
