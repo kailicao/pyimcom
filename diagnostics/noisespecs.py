@@ -40,9 +40,11 @@ if filter=='F':
 
 # Determine type of noise to use (white or 1/f)
 if sys.argv[2] == 'white' or sys.argv[2] == 'w' or sys.argv[2] == 'White' or sys.argv[2] == 'W':
-    noisetype = 'WN'
+    noisetype = 'W'
 elif sys.argv[2] == 'f' or sys.argv[2] == '1f' or sys.argv[2] == 'F' or sys.argv[2] == '1F':
-    noisetype = 'FN'
+    noisetype = 'F'
+elif sys.argv[2] == 'l' or sys.argv[2] == 'lab' or sys.argv[2] == 'L' or sys.argv[2] == 'Lab':
+    noisetype = 'L'
 
 # prefix and suffix
 in1 = sys.argv[3]
@@ -62,8 +64,9 @@ for iblock in range(nstart,nstart+nblockuse):
   ibx = j%nblock; iby = j//nblock
 
   #Combine in1 with block ID to get input file and block label
-  label = '{:s}_{:02d}_{:02d}'.format(filter,ibx,iby) + '_' + noisetype
-  infile = in1 + label + '_map.fits'
+  blockid = '{:s}_{:02d}_{:02d}'.format(filter,ibx,iby)
+  label = blockid + '_' + noisetype
+  infile = in1 + blockid + '_map.fits'
 
  # extract information from the header of the first file
   if iblock==nstart:
@@ -74,6 +77,7 @@ for iblock in range(nstart,nstart+nblockuse):
       config = ''
       for g in f['CONFIG'].data['text'].tolist(): config += g+' '
       configStruct = json.loads(config)
+      configdata = f['CONFIG'].data
 
       blocksize = int(configStruct['OUTSIZE'][0]) * int(configStruct['OUTSIZE'][1]) * float(configStruct['OUTSIZE'][2]) / 3600. *numpy.pi/180 # radians
 
@@ -87,15 +91,20 @@ for iblock in range(nstart,nstart+nblockuse):
       layers = [''] + configStruct['EXTRAINPUT']
       print('#', layers)
       for i in range(len(layers))[::-1]:
-        if noisetype = 'WN':
+        if noisetype = 'W':
             m = re.match(r'^whitenoise(\d+)$', layers[i])
             if m:
               use_slice = i
-        elif noisetype = 'FN':
+        elif noisetype = 'F':
             m = re.match(r'^1fnoise(\d+)$', layers[i])
             if m:
               use_slice = i
-      print('# Analyzing ', noisetype, ' using layer', use_slice, ', output pix =', outscale, ', arcsec   n=',n)
+        elif noisetype = 'L':
+            m = re.match(r'^labnoise$', layers[i])
+            if m:
+              use_slice = i
+
+  print('# Analyzing ', noisetype, ' using layer', use_slice, ', output pix =', outscale, ', arcsec   n=',n)
 
   print('# Running file: ' + infile +'\n')
 
@@ -108,7 +117,7 @@ for iblock in range(nstart,nstart+nblockuse):
   L = indata.shape[0] #side length of blocks
   nradbins = L//16 # Number of radial bins is side length div. into 8 from binning and then (floor) div. by 2.
   
-  norm = tfr/gain * ABstd/h * configInfo.AREA * 10**(-0.4*m_ab) * s_out**2
+  norm = tfr/gain * ABstd/h * area * 10**(-0.4*m_ab) * s_out**2
   
   def measure_power_spectrum(noiseframe, bin):
       """
@@ -244,5 +253,6 @@ col3 = fits.Column(name='Error', format='E', array=PspecResults['ps_image_err']
 col4 = fits.Column(name='Mean_Covg', format='E', array=PspecResults['mc']
 p1d_cols = fits.ColDefs([col1, col2, col3, col4])
 hdu_ps1d = fits.BinTableHDU.from_columns(coldefs, name='P1D_TABLE')
-hdul = fits.HDUList([hdu_ps2d, hdu_ps1d])
+hdu_config = fits.BinTableHDU(data=configdata)
+hdul = fits.HDUList([ hdu_ps2d, hdu_config, hdu_ps1d])
 hdul.writeto(outstem + label + 'ps.fits', overwrite=True)
