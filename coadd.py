@@ -1,5 +1,16 @@
+'''
+Driver to coadd a block (2D array of postage stamps).
+
+Classes
+-------
+InImage : Input image attached to a Block instance.
+InStamp : Data structure for input pixel positions and signals.
+OutStamp : Driver for postage stamp coaddition.
+Block : Driver for block coaddition.
+
+'''
+
 from os.path import exists
-# import shutil
 import pathlib
 from itertools import combinations, product
 import gc
@@ -37,6 +48,7 @@ class InImage:
     clear : Free up memory space.
 
     smooth_and_pad (staticmethod): Utility to smear a PSF with a tophat and a Gaussian.
+    LPolyArr (staticmethod) : Utility to generate an array of Legendre polynomials.
     get_psf_and_distort_mat: Get input PSF array and the corresponding distortion matrix.
 
     '''
@@ -223,8 +235,8 @@ class InImage:
                                 pix_lower < my_y < pix_upper): continue
                         if not mask[bottom+j, left+i]: continue
 
-                        i_st = int((my_x-pix_lower) // self.blk.cfg.n2)  # st stands for stamp
-                        j_st = int((my_y-pix_lower) // self.blk.cfg.n2)
+                        i_st = int((my_x - pix_lower) // self.blk.cfg.n2)  # st stands for stamp
+                        j_st = int((my_y - pix_lower) // self.blk.cfg.n2)
                         if not self.blk.use_instamps[j_st, i_st]: continue
 
                         my_idx = self.pix_count[j_st, i_st]
@@ -381,14 +393,15 @@ class InImage:
         # (moved this up since some PSF models need it)
         pixloc = self.inwcs.all_world2pix(np.array([[psf_compute_point[0], psf_compute_point[1]]]).astype(np.float64), 0)[0]
 
-        if self.blk.cfg.inpsf_format=='dc2_imsim':
-            fname = self.blk.cfg.inpsf_path+'/dc2_psf_{:d}.fits'.format(self.idsca[0])
+        if self.blk.cfg.inpsf_format == 'dc2_imsim':
+            fname = self.blk.cfg.inpsf_path + '/dc2_psf_{:d}.fits'.format(self.idsca[0])
             assert exists(fname), 'Error: input psf does not exist'
             fileh = fitsio.FITS(fname)
             this_psf = InImage.smooth_and_pad(fileh[self.idsca[1]][:, :], tophatwidth=self.blk.cfg.inpsf_oversamp)
             fileh.close()
-        elif self.blk.cfg.inpsf_format=='anlsim':
-            fname = self.blk.cfg.inpsf_path+'/psf_polyfit_{:d}.fits'.format(self.idsca[0])
+
+        elif self.blk.cfg.inpsf_format == 'anlsim':
+            fname = self.blk.cfg.inpsf_path + '/psf_polyfit_{:d}.fits'.format(self.idsca[0])
             assert exists(fname), 'Error: input psf does not exist'
             fileh = fitsio.FITS(fname)
             # order = 1
@@ -398,6 +411,7 @@ class InImage:
             this_psf = InImage.smooth_and_pad(np.einsum('a,aij->ij', lpoly, cube), tophatwidth=self.blk.cfg.inpsf_oversamp)/64
                 # divide by 64=8**2 since anlsim files are in fractional intensity per s_in**2 instead of per (s_in/8)**2
             fileh.close()
+
         else:
             raise RuntimeError('Error: input psf does not exist')
 
@@ -564,7 +578,7 @@ class InStamp:
 
 class OutStamp:
     '''
-    Postage stamp coaddition.
+    Driver for postage stamp coaddition.
 
     Methods
     -------
@@ -1087,7 +1101,7 @@ class OutStamp:
 
 class Block:
     '''
-    Output block coaddition.
+    Driver for block coaddition.
 
     Methods
     -------
@@ -1644,9 +1658,6 @@ class Block:
         # ... and the kappa map
         fits.PrimaryHDU(np.stack((self.kappamin[fk:-fk, fk:-fk], self.kappamax[fk:-fk, fk:-fk])))\
             .writeto(self.outstem+'_kappa.fits', overwrite=True)
-
-        # if self.cfg.fname is not None:
-        #     shutil.copy(str(self.cfg.fname), self.outstem+'_config.json')
 
     def clear_all(self) -> None:
         '''

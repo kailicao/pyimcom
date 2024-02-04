@@ -1,17 +1,90 @@
+'''
+Linear algebra kernels to solve linear systems.
+
+Classes (current)
+-------
+LAKernel : Static methods to solve linear systems.
+
+Classes (planned)
+-------
+LAKernel : Abstract base class of linear algebra kernels.
+EigenKernel : LA kernel using eigendecomposition.
+ChoKernel : LA kernel using Cholesky decomposition.
+IterKernel : LA kernel using iterative method.
+EmpirKernel : Fake LA kernel using empirical relation.
+
+'''
+
 from warnings import warn
 
 import numpy as np
 from scipy.linalg import cholesky, cho_solve
 
 from .config import Timer
-from pyimcom_croutines import build_reduced_T_wrap
+from pyimcom_croutines import lakernel1, build_reduced_T_wrap
 
 
 class LAKernel:
     '''
-    Linear algebra kernel, static methods to solve linear systems.
+    Linear algebra kernels, static methods to solve linear systems.
+
+    Methods (current)
+    -------
+    CKernelMulti (staticmethod) : To be EigenKernel.
+    get_coadd_matrix_discrete (staticmethod) : To be ChoKernel.
 
     '''
+
+    @staticmethod
+    def CKernelMulti(A, mBhalf, C, targetleak, kCmin=1e-16, kCmax=1e16, nbis=53, smax=1e8):
+        '''
+        This one generates multiple images. there can be nt target PSFs.
+        if 2D arrays are input then assumes nt=1
+
+        Inputs:
+          A = system matrix, shape = (n, n)
+          mBhalf = -B/2 = target overlap matrix, shape = (nt, m, n)
+          C = target normalization, shape = (nt,)
+          targetleak = allowable leakage of target PSF(nt,)
+          kCmin, kCmax, nbis = range of kappa/C to test, number of bisections
+          smax = maximum allowed Sigma
+
+        Outputs:
+          kappa = Lagrange multiplier per output pixel, shape = (nt, m)
+          Sigma = output noise amplification, shape = (nt, m)
+          UC = fractional squared error in PSF, shape = (nt, m)
+          T = coaddition matrix, shape =(nt,m,n)
+
+        '''
+
+        # eigensystem
+        lam, Q = np.linalg.eigh(A)
+
+        # get dimensions and mPhalf matrix
+        if mBhalf.ndim == 2:
+            nt = 1
+            (m, n) = np.shape(mBhalf)
+            mBhalf_image = mBhalf.reshape((1, m, n))
+            C_s = np.array([C])
+            targetleak_s = np.array([targetleak])
+        else:
+            (nt, m, n) = np.shape(mBhalf)
+            mBhalf_image = mBhalf
+            C_s = C
+            targetleak_s = targetleak
+
+        # output arrays
+        kappa = np.zeros((nt, m))
+        Sigma = np.zeros((nt, m))
+        UC = np.zeros((nt, m))
+        T = np.zeros((nt, m, n))
+        tt = np.zeros((m, n))
+
+        for k in range(nt):
+            lakernel1(lam, Q, mBhalf_image[k, :, :]@Q, C_s[k], targetleak_s[k],
+                      kCmin, kCmax, nbis, kappa[k, :], Sigma[k, :], UC[k, :], tt, smax)
+            T[k, :, :] = tt@Q.T
+        return (kappa, Sigma, UC, T)
 
     @staticmethod
     def get_coadd_matrix_discrete(A, mBhalf, C, kappa_array, ucmin, smax=0.5,
@@ -20,20 +93,20 @@ class LAKernel:
         alternative to CKernelMulti, almost same functionality but has a range of kappa
 
         Inputs:
-        A = in-in overlap matrix, shape (n,n)
-        mBhalf = in-out overlap matrix, shape (n_out,m,n)
-        C = out-out overlap, vector, length n_out
-        kappa_array = eigenvalue nodes, vector, length nv, ascending order
-        ucmin = minimum U/C (after this focus on noise)
+          A = in-in overlap matrix, shape (n, n)
+          mBhalf = in-out overlap matrix, shape (n_out, m, n)
+          C = out-out overlap, vector, length n_out
+          kappa_array = eigenvalue nodes, vector, length nv, ascending order
+          ucmin = minimum U/C (after this focus on noise)
 
         Named inputs:
-        smax = maximum noise to allow
+          smax = maximum noise to allow
 
         Outputs:
-        kappa, shape (n_out, m)
-        S, shape (n_out, m)
-        UC, shape (n_out,m)
-        T, shape (n_out,m,n)
+          kappa, shape (n_out, m)
+          S, shape (n_out, m)
+          UC, shape (n_out, m)
+          T, shape (n_out, m, n)
 
         '''
 
@@ -113,52 +186,3 @@ class LAKernel:
             if timing: print('C function took', timer(), 's')
 
         return (k_, S_, UC_, T_)
-
-'''
-# This one generates multiple images. there can be nt target PSFs.
-# if 2D arrays are input then assumes nt=1
-#
-# Inputs:
-#   A = system matrix, shape=(n,n)
-#   mBhalf = -B/2 = target overlap matrix, shape=(nt,m,n)
-#   C = target normalization, shape = (nt,)
-#   targetleak = allowable leakage of target PSF (nt,)
-#   kCmin, kCmax, nbis = range of kappa/C to test, number of bisections
-#   smax = maximum allowed Sigma
-#
-# Outputs:
-#   kappa = Lagrange multiplier per output pixel, shape=(nt,m)
-#   Sigma = output noise amplification, shape=(nt,m)
-#   UC = fractional squared error in PSF, shape=(nt,m)
-#   T = coaddition matrix, shape=(nt,m,n)
-#
-def CKernelMulti(A,mBhalf,C,targetleak,kCmin=1e-16,kCmax=1e16,nbis=53,smax=1e8):
-
-  # eigensystem
-  lam, Q = numpy.linalg.eigh(A)
-
-  # get dimensions and mPhalf matrix
-  if mBhalf.ndim==2:
-    nt=1
-    (m,n) = numpy.shape(mBhalf)
-    mBhalf_image = mBhalf.reshape((1,m,n))
-    C_s = numpy.array([C])
-    targetleak_s = numpy.array([targetleak])
-  else:
-    (nt,m,n) = numpy.shape(mBhalf)
-    mBhalf_image = mBhalf
-    C_s = C
-    targetleak_s = targetleak
-
-  # output arrays
-  kappa = numpy.zeros((nt,m))
-  Sigma = numpy.zeros((nt,m))
-  UC = numpy.zeros((nt,m))
-  T = numpy.zeros((nt,m,n))
-  tt = numpy.zeros((m,n))
-
-  for k in range(nt):
-    pyimcom_croutines.lakernel1(lam,Q,mBhalf_image[k,:,:]@Q,C_s[k],targetleak_s[k],kCmin,kCmax,nbis,kappa[k,:],Sigma[k,:],UC[k,:],tt,smax)
-    T[k,:,:] = tt@Q.T
-  return (kappa,Sigma,UC,T)
-'''

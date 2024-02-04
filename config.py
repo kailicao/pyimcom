@@ -1,3 +1,14 @@
+'''
+Encapsulation of pyimcom background settings and configuration.
+
+Classes
+-------
+Timer : All-purpose timer.
+Settings : pyimcom background settings.
+Config : pyimcom configuration, with JSON file interface.
+
+'''
+
 from time import perf_counter
 from importlib.resources import files
 import json
@@ -63,9 +74,9 @@ class Settings:
     # which header in the input file contains the WCS information
     hdu_with_wcs = 'SCI'
 
-    degree = u.degree.to('rad')  # np.pi/180.0 = 0.017453292519943295
-    arcmin = u.arcmin.to('rad')  # degree/60.0 = 0.0002908882086657216
-    arcsec = u.arcsec.to('rad')  # arcmin/60.0 = 4.84813681109536e-06
+    degree = u.degree.to('rad')  # == np.pi/180.0 == 0.017453292519943295
+    arcmin = u.arcmin.to('rad')  # == degree/60.0 == 0.0002908882086657216
+    arcsec = u.arcsec.to('rad')  # == arcmin/60.0 == 4.84813681109536e-06
 
     # filter list
     RomanFilters  = ['W146', 'F184', 'H158', 'J129', 'Y106',
@@ -160,7 +171,8 @@ class Config:
 
         # tile center in degrees RA, DEC
         self.ra, self.dec = cfg['CTR']
-        # and output size: n1 (number of IMCOM blocks), n2 (size of single run), dtheta (arcsec)
+        # and output size: n1 (number of IMCOM postage stamps)
+        # n2 (size of single run), dtheta (arcsec)
         # output array size will be (n1 x n2 x dtheta) on a side
         # with padding, it is (n1 + 2*postage_pad) n2 x dtheta on a side
         self.n1, self.n2, self.dtheta = cfg['OUTSIZE']
@@ -202,7 +214,7 @@ class Config:
 
         # pad this many IMCOM postage stamps around the edge
         self.postage_pad = cfg.get('PAD', 0)
-        # accordingto the strategy or on the sides specified by the user
+        # according to the strategy or on the sides specified by the user
         self.pad_sides = cfg.get('PADSIDES', 'auto')
 
         # output target PSF extra smearing
@@ -221,6 +233,15 @@ class Config:
 
         # temporary storage
         self.tempfile = cfg.get('TEMPFILE', None)
+
+        # choose_outputs = 'CKMSTU' (default); which outputs to report:
+        #     A, B, C = IMCOM matrices
+        #     K = kappa (Lagrange multiplier map)
+        #     M = coaddition input pixel mask
+        #     S = noise map
+        #     T = coaddition matrix
+        #     U = PSF leakage map (U_alpha/C)
+        #   (A and B are large and I don't try to save them if we aren't going to use them)
 
         cfg.clear(); del cfg
 
@@ -348,12 +369,12 @@ class Config:
             "self.postage_pad = float(PAD) if PAD else 0")
 
         print('# on which side(s) to pad IMCOM postage stamps' '\n'
-              '# "all" means to pad on all sides;' '\n'
-              '# "auto" means to pad on mosaic boundaries only;' '\n'
-              '# "none" means pad pad on none of the sides;' '\n'
+              '# "all": pad on all sides;' '\n'
+              '# "auto": pad on mosaic boundaries only;' '\n'
+              '# "none": pad on none of the sides;' '\n'
               '# otherwise, please specify which side(s) to pad on' '\n'
-              '# using CAPITAL letters "B" (bottom), "T" (top),'
-              '# "L" (left), and "R" (right); the order does not matter', flush=True)
+              '# using CAPITAL letters (the order does not matter)' '\n'
+              '# "B" (bottom), "T" (top), "L" (left), and "R" (right)', flush=True)
         self._get_attrs_wrapper(
             "PADSIDES = input('PADSIDES (str) [default: \"auto\"]: ')" '\n'
             "self.pad_sides = PADSIDES if PADSIDES else 'auto'")
@@ -366,7 +387,7 @@ class Config:
 
         print('# extra inputs (input images to stack at once)' '\n'
               '# (use names for each one, space-delimited; meaning of names must be coded into' '\n'
-              '# coadd_utils.py, with the meaning based on the naming convention in INDATA)', flush=True)
+              '# layer.get_all_data, with the meaning based on the naming convention in INDATA)', flush=True)
         self._get_attrs_wrapper(
             "EXTRAINPUT = input('EXTRAINPUT (str str ...) [default: None]: ')" '\n'
             "self.extrainput = [None] + (EXTRAINPUT.split() if EXTRAINPUT else [])" '\n'

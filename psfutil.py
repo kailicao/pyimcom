@@ -1,3 +1,16 @@
+'''
+Utilities for PSFs and system matrices.
+
+Classes
+-------
+OutPSF : Simple target output PSF models.
+PSFGrp : Group of PSFs attached to either an InStamp or a Block.
+PSFOvl : Overlap between two PSFGrp instances or a PSFGrp instance and itself.
+SysMatA : System matrix A attached to a coadd.Block instance.
+SysMatB : System matrix B attached to a coadd.Block instance.
+
+'''
+
 import numpy as np
 from scipy.special import jv
 from astropy import wcs
@@ -14,7 +27,7 @@ from pyimcom_croutines import iD5512C, iD5512C_sym, gridD5512C
 
 class OutPSF:
     '''
-    Simple PSF models (for testing or outputs).
+    Simple target output PSF models (for testing or outputs).
 
     Methods
     -------
@@ -94,7 +107,7 @@ class OutPSF:
             / (4.0*ldp**2 * (1-obsc**2)) * np.pi
         del y, x, r
 
-        # now convovle
+        # now convolve
         It = numpy_fft.rfft2(I)
         uxa = np.linspace(0, 1-1/npad, npad); uxa[-(npad//2):] -= 1
         ux = np.tile(uxa[None, :npad//2+1], (npad, 1))
@@ -169,7 +182,7 @@ class OutPSF:
             I[4:,   :-4] += 0.1 * Icopy[ :-4, 4:]
             del Icopy
 
-        # now convovle
+        # now convolve
         It = numpy_fft.rfft2(I)
         uxa = np.linspace(0, 1-1/npad, npad); uxa[-(npad//2):] -= 1
         ux = np.tile(uxa[None, :npad//2+1], (npad, 1))
@@ -482,7 +495,7 @@ class PSFGrp:
         '''
 
         n_arr = psf_arr.shape[0]
-        pad_m1 = np.zeros((n_arr, PSFGrp.nsamp,  PSFGrp.nfft))
+        pad_m1 = np.zeros((n_arr, PSFGrp.nsamp, PSFGrp.nfft))
         pad_m2 = np.zeros((n_arr, PSFGrp.nfft, PSFGrp.nfft//2+1), dtype=np.complex128)
 
         pad_m1[:, :, :PSFGrp.nsamp] = psf_arr
@@ -647,6 +660,7 @@ class PSFOvl:
         less than (1/2) x (1/2) of the irfft2 results.
         For nsamp = 537 and nfft = 1280, this saves about 40%
         of the time compared to simply using irfft2 and ifftshift.
+
         Note: Because of the ifftshift part, this function is *not*
         the inverse function of PSFGrp.accel_pad_and_rfft2.
 
@@ -873,7 +887,7 @@ class PSFOvl:
                 del out_arr
 
                 # flat penalty
-                if PSFOvl.flat_penalty != 0:
+                if PSFOvl.flat_penalty != 0.0:
                     res[slice_] -= PSFOvl.flat_penalty / n_in
                     if j_im == i_im: res[slice_] += PSFOvl.flat_penalty
                 del slice_
@@ -1037,7 +1051,7 @@ class PSFOvl:
                 res[slice_] = out_arr.reshape((st1.pix_count[j_im], st2.pix_count[i_im]))
 
                 # flat penalty
-                if PSFOvl.flat_penalty != 0:
+                if PSFOvl.flat_penalty != 0.0:
                     res[slice_] -= PSFOvl.flat_penalty / self.grp1.n_psf
                     if j_im == i_im: res[slice_] += PSFOvl.flat_penalty
 
@@ -1354,8 +1368,9 @@ class SysMatA:
         if (ji_st1, ji_st2) not in self.iisubmats:
             # load virtual memory when available
             fname = 'iisubmat_' + '_'.join(f'{ji:02d}' for ji in ji_st1 + ji_st2) + '.npy'
-            fpath = self.blk.cache_dir / fname; print(f'VIRMEM: loading {fname}')
+            fpath = self.blk.cache_dir / fname
             if fpath.exists():
+                print(f'VIRMEM: loading {fname}')
                 self.iisubmats[(ji_st1, ji_st2)] = np.load(str(fpath))
                 fpath.unlink(); del fname, fpath
             else:
@@ -1382,7 +1397,7 @@ class SysMatB:
     System matrix B attached to a coadd.Block instance.
 
     The symtem matrix B is defined in Rowe+ 2011 Equation (18).
-    INPORTANT: The -2 coefficient is NOT included in this program.
+    IMPORTANT: The -2 coefficient is NOT included in this program.
 
     Methods
     -------

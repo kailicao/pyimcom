@@ -1,3 +1,21 @@
+'''
+Utilities to generate additional layers and handle masks.
+
+Classes
+-------
+GalSimInject : Utilities to inject objects using GalSim.
+GridInject : Utilities to inject stars using furry-parakeet C routine.
+Noise : Utilities to generate 1/f noise.
+Mask : Utilities for permanent and cosmic ray masks.
+
+Functions
+---------
+_get_sca_imagefile : Returns path to required SCA image file.
+check_if_idsca_exists : Determines whether an observation (id,sca) pair exists.
+get_all_data : Makes a 3D array of the image data.
+
+'''
+
 from os.path import exists
 import re
 import sys
@@ -18,8 +36,9 @@ from pyimcom_croutines import iD5512C
 
 class GalSimInject:
     '''
-    fluffy-garbanzo/inject_galsim_obj.py
+    Utilities to inject objects using GalSim.
 
+    fluffy-garbanzo/inject_galsim_obj.py
     # This file will contain routines to make an input image of injected objects using GalSim.
 
     '''
@@ -295,6 +314,8 @@ class GalSimInject:
 
 class GridInject:
     '''
+    Utilities to inject stars using furry-parakeet C routine.
+
     fluffy-garbanzo/grid_inject.py
 
     '''
@@ -429,6 +450,8 @@ class GridInject:
 
 class Noise:
     '''
+    Utilities to generate 1/f noise.
+
     fluffy-garbanzo/inject_complex_noise.py
 
     '''
@@ -465,6 +488,10 @@ class Noise:
 
 
 class Mask:
+    '''
+    Utilities for permanent and cosmic ray masks.
+
+    '''
 
     @staticmethod
     def randmask(idsca, pcut, hitinfo=None):
@@ -611,45 +638,23 @@ def check_if_idsca_exists(cfg, obsdata, idsca):
 
 def get_all_data(inimage: 'coadd.InImage'):
     '''
-    OUTDATED --> makes a 4D array of the image data
-    OUTDATED -->   axes of the output = [input type (e.g., 0=sci or sim), exposure index, y, x]
-
-    Inputs:
-      n_inframe = number of input frames
-      REPLACED --> obslist = which observations to use (list of tupes (obsid, sca) (sca in 1..18))
-      obsdata = observation data table (information needed for some formats)
-      path = directory for the files
-      format_ = string describing type of file name
-      OUTDATED --> inwcs = input WCS list (same length as obslist)
-      OUTDATED --> inpsf = input PSF information (dictionary; to be passed to psfutils routines if we draw objects)
-      extrainput = make multiple maps (list of types, first should be None, rest strings)
-      REMOVED --> extraargs = dictionary; may have the following (or more for future compatibility)
-
-      REMOVED -->      (*) tempfile => for memmap'ed arrays
+    makes a 3D array of the image data
+      axes of the output = [input type (e.g., 0=sci or sim), y, x]
 
     '''
 
     # read arguments from InImage attributes
-    n_inframe = inimage.blk.cfg.n_inframe
-    # obslist = inimage.blk.obslist
-    idsca = inimage.idsca
-    obsdata = inimage.blk.obsdata
-    path = inimage.blk.cfg.inpath
-    format_ = inimage.blk.cfg.informat
-    inwcs = inimage.inwcs  # only one inwcs!
-    inpsf = inimage.get_psf_and_distort_mat # now this is a **function**
+    n_inframe = inimage.blk.cfg.n_inframe  # number of input frames
+    idsca = inimage.idsca  # which observation to use (tuple (obsid, sca) (sca in 1..18))
+    obsdata = inimage.blk.obsdata  # observation data table (information needed for some formats)
+    path = inimage.blk.cfg.inpath  # directory for the files
+    format_ = inimage.blk.cfg.informat  # string describing type of file name
+    inwcs = inimage.inwcs  # input WCS of *this* observation
+    inpsf = inimage.get_psf_and_distort_mat  # now this is a **function**
+    # input PSF information (to be passed to GalSimInject or GridInject routines if we draw objects)
     inpsf_oversamp = inimage.blk.cfg.inpsf_oversamp
-    extrainput = inimage.blk.cfg.extrainput
+    extrainput = inimage.blk.cfg.extrainput  # make multiple maps (list of types, first should be None, rest strings)
 
-    # start by allocating the memory ...
-    # if extraargs is not None:
-    #     if 'tempfile' in extraargs.keys():
-    #         inimage.indata = np.memmap(extraargs['tempfile'], mode='w+', dtype=np.float32, shape=(
-    #             n_inframe, len(obslist), Stn.sca_nside, Stn.sca_nside))
-    #     else:
-    #         inimage.indata = np.zeros(
-    #             (n_inframe, len(obslist), Stn.sca_nside, Stn.sca_nside), dtype=np.float32)
-    # else:
     inimage.indata = np.zeros((n_inframe, Stn.sca_nside, Stn.sca_nside), dtype=np.float32)
 
     # now fill in each slice in *this* observation
