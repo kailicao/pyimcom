@@ -82,7 +82,6 @@ for iblock in range(nstart,nstart+nblockuse):
       configdata = f['CONFIG'].data
 
       mean_coverage = np.mean(np.sum(np.where(f['INWEIGHT'].data[0, :, :, :] > 0, 1, 0), axis=0)[2:-2, 2:-2])
-      configdata = np.append(configdata, np.array([('    "MEANCOVG:" '+str(mean_coverage))], dtype=configdata.dtype))
 
       blocksize = int(configStruct['OUTSIZE'][0]) * int(configStruct['OUTSIZE'][1]) * float(configStruct['OUTSIZE'][2]) / 3600. *numpy.pi/180 # radians
 
@@ -258,12 +257,17 @@ for iblock in range(nstart,nstart+nblockuse):
 #  print('# Image Err shape: ', powerspectrum.ps_image_err.shape)
 
   hdu_ps2d = fits.PrimaryHDU(powerspectrum.ps_2d)
+  hdr = hdu_ps2d.header
+  hdr['INSTEM'] = in1
+  hdr['MEANCOVG'] = mean_coverage
+    
   col1 = fits.Column(name='Wavenumber', format='E', array=powerspectrum.k)
   col2 = fits.Column(name='Power', format='E', array=powerspectrum.ps_image)
   col3 = fits.Column(name='Error', format='E', array=powerspectrum.ps_image_err)
   p1d_cols = fits.ColDefs([col1, col2, col3])
   hdu_ps1d = fits.BinTableHDU.from_columns(p1d_cols, name='P1D_TABLE')
   hdu_config = fits.BinTableHDU(data=configdata, name='CONFIG')
+    
   hdul = fits.HDUList([ hdu_ps2d, hdu_config, hdu_ps1d])
   hdul.writeto(outstem + label + 'ps.fits', overwrite=True)
   print('# Results saved to ', outstem, label, 'ps.fits')
