@@ -49,7 +49,7 @@ class InImage:
 
     smooth_and_pad (staticmethod): Utility to smear a PSF with a tophat and a Gaussian.
     LPolyArr (staticmethod) : Utility to generate an array of Legendre polynomials.
-    get_psf_and_distort_mat: Get input PSF array and the corresponding distortion matrix.
+    get_psf_and_distort_mat : Get input PSF array and the corresponding distortion matrix.
 
     '''
 
@@ -80,7 +80,7 @@ class InImage:
         if self.exists:
             with fits.open(self.infile) as f:
                 self.inwcs = wcs.WCS(f[Stn.hdu_with_wcs].header)
-                print('read WCS:', self.infile, 'HDU', Stn.hdu_with_wcs)
+                # print('read WCS:', self.infile, 'HDU', Stn.hdu_with_wcs)
 
     @staticmethod
     def generate_idx_grid(xs: np.array, ys: np.array) -> np.array:
@@ -426,7 +426,7 @@ class InImage:
             @ wcs.utils.local_partial_pixel_derivatives(self.inwcs, pixloc[0], pixloc[1]) \
             * self.blk.cfg.dtheta*Stn.degree/Stn.pixscale_native
 
-        print(pixloc, self.blk.cfg.inpsf_oversamp, np.shape(this_psf), np.sum(this_psf))
+        # print(pixloc, self.blk.cfg.inpsf_oversamp, np.shape(this_psf), np.sum(this_psf))
         return this_psf, distort_matrice
 
 
@@ -845,6 +845,12 @@ class OutStamp:
             print()
             self._visualize_coadd_matrices()
 
+        if self.blk.cfg.fade_kernel > 0:
+            fade_kernel = self.blk.cfg.fade_kernel  # shortcut
+            OutStamp.trapezoid(self.kappa, fade_kernel)
+            OutStamp.trapezoid(self.Sigma, fade_kernel)
+            OutStamp.trapezoid(self.UC, fade_kernel)
+
     def _visualize_system_matrices(self) -> None:
         '''
         Visualize system matrices.
@@ -966,16 +972,21 @@ class OutStamp:
 
         '''
 
-        if self.blk.cfg.fade_kernel > 0:
+        # shortcuts
+        n_out = self.blk.outpsfgrp.n_psf
+        n2f = self.blk.cfg.n2f
+        fade_kernel = self.blk.cfg.fade_kernel
+
+        if fade_kernel > 0:
             # self.T: (n_out, n_outpix, n_inpix)
             T_view = np.moveaxis(self.T, 1, -1).reshape(
-                (self.blk.outpsfgrp.n_psf, self.inpix_cumsum[-1],
-                 self.blk.cfg.n2f, self.blk.cfg.n2f))
-            OutStamp.trapezoid(T_view, self.blk.cfg.fade_kernel)
+                (n_out, self.inpix_cumsum[-1], n2f, n2f))
+            OutStamp.trapezoid(T_view, fade_kernel)
 
-        # the actual multiplication. includes multiplication by the trapezoid filter with transition width fade_kernel
-        self.outimage = np.einsum('oaj,ij->oia', self.T, self.indata).\
-        reshape((self.blk.outpsfgrp.n_psf, self.blk.cfg.n_inframe, self.blk.cfg.n2f, self.blk.cfg.n2f))
+        # the actual multiplication. includes multiplication
+        # by the trapezoid filter with transition width fade_kernel
+        self.outimage = np.einsum('oaj,ij->oia', self.T, self.indata).reshape(
+            (n_out, self.blk.cfg.n_inframe, n2f, n2f))
 
         if visualize:
             print()
@@ -985,9 +996,9 @@ class OutStamp:
         del self.iny_val, self.inx_val, self.indata
 
         # weight computations
-        Tsum_partial = np.sum(self.T, axis=1)
-        if not save_t: del self.T
-        self.Tsum = np.zeros((self.blk.outpsfgrp.n_psf, self.blk.n_inimage))
+        # Tsum_partial = np.sum(self.T, axis=1)
+        Tsum_image = np.zeros(self.T.shape[:2] + (self.blk.n_inimage,))  # (n_out, n_outpix, n_inimage)
+        # self.Tsum_stamp = np.zeros((self.blk.outpsfgrp.n_psf, self.blk.n_inimage))
 
         for j_st, inst, selection in zip(range(9), self.instamps, self.selections):
             if selection is None:
@@ -999,10 +1010,19 @@ class OutStamp:
 
             for i_im in range(self.blk.n_inimage):
                 # print(j_st, i_im, np.sum(Tsum_partial[:, my_cumsum[i_im]:my_cumsum[i_im+1]], axis=1))
-                self.Tsum[:, i_im] += np.sum(Tsum_partial[:, my_cumsum[i_im]:my_cumsum[i_im+1]], axis=1)
+                # self.Tsum_stamp[:, i_im] += np.sum(Tsum_partial[:, my_cumsum[i_im]:my_cumsum[i_im+1]], axis=1)
+                Tsum_image[:, :, i_im] += np.sum(self.T[:, :, my_cumsum[i_im]:my_cumsum[i_im+1]], axis=2)
 
-        del Tsum_partial
-        self.Tsum /= self.Tsum.sum(axis=1)[:, None]
+        self.Tsum_stamp = np.sum(Tsum_image, axis=1)  # (n_out, n_inimage)
+        self.Tsum_inpix = np.sum(Tsum_image, axis=2).reshape((n_out, n2f, n2f))
+        Tsum_norm = Tsum_image / np.abs(Tsum_image).sum(axis=2)[:, :, None]
+        self.Neff = 1. / np.sum(np.square(Tsum_norm), axis=2).reshape((n_out, n2f, n2f))
+        if fade_kernel > 0: OutStamp.trapezoid(self.Neff, fade_kernel)
+
+        if not save_t: del self.T
+        del Tsum_image, Tsum_norm
+        # self.Tsum /= self.Tsum.sum(axis=1)[:, None]
+        self.Tsum /= self.blk.cfg.n2 ** 2
 
     def _show_in_and_out_images(self) -> None:
         '''
@@ -1095,7 +1115,8 @@ class OutStamp:
 
         del self.inpix_count, self.inpix_cumsum
         self.selections.clear(); del self.selections
-        del self.kappa, self.Sigma, self.UC, self.Tsum
+        del self.kappa, self.Sigma, self.UC
+        del self.Tsum_stamp, self.Tsum_inpix, self.Neff
         del self.yx_val, self.outimage
 
 
@@ -1242,7 +1263,7 @@ class Block:
         print()
 
         # block information
-        iby, ibx = divmod(self.this_sub, self.cfg.nblock)
+        ibx, iby = divmod(self.this_sub, self.cfg.nblock)
         print('sub-block {:4d} <{:2d},{:2d}> of {:2d}x{:2d}={:2d}'.format(self.this_sub,
               ibx, iby, self.cfg.nblock, self.cfg.nblock, self.cfg.nblock**2))
         self.outstem = self.cfg.outstem + '_{:02d}_{:02d}'.format(ibx, iby)
@@ -1388,7 +1409,7 @@ class Block:
 
         elif self.cfg.pad_sides == 'auto':  # pad on mosaic boundaries only
             nblock = self.cfg.nblock  # shortcut
-            iby, ibx = divmod(self.this_sub, self.cfg.nblock)
+            ibx, iby = divmod(self.this_sub, self.cfg.nblock)
             if iby == 0: self.j_st_min -= postage_pad
             elif iby == nblock - 1: self.j_st_max += postage_pad
             if ibx == 0: self.i_st_min -= postage_pad
@@ -1526,16 +1547,23 @@ class Block:
             self.out_map[:, :, bottom:top, left:right] += outst.outimage
 
             # weight computations
-            self.T_weightmap[:, :, j_st-1, i_st-1] = outst.Tsum
+            self.T_weightmap[:, :, j_st-1, i_st-1] = outst.Tsum_stamp
 
             # fidelity map
-            self.fidelity_map[:, bottom:top, left:right] = np.minimum(
-                self.fidelity_map[:, bottom:top, left:right],
-                np.floor(-10*np.log10(np.clip(outst.UC, 10**(-25.5999), .99999))).astype(np.uint8))
+            # self.fidelity_map[:, bottom:top, left:right] = np.minimum(
+            #     self.fidelity_map[:, bottom:top, left:right],
+            #     np.floor(-10*np.log10(np.clip(outst.UC, 10**(-25.5999), .99999))).astype(np.uint8))
+            self.UC_map[:, bottom:top, left:right] += outst.UC
+            self.Sigma_map[:, bottom:top, left:right] += outst.Sigma
 
             # kappa map
-            self.kappamin[bottom:top, left:right] = np.minimum(self.kappamin[bottom:top, left:right], outst.kappa)
-            self.kappamax[bottom:top, left:right] = np.maximum(self.kappamax[bottom:top, left:right], outst.kappa)
+            # self.kappamin[bottom:top, left:right] = np.minimum(self.kappamin[bottom:top, left:right], outst.kappa)
+            # self.kappamax[bottom:top, left:right] = np.maximum(self.kappamax[bottom:top, left:right], outst.kappa)
+            self.kappa_map[:, bottom:top, left:right] += outst.kappa
+
+            # additional weight computations
+            self.Tsum_map[:, bottom:top, left:right] += outst.Tsum_inpix
+            self.Neff_map[:, bottom:top, left:right] += outst.Neff
 
     def coadd_output_stamps(self, sim_mode: bool = False) -> None:
         '''
@@ -1567,14 +1595,19 @@ class Block:
             # make basic output array (NOT including transition pixels on the boundaries)
             self.out_map = np.zeros((n_out, self.cfg.n_inframe, NsidePf, NsidePf), dtype=np.float32)
             # and the fidelity information (store as integer, will be in dB; initialize at full fidelity)
-            self.fidelity_map = np.full((n_out, NsidePf, NsidePf), fill_value=255, dtype=np.uint8)
+            # self.fidelity_map = np.full((n_out, NsidePf, NsidePf), fill_value=255, dtype=np.uint8)
+            self.UC_map = np.zeros((n_out, NsidePf, NsidePf), dtype=np.float32)
+            self.Sigma_map = np.zeros((n_out, NsidePf, NsidePf), dtype=np.float32)
             # and kappa (2 layers, min and max; start min layer at a large value)
-            self.kappamin = np.full ((NsidePf, NsidePf), fill_value=1e32, dtype=np.float32)
-            self.kappamax = np.zeros((NsidePf, NsidePf), dtype=np.float32)
+            # self.kappamin = np.full ((NsidePf, NsidePf), fill_value=1e32, dtype=np.float32)
+            # self.kappamax = np.zeros((NsidePf, NsidePf), dtype=np.float32)
+            self.kappa_map = np.zeros((n_out, NsidePf, NsidePf), dtype=np.float32)
 
             # allocate ancillary arrays
-            self.T_weightmap = np.zeros((self.outpsfgrp.n_psf, self.n_inimage,
+            self.T_weightmap = np.zeros((n_out, self.n_inimage,
                                          self.cfg.n1P, self.cfg.n1P), dtype=np.float32)
+            self.Tsum_map = np.zeros((n_out, NsidePf, NsidePf), dtype=np.float32)
+            self.Neff_map = np.zeros((n_out, NsidePf, NsidePf), dtype=np.float32)
 
         ### Begin loop over all the postage stamps we want to create ###
 
@@ -1628,10 +1661,16 @@ class Block:
         '''
 
         fk = self.cfg.fade_kernel  # shortcut
-        if is_final:
-            OutStamp.trapezoid(self.out_map, fk, recover_mode=True)  # recover block boundaries
+        if is_final:  # recover block boundaries
+            OutStamp.trapezoid(self.out_map, fk, recover_mode=True)
+            OutStamp.trapezoid(self.UC_map, fk, recover_mode=True)
+            OutStamp.trapezoid(self.Sigma_map, fk, recover_mode=True)
+            OutStamp.trapezoid(self.kappa_map, fk, recover_mode=True)
+            OutStamp.trapezoid(self.Tsum_map, fk, recover_mode=True)
+            OutStamp.trapezoid(self.Neff_map, fk, recover_mode=True)
 
-        maphdu = fits.PrimaryHDU(self.out_map[:, :, fk:-fk, fk:-fk], header=self.outwcs.to_header())
+        my_header = self.outwcs.to_header()
+        maphdu = fits.PrimaryHDU(self.out_map[:, :, fk:-fk, fk:-fk], header=my_header)
         config_hdu = fits.TableHDU.from_columns(
             [fits.Column(name='text', array=self.cfg.to_file(None).splitlines(), format='A512', ascii=True)])
         config_hdu.header['EXTNAME'] = 'CONFIG'
@@ -1649,15 +1688,47 @@ class Block:
         T_hdu2 = fits.ImageHDU(np.transpose(self.T_weightmap, axes=(0, 2, 1, 3)).\
                                reshape((self.outpsfgrp.n_psf*self.cfg.n1P, self.n_inimage*self.cfg.n1P)))
         T_hdu2.header['EXTNAME'] = 'INWTFLAT'
-        fidelity_hdu = fits.ImageHDU(self.fidelity_map[:, fk:-fk, fk:-fk], header=self.outwcs.to_header())
+
+        # n_out   = self.outpsfgrp.n_psf
+        # NsidePf = self.cfg.NsideP + self.cfg.fade_kernel * 2
+        # fidelity_map = np.full((n_out, NsidePf, NsidePf), fill_value=255, dtype=np.uint8)
+        # fidelity_map = np.floor(-10*np.log10(np.clip(self.UC_map, 10**(-25.5999), .99999))).astype(np.uint8)
+        fidelity_map = np.clip(np.floor(-1000*np.log10(np.clip(
+            self.UC_map[:, fk:-fk, fk:-fk], 1e-32, None))), 0, 65535).astype(np.uint16)
+        fidelity_hdu = fits.ImageHDU(fidelity_map, header=my_header); del fidelity_map
         fidelity_hdu.header['EXTNAME'] = 'FIDELITY'
-        fidelity_hdu.header['UNIT'] = ('dB', '-10*log10(U/C)')
-        hdu_list = fits.HDUList([maphdu, config_hdu, inlist_hdu, T_hdu, T_hdu2, fidelity_hdu])
-        hdu_list.writeto(self.outstem+'_map.fits', overwrite=True)
+        fidelity_hdu.header['UNIT'] = ('mB', '-1000*log10(U/C)')
+
+        Sigma_map_mB = np.clip(np.floor(-1000*np.log10(np.clip(
+            self.Sigma_map[:, fk:-fk, fk:-fk], 1e-32, None))), -32768, 32767).astype(np.int16)
+        Sigma_hdu = fits.ImageHDU(Sigma_map_mB, header=my_header); del Sigma_map_mB
+        Sigma_hdu.header['EXTNAME'] = 'SIGMA'
+        Sigma_hdu.header['UNIT'] = ('mB', '-1000*log10(Sigma)')
 
         # ... and the kappa map
-        fits.PrimaryHDU(np.stack((self.kappamin[fk:-fk, fk:-fk], self.kappamax[fk:-fk, fk:-fk])))\
-            .writeto(self.outstem+'_kappa.fits', overwrite=True)
+        # fits.PrimaryHDU(np.stack((self.kappamin[fk:-fk, fk:-fk], self.kappamax[fk:-fk, fk:-fk])))\
+        #     .writeto(self.outstem+'_kappa.fits', overwrite=True)
+        kappa_map_mB = np.clip(np.floor(-1000*np.log10(np.clip(
+            self.kappa_map[:, fk:-fk, fk:-fk], 1e-32, None))), 0, 65535).astype(np.uint16)
+        kappa_hdu = fits.ImageHDU(kappa_map_mB, header=my_header); del kappa_map_mB
+        kappa_hdu.header['EXTNAME'] = 'KAPPA'
+        kappa_hdu.header['UNIT'] = ('mB', '-1000*log10(kappa)')
+
+        Tsum_map_mB = np.clip(np.floor(1000*np.log10(np.clip(
+            self.Tsum_map[:, fk:-fk, fk:-fk], 1e-32, None))), -32768, 32767).astype(np.int16)
+        Tsum_hdu = fits.ImageHDU(Tsum_map_mB, header=my_header); del Tsum_map_mB
+        Tsum_hdu.header['EXTNAME'] = 'INWTSUM'
+        Tsum_hdu.header['UNIT'] = ('mB', '1000*log10(Tsum)')
+
+        Neff_map_mB = np.clip(np.floor(1000*np.log10(np.clip(
+            self.Neff_map[:, fk:-fk, fk:-fk], 1e-32, None))), 0, 65535).astype(np.uint16)
+        Neff_hdu = fits.ImageHDU(Neff_map_mB, header=my_header); del Neff_map_mB
+        Neff_hdu.header['EXTNAME'] = 'EFFCOVER'
+        Neff_hdu.header['UNIT'] = ('mB', '1000*log10(Neff)')
+
+        hdu_list = fits.HDUList([maphdu, config_hdu, inlist_hdu, T_hdu, T_hdu2,
+                                 fidelity_hdu, Sigma_hdu, kappa_hdu, Tsum_hdu, Neff_hdu])
+        hdu_list.writeto(self.outstem+'_map.fits', overwrite=True)
 
     def clear_all(self) -> None:
         '''
@@ -1673,7 +1744,8 @@ class Block:
 
         del self.obsdata, self.obslist, self.outwcs
         del self.outpsfgrp, self.outpsfovl, self.sysmata, self.sysmatb
-        del self.out_map, self.fidelity_map, self.kappamin, self.kappamax, self.T_weightmap
+        del self.out_map, self.UC_map, self.kappa_map
+        del self.T_weightmap, self.Tsum_map, self.Neff_map
 
         for j_st in range(self.cfg.n1P+2):
             for i_st in range(self.cfg.n1P+2):
