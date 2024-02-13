@@ -418,11 +418,11 @@ class PSFGrp:
         psf_compute_point = blk.outwcs.all_pix2world(np.array([self.inst.psf_compute_point_pix]), 0)[0]
         dWdp_out = wcs.utils.local_partial_pixel_derivatives(blk.outwcs, *self.inst.psf_compute_point_pix)
         print('INPUT/PSF computation at RA={:8.4f}, Dec={:8.4f}'.format(*psf_compute_point))
-        print(' --> partial derivatives, ', dWdp_out)
+        # print(' --> partial derivatives, ', dWdp_out)
 
         self.psf_arr = np.zeros((self.n_psf, PSFGrp.nsamp, PSFGrp.nsamp))
         for idx in range(self.n_psf):
-            print('PSF info -->', self.idx_grp2blk[idx], end=' ')
+            # print('PSF info -->', self.idx_grp2blk[idx], end=' ')
             this_psf, distort_matrice = self.inst.blk.inimages[self.idx_grp2blk[idx]].\
                 get_psf_and_distort_mat(psf_compute_point, dWdp_out)            
             self._sample_psf(idx, this_psf, distort_matrice, visualize=visualize)
@@ -1370,7 +1370,7 @@ class SysMatA:
             fname = 'iisubmat_' + '_'.join(f'{ji:02d}' for ji in ji_st1 + ji_st2) + '.npy'
             fpath = self.blk.cache_dir / fname
             if fpath.exists():
-                print(f'VIRMEM: loading {fname}')
+                # print(f'VIRMEM: loading {fname}')
                 self.iisubmats[(ji_st1, ji_st2)] = np.load(str(fpath))
                 fpath.unlink(); del fname, fpath
             else:
@@ -1385,7 +1385,7 @@ class SysMatA:
             and (ji_st_out[1] == min(ji_st1[1], ji_st2[1]) + 1):
             # save virtual memory when needed
             fname = 'iisubmat_' + '_'.join(f'{ji:02d}' for ji in ji_st1 + ji_st2) + '.npy'
-            fpath = self.blk.cache_dir / fname; print(f'VIRMEM: saving {fname}')
+            fpath = self.blk.cache_dir / fname  #; print(f'VIRMEM: saving {fname}')
             with open(str(fpath), 'wb') as f: np.save(f, arr)
             del self.iisubmats[(ji_st1, ji_st2)], fname, fpath
 
