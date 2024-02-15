@@ -415,7 +415,7 @@ class InImage:
         else:
             raise RuntimeError('Error: input psf does not exist')
 
-        # temporary measure to work with layer.get_all_data
+        # when distort_matrice is not required
         if dWdp_out is None: return this_psf, None
 
         # get the distortion matrices d[(X,Y)perfect]/d[(X,Y)native]
@@ -746,7 +746,6 @@ class OutStamp:
 
         '''
 
-        # print(f'> coadding OutStamp {(self.j_st, self.i_st)}', '@', self.blk.timer(), flush=True)
         self._build_system_matrices(visualize, save_abc)
         self._perform_coaddition(visualize, save_t)
         print()
@@ -820,7 +819,6 @@ class OutStamp:
             print()
             self._visualize_system_matrices()
 
-        # print(f'--> getting coadd matrix for OutStamp {(self.j_st, self.i_st)}', '@', self.blk.timer(), 's', flush=True)
         # kappa_, Sigma_, UC_: (n_out, n_outpix); self.T: (n_out, n_outpix, n_inpix)
         kappa_, Sigma_, UC_, self.T = LAKernel.get_coadd_matrix_discrete(
             self.sysmata, self.mhalfb, self.outovlc,
@@ -1013,7 +1011,7 @@ class OutStamp:
                 # self.Tsum_stamp[:, i_im] += np.sum(Tsum_partial[:, my_cumsum[i_im]:my_cumsum[i_im+1]], axis=1)
                 Tsum_image[:, :, i_im] += np.sum(self.T[:, :, my_cumsum[i_im]:my_cumsum[i_im+1]], axis=2)
 
-        self.Tsum_stamp = np.sum(Tsum_image, axis=1)  # (n_out, n_inimage)
+        self.Tsum_stamp = np.sum(Tsum_image, axis=1) / self.blk.cfg.n2 ** 2 # (n_out, n_inimage)
         self.Tsum_inpix = np.sum(Tsum_image, axis=2).reshape((n_out, n2f, n2f))
         Tsum_norm = Tsum_image / np.abs(Tsum_image).sum(axis=2)[:, :, None]
         self.Neff = 1. / np.sum(np.square(Tsum_norm), axis=2).reshape((n_out, n2f, n2f))
@@ -1022,7 +1020,6 @@ class OutStamp:
         if not save_t: del self.T
         del Tsum_image, Tsum_norm
         # self.Tsum /= self.Tsum.sum(axis=1)[:, None]
-        self.Tsum /= self.blk.cfg.n2 ** 2
 
     def _show_in_and_out_images(self) -> None:
         '''
@@ -1097,7 +1094,7 @@ class OutStamp:
 
         for in_idx in closest_inpix:
             print(f'{(self.inx_val[in_idx], self.iny_val[in_idx])=}')
-            plt.imshow(self.T[0, :, in_idx].reshape(56, 56), origin='lower')
+            plt.imshow(self.T[0, :, in_idx].reshape(n2f, n2f), origin='lower')
             plt.colorbar()
             plt.scatter(self.inx_val[in_idx]-(self.left-fk2//2),
                         self.iny_val[in_idx]-(self.bottom-fk2//2), c='r', s=2)
@@ -1138,6 +1135,7 @@ class Block:
 
     _output_stamp_wrapper : Wrapper for output stamp coaddition.
     coadd_output_stamps : Coadd output stamps using input stamps.
+    compress_map: Compress float32 map to (u)int16 to save storage.
     build_output_file : Build the output FITS file.
     clear_all : Free up all memory spaces.
 
@@ -1183,34 +1181,21 @@ class Block:
 
         '''
 
-        # print('> Block.parse_config', '@', self.timer(), 's')
         self.parse_config()
         # this produces: obsdata, outwcs, outpsfgrp, outpsfovl
-
-        # print('> Block.process_input_images', '@', self.timer(), 's')
         self.process_input_images()
         # this produces: obslist, inimages (1-d list), n_inimage
-
-        # print('> Block.build_input_stamps', '@', self.timer(), 's')
         self.build_input_stamps()
         # this produces: instamps (2-d list)
-        # print('done.\n', flush=True)
 
-        # print('> Block.coadd_output_stamps(sim_mode=True)', '@', self.timer(), 's')
         self.coadd_output_stamps(sim_mode=True)
         # this produces: sysmata (object), sysmatb (object), outstamps (2-d list)
-        # print('> Block.coadd_output_stamps(sim_mode=False)', '@', self.timer(), 's', end='\n\n')
         self.coadd_output_stamps(sim_mode=False)
-        # this produces: out_map, fidelity_map, kappamin, kappamax, T_weightmap
+        # this produces: out_map, T_weightmap, and additional output maps
 
-        # print('> Block.build_output_file', '@', self.timer(), 's')
         self.build_output_file(is_final=True)
-        # print('> Block.clear_all', '@', self.timer(), 's')
         self.clear_all()
-
-        # print()
         print(f'finished at t = {self.timer():.2f} s')
-        # print()
 
     def parse_config(self) -> None:
         '''
@@ -1297,8 +1282,7 @@ class Block:
 
         print('kappa array', self.cfg.kappa_arr)
 
-        # and the output PSFs and target leakages
-        # (this will have to be modified for multiple outputs)
+        # and the output PSFs
         self.outpsfgrp = PSFGrp(in_or_out=False, blk=self)
         self.outpsfovl = PSFOvl(self.outpsfgrp, None)
         print('computed overlap, C=', self.outpsfovl.outovlc)
@@ -1307,6 +1291,20 @@ class Block:
     def _get_obs_cover(self, radius: float) -> None:
         '''
         Get observations relevant to this Block.
+
+        Previous comments:
+          select observation/SCA pairs from a observation table
+
+        Inputs:
+          obsdata (the observation table)
+          ra (in degrees)
+          dec (in degrees)
+          radius (in degrees)
+          filter (integer, 0..10)
+
+        Outputs:
+          list of (observation, sca) that overlaps this target
+          [note SCA numbers are 1..18 for ease of comparison with the Project notation]
 
         Parameters
         ----------
@@ -1318,19 +1316,6 @@ class Block:
         None.
 
         '''
-
-        # select observation/SCA pairs from a observation table
-        #
-        # Inputs:
-        #   obsdata (the observation table)
-        #   ra (in degrees)
-        #   dec (in degrees)
-        #   radius (in degrees)
-        #   filter (integer, 0..10)
-        #
-        # Outputs:
-        #   list of (observation, sca) that overlaps this target
-        #   [note SCA numbers are 1..18 for ease of comparison with the Project notation]
 
         self.obslist = []
         n_obs_tot = len(self.obsdata.field(0))
@@ -1461,13 +1446,6 @@ class Block:
         print()
         assert any_exists, 'No candidate observations found to stack. Exiting now.'
 
-        # The following lines have been superseded:
-        # n_data = coadd_utils.get_all_data(n_inframe, obslist, obsdata, inpath, informat, inwcs, inpsf, extrainput)
-        # sys.stdout.write('done.\n')
-        # sys.stdout.flush()
-        # print('Size = {:6.1f} MB, shape ='.format(in_data.size*in_data.itemsize/1e6), numpy.shape(in_data))
-        # print()
-
         print('Reading input data ... ')
         self.pmask = Mask.load_permanent_mask(self)
         print()
@@ -1545,25 +1523,13 @@ class Block:
             right  =  i_st    * self.cfg.n2 + self.cfg.fade_kernel*2
 
             self.out_map[:, :, bottom:top, left:right] += outst.outimage
+            self.T_weightmap[:, :, j_st-1, i_st-1] = outst.Tsum_stamp  # weight computations
 
-            # weight computations
-            self.T_weightmap[:, :, j_st-1, i_st-1] = outst.Tsum_stamp
-
-            # fidelity map
-            # self.fidelity_map[:, bottom:top, left:right] = np.minimum(
-            #     self.fidelity_map[:, bottom:top, left:right],
-            #     np.floor(-10*np.log10(np.clip(outst.UC, 10**(-25.5999), .99999))).astype(np.uint8))
-            self.UC_map[:, bottom:top, left:right] += outst.UC
-            self.Sigma_map[:, bottom:top, left:right] += outst.Sigma
-
-            # kappa map
-            # self.kappamin[bottom:top, left:right] = np.minimum(self.kappamin[bottom:top, left:right], outst.kappa)
-            # self.kappamax[bottom:top, left:right] = np.maximum(self.kappamax[bottom:top, left:right], outst.kappa)
-            self.kappa_map[:, bottom:top, left:right] += outst.kappa
-
-            # additional weight computations
-            self.Tsum_map[:, bottom:top, left:right] += outst.Tsum_inpix
-            self.Neff_map[:, bottom:top, left:right] += outst.Neff
+            self.UC_map   [:, bottom:top, left:right] += outst.UC          # fidelity map
+            self.Sigma_map[:, bottom:top, left:right] += outst.Sigma       # noise map
+            self.kappa_map[:, bottom:top, left:right] += outst.kappa       # kappa map
+            self.Tsum_map [:, bottom:top, left:right] += outst.Tsum_inpix  # total weight
+            self.Neff_map [:, bottom:top, left:right] += outst.Neff        # effective coverage
 
     def coadd_output_stamps(self, sim_mode: bool = False) -> None:
         '''
@@ -1592,22 +1558,19 @@ class Block:
             n_out   = self.outpsfgrp.n_psf
             NsidePf = self.cfg.NsideP + self.cfg.fade_kernel * 2
 
-            # make basic output array (NOT including transition pixels on the boundaries)
+            # make basic output array (including transition pixels on the boundaries)
             self.out_map = np.zeros((n_out, self.cfg.n_inframe, NsidePf, NsidePf), dtype=np.float32)
-            # and the fidelity information (store as integer, will be in dB; initialize at full fidelity)
-            # self.fidelity_map = np.full((n_out, NsidePf, NsidePf), fill_value=255, dtype=np.uint8)
-            self.UC_map = np.zeros((n_out, NsidePf, NsidePf), dtype=np.float32)
-            self.Sigma_map = np.zeros((n_out, NsidePf, NsidePf), dtype=np.float32)
-            # and kappa (2 layers, min and max; start min layer at a large value)
-            # self.kappamin = np.full ((NsidePf, NsidePf), fill_value=1e32, dtype=np.float32)
-            # self.kappamax = np.zeros((NsidePf, NsidePf), dtype=np.float32)
-            self.kappa_map = np.zeros((n_out, NsidePf, NsidePf), dtype=np.float32)
-
             # allocate ancillary arrays
             self.T_weightmap = np.zeros((n_out, self.n_inimage,
                                          self.cfg.n1P, self.cfg.n1P), dtype=np.float32)
-            self.Tsum_map = np.zeros((n_out, NsidePf, NsidePf), dtype=np.float32)
-            self.Neff_map = np.zeros((n_out, NsidePf, NsidePf), dtype=np.float32)
+
+            # additional information (will convert to integer)
+            shape = (n_out, NsidePf, NsidePf)
+            self.UC_map    = np.zeros(shape, dtype=np.float32)  # fidelity map
+            self.Sigma_map = np.zeros(shape, dtype=np.float32)  # noise map
+            self.kappa_map = np.zeros(shape, dtype=np.float32)  # kappa map
+            self.Tsum_map  = np.zeros(shape, dtype=np.float32)  # total weight
+            self.Neff_map  = np.zeros(shape, dtype=np.float32)  # effective coverage
 
         ### Begin loop over all the postage stamps we want to create ###
 
@@ -1620,9 +1583,7 @@ class Block:
 
                     if n_coadded == self.nrun:
                         if sim_mode:
-                            # print(self.sysmata.iisubmats_ref)
                             self.sysmata.iisubmats.clear()
-                            # print(self.sysmatb.iopsfovls_ref)
                             self.sysmatb.iopsfovls.clear()
                         else:
                             assert len(self.sysmata.iisubmats) == 0, 'self.sysmata.iisubmats is not empty'
@@ -1633,13 +1594,49 @@ class Block:
                     gc.collect()  # force a garbage collection
 
             if not sim_mode:
-                # Write an intermediate map
                 print('  --> intermediate output -->\n')
                 self.build_output_file(is_final=False)
-                # fk = self.cfg.fade_kernel  # shortcut
-                # maphdu = fits.PrimaryHDU(self.out_map[:, :, fk:-fk, fk:-fk], header=self.outwcs.to_header())
-                # hdu_list = fits.HDUList([maphdu])
-                # hdu_list.writeto(self.outstem+'_map.fits', overwrite=True)
+
+    @staticmethod
+    def compress_map(map_: np.array, coef: int, dtype: type,
+                     header: fits.Header, EXTNAME: str, UNIT: (str, str)) -> fits.ImageHDU:
+        '''
+        Compress float32 map to (u)int16 to save storage.
+
+        Parameters
+        ----------
+        map_ : np.array, shape : usually (NsideP, NsideP)
+            Map to be compressed.
+        coef : int
+            Coefficient for log10 values.
+        dtype : type
+            Data type of the compressed map, np.(u)int16.
+        header : fits.Header
+            Template header of the HDU.
+        EXTNAME : str
+            EXTNAME keyword of the header.
+        UNIT : (str, str)
+            UNIT keyword of the header.
+
+        Returns
+        -------
+        fits.ImageHDU
+            HDU containing the compressed array.
+
+        '''
+
+        if dtype is np.uint16:
+            a_min, a_max = 0, 65535
+        elif dtype is np.int16:
+            a_min, a_max = -32768, 32767
+
+        my_map = np.clip(np.floor(coef*np.log10(np.clip(
+            map_, 1e-32, None))), a_min, a_max).astype(dtype)
+        my_hdu = fits.ImageHDU(my_map, header=header); del my_map
+        my_hdu.header['EXTNAME'] = EXTNAME
+        my_hdu.header['UNIT'] = UNIT
+
+        return my_hdu
 
     def build_output_file(self, is_final: bool = False) -> None:
         '''
@@ -1662,12 +1659,12 @@ class Block:
 
         fk = self.cfg.fade_kernel  # shortcut
         if is_final:  # recover block boundaries
-            OutStamp.trapezoid(self.out_map, fk, recover_mode=True)
-            OutStamp.trapezoid(self.UC_map, fk, recover_mode=True)
+            OutStamp.trapezoid(self.out_map,   fk, recover_mode=True)
+            OutStamp.trapezoid(self.UC_map,    fk, recover_mode=True)
             OutStamp.trapezoid(self.Sigma_map, fk, recover_mode=True)
             OutStamp.trapezoid(self.kappa_map, fk, recover_mode=True)
-            OutStamp.trapezoid(self.Tsum_map, fk, recover_mode=True)
-            OutStamp.trapezoid(self.Neff_map, fk, recover_mode=True)
+            OutStamp.trapezoid(self.Tsum_map,  fk, recover_mode=True)
+            OutStamp.trapezoid(self.Neff_map,  fk, recover_mode=True)
 
         my_header = self.outwcs.to_header()
         maphdu = fits.PrimaryHDU(self.out_map[:, :, fk:-fk, fk:-fk], header=my_header)
@@ -1689,45 +1686,59 @@ class Block:
                                reshape((self.outpsfgrp.n_psf*self.cfg.n1P, self.n_inimage*self.cfg.n1P)))
         T_hdu2.header['EXTNAME'] = 'INWTFLAT'
 
-        # n_out   = self.outpsfgrp.n_psf
-        # NsidePf = self.cfg.NsideP + self.cfg.fade_kernel * 2
-        # fidelity_map = np.full((n_out, NsidePf, NsidePf), fill_value=255, dtype=np.uint8)
-        # fidelity_map = np.floor(-10*np.log10(np.clip(self.UC_map, 10**(-25.5999), .99999))).astype(np.uint8)
-        fidelity_map = np.clip(np.floor(-1000*np.log10(np.clip(
-            self.UC_map[:, fk:-fk, fk:-fk], 1e-32, None))), 0, 65535).astype(np.uint16)
-        fidelity_hdu = fits.ImageHDU(fidelity_map, header=my_header); del fidelity_map
-        fidelity_hdu.header['EXTNAME'] = 'FIDELITY'
-        fidelity_hdu.header['UNIT'] = ('mB', '-1000*log10(U/C)')
+        hdulist = [maphdu, config_hdu, inlist_hdu, T_hdu, T_hdu2]
 
-        Sigma_map_mB = np.clip(np.floor(-1000*np.log10(np.clip(
-            self.Sigma_map[:, fk:-fk, fk:-fk], 1e-32, None))), -32768, 32767).astype(np.int16)
-        Sigma_hdu = fits.ImageHDU(Sigma_map_mB, header=my_header); del Sigma_map_mB
-        Sigma_hdu.header['EXTNAME'] = 'SIGMA'
-        Sigma_hdu.header['UNIT'] = ('mB', '-1000*log10(Sigma)')
+        # fidelity_map = np.clip(np.floor(-5000*np.log10(np.clip(
+        #     self.UC_map[:, fk:-fk, fk:-fk], 1e-32, None))), 0, 65535).astype(np.uint16)
+        # fidelity_hdu = fits.ImageHDU(fidelity_map, header=my_header); del fidelity_map
+        # fidelity_hdu.header['EXTNAME'] = 'FIDELITY'
+        # fidelity_hdu.header['UNIT'] = ('0.2mB', '-5000*log10(U/C)')
+        # hdulist.append(fidelity_hdu)
+        hdulist.append(Block.compress_map(
+            self.UC_map[:, fk:-fk, fk:-fk], -5000, np.uint16,
+            my_header, 'FIDELITY', ('0.2mB', '-5000*log10(U/C)')))
 
-        # ... and the kappa map
-        # fits.PrimaryHDU(np.stack((self.kappamin[fk:-fk, fk:-fk], self.kappamax[fk:-fk, fk:-fk])))\
-        #     .writeto(self.outstem+'_kappa.fits', overwrite=True)
-        kappa_map_mB = np.clip(np.floor(-1000*np.log10(np.clip(
-            self.kappa_map[:, fk:-fk, fk:-fk], 1e-32, None))), 0, 65535).astype(np.uint16)
-        kappa_hdu = fits.ImageHDU(kappa_map_mB, header=my_header); del kappa_map_mB
-        kappa_hdu.header['EXTNAME'] = 'KAPPA'
-        kappa_hdu.header['UNIT'] = ('mB', '-1000*log10(kappa)')
+        # Sigma_map_mB = np.clip(np.floor(-20000*np.log10(np.clip(
+        #     self.Sigma_map[:, fk:-fk, fk:-fk], 1e-32, None))), -32768, 32767).astype(np.int16)
+        # Sigma_hdu = fits.ImageHDU(Sigma_map_mB, header=my_header); del Sigma_map_mB
+        # Sigma_hdu.header['EXTNAME'] = 'SIGMA'
+        # Sigma_hdu.header['UNIT'] = ('50uB', '-20000*log10(Sigma)')
+        # hdulist.append(Sigma_hdu)
+        hdulist.append(Block.compress_map(
+            self.Sigma_map[:, fk:-fk, fk:-fk], -20000, np.int16,
+            my_header, 'SIGMA', ('50uB', '-20000*log10(Sigma)')))
 
-        Tsum_map_mB = np.clip(np.floor(1000*np.log10(np.clip(
-            self.Tsum_map[:, fk:-fk, fk:-fk], 1e-32, None))), -32768, 32767).astype(np.int16)
-        Tsum_hdu = fits.ImageHDU(Tsum_map_mB, header=my_header); del Tsum_map_mB
-        Tsum_hdu.header['EXTNAME'] = 'INWTSUM'
-        Tsum_hdu.header['UNIT'] = ('mB', '1000*log10(Tsum)')
+        # kappa_map_mB = np.clip(np.floor(-5000*np.log10(np.clip(
+        #     self.kappa_map[:, fk:-fk, fk:-fk], 1e-32, None))), 0, 65535).astype(np.uint16)
+        # kappa_hdu = fits.ImageHDU(kappa_map_mB, header=my_header); del kappa_map_mB
+        # kappa_hdu.header['EXTNAME'] = 'KAPPA'
+        # kappa_hdu.header['UNIT'] = ('0.2mB', '-5000*log10(kappa)')
+        # hdulist.append(kappa_hdu)
+        hdulist.append(Block.compress_map(
+            self.kappa_map[:, fk:-fk, fk:-fk], -5000, np.uint16,
+            my_header, 'KAPPA', ('0.2mB', '-5000*log10(kappa)')))
 
-        Neff_map_mB = np.clip(np.floor(1000*np.log10(np.clip(
-            self.Neff_map[:, fk:-fk, fk:-fk], 1e-32, None))), 0, 65535).astype(np.uint16)
-        Neff_hdu = fits.ImageHDU(Neff_map_mB, header=my_header); del Neff_map_mB
-        Neff_hdu.header['EXTNAME'] = 'EFFCOVER'
-        Neff_hdu.header['UNIT'] = ('mB', '1000*log10(Neff)')
+        # Tsum_map_mB = np.clip(np.floor(20000*np.log10(np.clip(
+        #     self.Tsum_map[:, fk:-fk, fk:-fk], 1e-32, None))), -32768, 32767).astype(np.int16)
+        # Tsum_hdu = fits.ImageHDU(Tsum_map_mB, header=my_header); del Tsum_map_mB
+        # Tsum_hdu.header['EXTNAME'] = 'INWTSUM'
+        # Tsum_hdu.header['UNIT'] = ('50uB', '20000*log10(Tsum)')
+        # hdulist.append(Tsum_hdu)
+        hdulist.append(Block.compress_map(
+            self.Tsum_map[:, fk:-fk, fk:-fk], 200000, np.int16,
+            my_header, 'INWTSUM', ('5uB', '200000*log10(Tsum)')))
 
-        hdu_list = fits.HDUList([maphdu, config_hdu, inlist_hdu, T_hdu, T_hdu2,
-                                 fidelity_hdu, Sigma_hdu, kappa_hdu, Tsum_hdu, Neff_hdu])
+        # Neff_map_mB = np.clip(np.floor(5000*np.log10(np.clip(
+        #     self.Neff_map[:, fk:-fk, fk:-fk], 1e-32, None))), 0, 65535).astype(np.uint16)
+        # Neff_hdu = fits.ImageHDU(Neff_map_mB, header=my_header); del Neff_map_mB
+        # Neff_hdu.header['EXTNAME'] = 'EFFCOVER'
+        # Neff_hdu.header['UNIT'] = ('0.2mB', '5000*log10(Neff)')
+        # hdulist.append(Neff_hdu)
+        hdulist.append(Block.compress_map(
+            self.Neff_map[:, fk:-fk, fk:-fk], 50000, np.uint16,
+            my_header, 'EFFCOVER', ('2uB', '50000*log10(Neff)')))
+
+        hdu_list = fits.HDUList(hdulist)
         hdu_list.writeto(self.outstem+'_map.fits', overwrite=True)
 
     def clear_all(self) -> None:
