@@ -618,22 +618,22 @@ def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
     return out
 
 def check_if_idsca_exists(cfg, obsdata, idsca):
-   '''
-   Determines whether an observation (id,sca) pair exists.
-   
-   Inputs:
-     cfg = configuration information; must have inpath, informat
-     obsdata = observation table
-   
-   Returns:
-     is_exists = True or False
-     fname = file name
-   '''
-
-   fname = _get_sca_imagefile(cfg.inpath, idsca, obsdata, cfg.informat)
-
-   is_exists = exists(fname)
-   return is_exists, fname
+    '''
+    Determines whether an observation (id,sca) pair exists.
+    
+    Inputs:
+      cfg = configuration information; must have inpath, informat
+      obsdata = observation table
+    
+    Returns:
+      exists_ = True or False
+      fname = file name
+    '''
+    
+    fname = _get_sca_imagefile(cfg.inpath, idsca, obsdata, cfg.informat)
+    
+    exists_ = exists(fname)
+    return exists_, fname
 
 
 def get_all_data(inimage: 'coadd.InImage'):

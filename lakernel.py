@@ -87,8 +87,7 @@ class LAKernel:
         return (kappa, Sigma, UC, T)
 
     @staticmethod
-    def get_coadd_matrix_discrete(A, mBhalf, C, kappa_array, ucmin, smax=0.5,
-                                  timing: bool = False):
+    def get_coadd_matrix_discrete(A, mBhalf, C, kappaC_arr, ucmin, smax=0.5):
         '''
         alternative to CKernelMulti, almost same functionality but has a range of kappa
 
@@ -96,7 +95,7 @@ class LAKernel:
           A = in-in overlap matrix, shape (n, n)
           mBhalf = in-out overlap matrix, shape (n_out, m, n)
           C = out-out overlap, vector, length n_out
-          kappa_array = eigenvalue nodes, vector, length nv, ascending order
+          kappaC_arr = eigenvalue nodes, vector, length nv, ascending order
           ucmin = minimum U/C (after this focus on noise)
 
         Named inputs:
@@ -110,37 +109,9 @@ class LAKernel:
 
         '''
 
-        if timing: timer = Timer()
-
         # get parameters
         (n_out, m, n) = np.shape(mBhalf)
-        nv = np.size(kappa_array)
-
-        # Cholesky decompositions for each eigenvalue node
-        L = np.zeros((nv, n, n))
-        di = np.diag_indices(n)
-        AA = np.copy(A)
-        for j in range(nv):
-            if j > 0:
-                AA[di] += kappa_array[j] - kappa_array[j-1]
-            else:
-                AA[di] += kappa_array[0]
-            try:
-                L[j, :, :] = cholesky(
-                    AA, lower=True, check_finite=False)
-            except:
-                # if matrix is not quite positive definite, we can rectify it
-                w, v = np.linalg.eigh(A)
-                AA[di] += kappa_array[j] + np.abs(w[0])
-                del v
-                warn('Warning: pyimcom_lakernel Cholesky decomposition failed; '
-                     'fixed negative eigenvalue {:19.12e}'.format(w[0]))
-                L[j, :, :] = cholesky(
-                    AA, lower=True, check_finite=False)
-        del AA
-        del di
-
-        if timing: print('cholesky took', timer(), 's')
+        nv = np.size(kappaC_arr)
 
         # outputs
         T_ = np.zeros((n_out, m, n), dtype=np.float32)
@@ -153,6 +124,35 @@ class LAKernel:
         # loop over output PSFs
         for j_out in range(n_out):
 
+            # Cholesky decompositions for each eigenvalue node
+            L = np.zeros((nv, n, n))
+            di = np.diag_indices(n)
+            AA = np.copy(A)
+
+            kappa_arr = kappaC_arr * C[j_out]
+            # KC: Now that we specify kappa/C instead of kappa, decomposition
+            # results can no longer be shared between output PSFs (2/16/2024)
+
+            for j in range(nv):
+                if j > 0:
+                    AA[di] += kappa_arr[j] - kappa_arr[j-1]
+                else:
+                    AA[di] += kappa_arr[0]
+                try:
+                    L[j, :, :] = cholesky(AA, lower=True, check_finite=False)
+                except:
+                    # if matrix is not quite positive definite, we can rectify it
+                    w, v = np.linalg.eigh(A)
+                    # AA[di] += kappa_arr[j] + np.abs(w[0])
+                    AA[di] += np.abs(w[0]) + 1e-32  # KC: this seems right
+                    del v
+                    warn('Warning: pyimcom_lakernel Cholesky decomposition failed; '
+                         'fixed negative eigenvalue {:19.12e}'.format(w[0]))
+                    L[j, :, :] = cholesky(AA, lower=True, check_finite=False)
+                    AA[di] -= np.abs(w[0]) + 1e-32  # KC: let's recover AA
+            del AA
+            del di
+
             # build values at nodes
             for p in range(nv):
                 Tpi[p, :, :] = cho_solve(
@@ -164,17 +164,15 @@ class LAKernel:
             for p in range(nv):
                 for q in range(p):
                     Epq[:, q, p] = Epq[:, p, q] = Ep[:, q] - \
-                        kappa_array[p]*Npq[:, p, q]
-                Epq[:, p, p] = Ep[:, p] - kappa_array[p]*Npq[:, p, p]
-
-            if timing: print('cho_solve took', timer(), 's')
+                        kappa_arr[p]*Npq[:, p, q]
+                Epq[:, p, p] = Ep[:, p] - kappa_arr[p]*Npq[:, p, p]
 
             # now make outputs and call C function
             out_kappa = np.zeros((m,))
             out_Sigma = np.zeros((m,))
             out_UC = np.zeros((m,))
             out_w = np.zeros((m*nv,))
-            build_reduced_T_wrap(Npq.flatten(), Dp.flatten()/C[j_out], Epq.flatten()/C[j_out], kappa_array/C[j_out],
+            build_reduced_T_wrap(Npq.flatten(), Dp.flatten()/C[j_out], Epq.flatten()/C[j_out], kappaC_arr,
                                  ucmin, smax, out_kappa, out_Sigma, out_UC, out_w)
 
             # make outputs
@@ -182,7 +180,5 @@ class LAKernel:
             S_[j_out, :] = out_Sigma
             UC_[j_out, :] = out_UC
             T_[j_out, :, :] = np.einsum('pai,ap->ai', Tpi, out_w.reshape((m, nv)))
-
-            if timing: print('C function took', timer(), 's')
 
         return (k_, S_, UC_, T_)

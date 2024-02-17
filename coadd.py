@@ -73,11 +73,8 @@ class InImage:
         self.blk = blk
         self.idsca = idsca
 
-        #self.infile = blk.cfg.inpath+'/simple/dc2_{:s}_{:d}_{:d}.fits'.format(
-        #    Stn.RomanFilters[blk.obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
-        #self.exists = exists(self.infile) and exists(blk.cfg.inpsf_path+'/dc2_psf_{:d}.fits'.format(idsca[0]))
-        self.exists, self.infile = check_if_idsca_exists(blk.cfg, blk.obsdata, idsca)
-        if self.exists:
+        self.exists_, self.infile = check_if_idsca_exists(blk.cfg, blk.obsdata, idsca)
+        if self.exists_:
             with fits.open(self.infile) as f:
                 self.inwcs = wcs.WCS(f[Stn.hdu_with_wcs].header)
                 # print('read WCS:', self.infile, 'HDU', Stn.hdu_with_wcs)
@@ -210,8 +207,6 @@ class InImage:
         else:
             mask = np.ones((Stn.sca_nside, Stn.sca_nside), dtype=bool)
 
-        # with fits.open(self.infile) as f:
-        #     indata = f['SCI'].data - float(f['SCI'].header['SKY_MEAN'])
         get_all_data(self)  # shape : (n_inframe, Stn.sca_nside, Stn.sca_nside)
 
         cr_mask = Mask.load_cr_mask(self)
@@ -240,8 +235,8 @@ class InImage:
                         if not self.blk.use_instamps[j_st, i_st]: continue
 
                         my_idx = self.pix_count[j_st, i_st]
-                        self.y_idx[j_st, i_st, my_idx] = bottom+j
-                        self.x_idx[j_st, i_st, my_idx] = left+i
+                        self.y_idx[j_st, i_st, my_idx] = bottom + j
+                        self.x_idx[j_st, i_st, my_idx] = left + i
                         self.y_val[j_st, i_st, my_idx] = my_y
                         self.x_val[j_st, i_st, my_idx] = my_x
                         self.pix_count[j_st, i_st] += 1
@@ -270,7 +265,7 @@ class InImage:
 
         '''
 
-        assert self.exists, 'Error: input image and/or input psf do(es) not exist'
+        assert self.exists_, 'Error: input image and/or input psf do(es) not exist'
 
         self.data = np.zeros((self.blk.cfg.n_inframe, self.blk.cfg.n1P+2,
                               self.blk.cfg.n1P+2, self.max_count), dtype=np.float32)
@@ -297,6 +292,9 @@ class InImage:
 
         if self.is_relevant:
             del self.y_val, self.x_val, self.pix_count, self.data
+
+        if hasattr(self, 'inpsf_arr' ): del self.inpsf_arr
+        if hasattr(self, 'inpsf_cube'): del self.inpsf_cube
 
     @staticmethod
     def smooth_and_pad(inArray: np.array, tophatwidth: float = 0.0,
@@ -394,23 +392,28 @@ class InImage:
         pixloc = self.inwcs.all_world2pix(np.array([[psf_compute_point[0], psf_compute_point[1]]]).astype(np.float64), 0)[0]
 
         if self.blk.cfg.inpsf_format == 'dc2_imsim':
-            fname = self.blk.cfg.inpsf_path + '/dc2_psf_{:d}.fits'.format(self.idsca[0])
-            assert exists(fname), 'Error: input psf does not exist'
-            fileh = fitsio.FITS(fname)
-            this_psf = InImage.smooth_and_pad(fileh[self.idsca[1]][:, :], tophatwidth=self.blk.cfg.inpsf_oversamp)
-            fileh.close()
+            if not hasattr(self, 'inpsf_arr'):
+                fname = self.blk.cfg.inpsf_path + '/dc2_psf_{:d}.fits'.format(self.idsca[0])
+                assert exists(fname), 'Error: input psf does not exist'
+                with fitsio.FITS(fname) as fileh:
+                    self.inpsf_arr = InImage.smooth_and_pad(
+                        fileh[self.idsca[1]][:, :], tophatwidth=self.blk.cfg.inpsf_oversamp)
+
+            this_psf = self.inpsf_arr
 
         elif self.blk.cfg.inpsf_format == 'anlsim':
-            fname = self.blk.cfg.inpsf_path + '/psf_polyfit_{:d}.fits'.format(self.idsca[0])
-            assert exists(fname), 'Error: input psf does not exist'
-            fileh = fitsio.FITS(fname)
+            if not hasattr(self, 'inpsf_cube'):
+                fname = self.blk.cfg.inpsf_path + '/psf_polyfit_{:d}.fits'.format(self.idsca[0])
+                assert exists(fname), 'Error: input psf does not exist'
+                with fitsio.FITS(fname) as fileh:
+                    self.inpsf_cube = fileh[self.idsca[1]][:, :, :]
+
             # order = 1
             lpoly = InImage.LPolyArr(1, (pixloc[0]-2043.5)/2044., (pixloc[1]-2043.5)/2044.)
-                # pixels are in C/Python convention since pixloc was set this way
-            cube = fileh[self.idsca[1]][:, :, :]
-            this_psf = InImage.smooth_and_pad(np.einsum('a,aij->ij', lpoly, cube), tophatwidth=self.blk.cfg.inpsf_oversamp)/64
-                # divide by 64=8**2 since anlsim files are in fractional intensity per s_in**2 instead of per (s_in/8)**2
-            fileh.close()
+            # pixels are in C/Python convention since pixloc was set this way
+            this_psf = InImage.smooth_and_pad(
+                np.einsum('a,aij->ij', lpoly, self.inpsf_cube), tophatwidth=self.blk.cfg.inpsf_oversamp)/64
+            # divide by 64=8**2 since anlsim files are in fractional intensity per s_in**2 instead of per (s_in/8)**2
 
         else:
             raise RuntimeError('Error: input psf does not exist')
@@ -596,10 +599,6 @@ class OutStamp:
 
     '''
 
-    uctarget = [1.0e-6]
-    targetleak = np.array(uctarget)
-    imcom_smax = 0.5
-
     def __init__(self, blk: 'Block', j_st: int, i_st: int) -> None:
         '''
         Constructor.
@@ -771,7 +770,7 @@ class OutStamp:
 
         # the A-matrix first
         self.sysmata = np.zeros((self.inpix_cumsum[-1], self.inpix_cumsum[-1]))  # dtype=np.float64
-        use_virmem = self.blk.cfg.use_virmem  # shortcut
+        use_virmem = bool(self.blk.cfg.tempfile)
 
         for idx, ji_st_in, selection in zip(range(9), self.ji_st_in_s, self.selections):
             iisubmat = self.blk.sysmata.get_iisubmat(ji_st_in, ji_st_in,
@@ -821,8 +820,8 @@ class OutStamp:
 
         # kappa_, Sigma_, UC_: (n_out, n_outpix); self.T: (n_out, n_outpix, n_inpix)
         kappa_, Sigma_, UC_, self.T = LAKernel.get_coadd_matrix_discrete(
-            self.sysmata, self.mhalfb, self.outovlc,
-            self.blk.cfg.kappa_arr, np.array(OutStamp.targetleak), smax=OutStamp.imcom_smax)
+            self.sysmata, self.mhalfb, self.outovlc, self.blk.cfg.kappaC_arr,
+            np.array([self.blk.cfg.uctarget]), smax=self.blk.cfg.sigmamax)
         if not save_abc: del self.sysmata, self.mhalfb, self.outovlc
 
         # post processing
@@ -928,10 +927,9 @@ class OutStamp:
 
         assert arr.shape[-2] == arr.shape[-1], 'arr.shape[-2] != arr.shape[-1]'
         n = arr.shape[-1]
-        assert n > 2*fade_kernel, 'Fatal error in OutStamp.trapezoid: ' \
-                                 f'insufficient patch size, {n= } {fade_kernel= }'
-
         fk2 = fade_kernel * 2
+        assert n > fk2, 'Fatal error in OutStamp.trapezoid: ' \
+            f'insufficient patch size, {n= } {fade_kernel= }'
         if not fk2 > 0: return
 
         s = np.arange(1, fk2+1, dtype=float) / (fk2+1)
@@ -994,9 +992,7 @@ class OutStamp:
         del self.iny_val, self.inx_val, self.indata
 
         # weight computations
-        # Tsum_partial = np.sum(self.T, axis=1)
         Tsum_image = np.zeros(self.T.shape[:2] + (self.blk.n_inimage,))  # (n_out, n_outpix, n_inimage)
-        # self.Tsum_stamp = np.zeros((self.blk.outpsfgrp.n_psf, self.blk.n_inimage))
 
         for j_st, inst, selection in zip(range(9), self.instamps, self.selections):
             if selection is None:
@@ -1004,11 +1000,8 @@ class OutStamp:
             else:
                 my_cumsum = np.searchsorted(selection, inst.pix_cumsum)
             my_cumsum += self.inpix_cumsum[j_st]
-            # print(j_st, my_cumsum)
 
             for i_im in range(self.blk.n_inimage):
-                # print(j_st, i_im, np.sum(Tsum_partial[:, my_cumsum[i_im]:my_cumsum[i_im+1]], axis=1))
-                # self.Tsum_stamp[:, i_im] += np.sum(Tsum_partial[:, my_cumsum[i_im]:my_cumsum[i_im+1]], axis=1)
                 Tsum_image[:, :, i_im] += np.sum(self.T[:, :, my_cumsum[i_im]:my_cumsum[i_im+1]], axis=2)
 
         self.Tsum_stamp = np.sum(Tsum_image, axis=1) / self.blk.cfg.n2 ** 2 # (n_out, n_inimage)
@@ -1019,7 +1012,6 @@ class OutStamp:
 
         if not save_t: del self.T
         del Tsum_image, Tsum_norm
-        # self.Tsum /= self.Tsum.sum(axis=1)[:, None]
 
     def _show_in_and_out_images(self) -> None:
         '''
@@ -1280,7 +1272,7 @@ class Block:
         self.centerpos = self.outwcs.all_pix2world(np.array(
             [[cornerx[-1], cornery[-1]]]), 0)[0]  # [ra,dec] array in degrees
 
-        print('kappa array', self.cfg.kappa_arr)
+        print('kappa/C array', self.cfg.kappaC_arr)
 
         # and the output PSFs
         self.outpsfgrp = PSFGrp(in_or_out=False, blk=self)
@@ -1409,7 +1401,7 @@ class Block:
 
         self.nrun = (self.j_st_max - self.j_st_min + 1) \
                   * (self.i_st_max - self.i_st_min + 1)
-        if self.cfg.stoptile is not None: self.nrun = self.cfg.stoptile
+        if self.cfg.stoptile: self.nrun = self.cfg.stoptile
         self._build_use_instamps()
 
     def process_input_images(self) -> None:
@@ -1436,13 +1428,13 @@ class Block:
         print('  OBSID SCA  RAWFI    DECWFI   PA     RASCA   DECSCA       FILE (x=missing)')
         for idsca, inimage in zip(self.obslist, self.inimages):
             cpos = '                 '
-            if inimage.exists:
+            if inimage.exists_:
                 any_exists = True
                 cpos_coord = inimage.inwcs.all_pix2world([[Stn.sca_ctrpix, Stn.sca_ctrpix]], 0)[0]
                 cpos = '{:8.4f} {:8.4f}'.format(cpos_coord[0], cpos_coord[1])
             print('{:7d} {:2d} {:8.4f} {:8.4f} {:6.2f} {:s} {:s} {:s}'.format(
                 idsca[0], idsca[1], self.obsdata['ra'][idsca[0]], self.obsdata['dec'][idsca[0]],
-                self.obsdata['pa'][idsca[0]], cpos, ' ' if inimage.exists else 'x', inimage.infile))
+                self.obsdata['pa'][idsca[0]], cpos, ' ' if inimage.exists_ else 'x', inimage.infile))
         print()
         assert any_exists, 'No candidate observations found to stack. Exiting now.'
 
@@ -1452,7 +1444,7 @@ class Block:
 
         self._handle_postage_pad()
         for inimage in self.inimages:
-            if not inimage.exists:
+            if not inimage.exists_:
                 inimage.is_relevant = False
                 continue
             inimage.partition_pixels()
@@ -1525,11 +1517,12 @@ class Block:
             self.out_map[:, :, bottom:top, left:right] += outst.outimage
             self.T_weightmap[:, :, j_st-1, i_st-1] = outst.Tsum_stamp  # weight computations
 
-            self.UC_map   [:, bottom:top, left:right] += outst.UC          # fidelity map
-            self.Sigma_map[:, bottom:top, left:right] += outst.Sigma       # noise map
-            self.kappa_map[:, bottom:top, left:right] += outst.kappa       # kappa map
-            self.Tsum_map [:, bottom:top, left:right] += outst.Tsum_inpix  # total weight
-            self.Neff_map [:, bottom:top, left:right] += outst.Neff        # effective coverage
+            outmaps = self.cfg.outmaps  # shortcut
+            if 'U' in outmaps: self.UC_map   [:, bottom:top, left:right] += outst.UC          # fidelity map
+            if 'S' in outmaps: self.Sigma_map[:, bottom:top, left:right] += outst.Sigma       # noise map
+            if 'K' in outmaps: self.kappa_map[:, bottom:top, left:right] += outst.kappa       # kappa map
+            if 'T' in outmaps: self.Tsum_map [:, bottom:top, left:right] += outst.Tsum_inpix  # total weight
+            if 'N' in outmaps: self.Neff_map [:, bottom:top, left:right] += outst.Neff        # effective coverage
 
     def coadd_output_stamps(self, sim_mode: bool = False) -> None:
         '''
@@ -1565,12 +1558,13 @@ class Block:
                                          self.cfg.n1P, self.cfg.n1P), dtype=np.float32)
 
             # additional information (will convert to integer)
+            outmaps = self.cfg.outmaps  # shortcut
             shape = (n_out, NsidePf, NsidePf)
-            self.UC_map    = np.zeros(shape, dtype=np.float32)  # fidelity map
-            self.Sigma_map = np.zeros(shape, dtype=np.float32)  # noise map
-            self.kappa_map = np.zeros(shape, dtype=np.float32)  # kappa map
-            self.Tsum_map  = np.zeros(shape, dtype=np.float32)  # total weight
-            self.Neff_map  = np.zeros(shape, dtype=np.float32)  # effective coverage
+            if 'U' in outmaps: self.UC_map    = np.zeros(shape, dtype=np.float32)  # fidelity map
+            if 'S' in outmaps: self.Sigma_map = np.zeros(shape, dtype=np.float32)  # noise map
+            if 'K' in outmaps: self.kappa_map = np.zeros(shape, dtype=np.float32)  # kappa map
+            if 'T' in outmaps: self.Tsum_map  = np.zeros(shape, dtype=np.float32)  # total weight
+            if 'N' in outmaps: self.Neff_map  = np.zeros(shape, dtype=np.float32)  # effective coverage
 
         ### Begin loop over all the postage stamps we want to create ###
 
@@ -1657,14 +1651,17 @@ class Block:
 
         '''
 
-        fk = self.cfg.fade_kernel  # shortcut
+        # shortcuts
+        fk = self.cfg.fade_kernel  
+        outmaps = self.cfg.outmaps
+
         if is_final:  # recover block boundaries
             OutStamp.trapezoid(self.out_map,   fk, recover_mode=True)
-            OutStamp.trapezoid(self.UC_map,    fk, recover_mode=True)
-            OutStamp.trapezoid(self.Sigma_map, fk, recover_mode=True)
-            OutStamp.trapezoid(self.kappa_map, fk, recover_mode=True)
-            OutStamp.trapezoid(self.Tsum_map,  fk, recover_mode=True)
-            OutStamp.trapezoid(self.Neff_map,  fk, recover_mode=True)
+            if 'U' in outmaps: OutStamp.trapezoid(self.UC_map,    fk, recover_mode=True)
+            if 'S' in outmaps: OutStamp.trapezoid(self.Sigma_map, fk, recover_mode=True)
+            if 'K' in outmaps: OutStamp.trapezoid(self.kappa_map, fk, recover_mode=True)
+            if 'T' in outmaps: OutStamp.trapezoid(self.Tsum_map,  fk, recover_mode=True)
+            if 'N' in outmaps: OutStamp.trapezoid(self.Neff_map,  fk, recover_mode=True)
 
         my_header = self.outwcs.to_header()
         maphdu = fits.PrimaryHDU(self.out_map[:, :, fk:-fk, fk:-fk], header=my_header)
@@ -1677,7 +1674,7 @@ class Block:
             fits.Column(name='ra',    array=np.array([self.obsdata['ra' ][obs[0]] for obs in self.obslist]), format='D', unit='degree'),
             fits.Column(name='dec',   array=np.array([self.obsdata['dec'][obs[0]] for obs in self.obslist]), format='D', unit='degree'),
             fits.Column(name='pa',    array=np.array([self.obsdata['pa' ][obs[0]] for obs in self.obslist]), format='D', unit='degree'),
-            fits.Column(name='valid', array=np.array([inimage.exists for inimage in self.inimages]), format='L')
+            fits.Column(name='valid', array=np.array([inimage.exists_ for inimage in self.inimages]), format='L')
         ])
         inlist_hdu.header['EXTNAME'] = 'INDATA'
         T_hdu = fits.ImageHDU(self.T_weightmap)
@@ -1688,55 +1685,30 @@ class Block:
 
         hdulist = [maphdu, config_hdu, inlist_hdu, T_hdu, T_hdu2]
 
-        # fidelity_map = np.clip(np.floor(-5000*np.log10(np.clip(
-        #     self.UC_map[:, fk:-fk, fk:-fk], 1e-32, None))), 0, 65535).astype(np.uint16)
-        # fidelity_hdu = fits.ImageHDU(fidelity_map, header=my_header); del fidelity_map
-        # fidelity_hdu.header['EXTNAME'] = 'FIDELITY'
-        # fidelity_hdu.header['UNIT'] = ('0.2mB', '-5000*log10(U/C)')
-        # hdulist.append(fidelity_hdu)
-        hdulist.append(Block.compress_map(
-            self.UC_map[:, fk:-fk, fk:-fk], -5000, np.uint16,
-            my_header, 'FIDELITY', ('0.2mB', '-5000*log10(U/C)')))
+        if 'U' in outmaps:
+            hdulist.append(Block.compress_map(
+                self.UC_map[:, fk:-fk, fk:-fk], -5000, np.uint16,
+                my_header, 'FIDELITY', ('0.2mB', '-5000*log10(U/C)')))
 
-        # Sigma_map_mB = np.clip(np.floor(-20000*np.log10(np.clip(
-        #     self.Sigma_map[:, fk:-fk, fk:-fk], 1e-32, None))), -32768, 32767).astype(np.int16)
-        # Sigma_hdu = fits.ImageHDU(Sigma_map_mB, header=my_header); del Sigma_map_mB
-        # Sigma_hdu.header['EXTNAME'] = 'SIGMA'
-        # Sigma_hdu.header['UNIT'] = ('50uB', '-20000*log10(Sigma)')
-        # hdulist.append(Sigma_hdu)
-        hdulist.append(Block.compress_map(
-            self.Sigma_map[:, fk:-fk, fk:-fk], -20000, np.int16,
-            my_header, 'SIGMA', ('50uB', '-20000*log10(Sigma)')))
+        if 'S' in outmaps:
+            hdulist.append(Block.compress_map(
+                self.Sigma_map[:, fk:-fk, fk:-fk], -20000, np.int16,
+                my_header, 'SIGMA', ('50uB', '-20000*log10(Sigma)')))
 
-        # kappa_map_mB = np.clip(np.floor(-5000*np.log10(np.clip(
-        #     self.kappa_map[:, fk:-fk, fk:-fk], 1e-32, None))), 0, 65535).astype(np.uint16)
-        # kappa_hdu = fits.ImageHDU(kappa_map_mB, header=my_header); del kappa_map_mB
-        # kappa_hdu.header['EXTNAME'] = 'KAPPA'
-        # kappa_hdu.header['UNIT'] = ('0.2mB', '-5000*log10(kappa)')
-        # hdulist.append(kappa_hdu)
-        hdulist.append(Block.compress_map(
-            self.kappa_map[:, fk:-fk, fk:-fk], -5000, np.uint16,
-            my_header, 'KAPPA', ('0.2mB', '-5000*log10(kappa)')))
+        if 'K' in outmaps:
+            hdulist.append(Block.compress_map(
+                self.kappa_map[:, fk:-fk, fk:-fk], -5000, np.uint16,
+                my_header, 'KAPPA', ('0.2mB', '-5000*log10(kappa)')))
 
-        # Tsum_map_mB = np.clip(np.floor(20000*np.log10(np.clip(
-        #     self.Tsum_map[:, fk:-fk, fk:-fk], 1e-32, None))), -32768, 32767).astype(np.int16)
-        # Tsum_hdu = fits.ImageHDU(Tsum_map_mB, header=my_header); del Tsum_map_mB
-        # Tsum_hdu.header['EXTNAME'] = 'INWTSUM'
-        # Tsum_hdu.header['UNIT'] = ('50uB', '20000*log10(Tsum)')
-        # hdulist.append(Tsum_hdu)
-        hdulist.append(Block.compress_map(
-            self.Tsum_map[:, fk:-fk, fk:-fk], 200000, np.int16,
-            my_header, 'INWTSUM', ('5uB', '200000*log10(Tsum)')))
+        if 'T' in outmaps:
+            hdulist.append(Block.compress_map(
+                self.Tsum_map[:, fk:-fk, fk:-fk], 200000, np.int16,
+                my_header, 'INWTSUM', ('5uB', '200000*log10(Tsum)')))
 
-        # Neff_map_mB = np.clip(np.floor(5000*np.log10(np.clip(
-        #     self.Neff_map[:, fk:-fk, fk:-fk], 1e-32, None))), 0, 65535).astype(np.uint16)
-        # Neff_hdu = fits.ImageHDU(Neff_map_mB, header=my_header); del Neff_map_mB
-        # Neff_hdu.header['EXTNAME'] = 'EFFCOVER'
-        # Neff_hdu.header['UNIT'] = ('0.2mB', '5000*log10(Neff)')
-        # hdulist.append(Neff_hdu)
-        hdulist.append(Block.compress_map(
-            self.Neff_map[:, fk:-fk, fk:-fk], 50000, np.uint16,
-            my_header, 'EFFCOVER', ('2uB', '50000*log10(Neff)')))
+        if 'N' in outmaps:
+            hdulist.append(Block.compress_map(
+                self.Neff_map[:, fk:-fk, fk:-fk], 50000, np.uint16,
+                my_header, 'EFFCOVER', ('2uB', '50000*log10(Neff)')))
 
         hdu_list = fits.HDUList(hdulist)
         hdu_list.writeto(self.outstem+'_map.fits', overwrite=True)
@@ -1755,8 +1727,14 @@ class Block:
 
         del self.obsdata, self.obslist, self.outwcs
         del self.outpsfgrp, self.outpsfovl, self.sysmata, self.sysmatb
-        del self.out_map, self.UC_map, self.kappa_map
-        del self.T_weightmap, self.Tsum_map, self.Neff_map
+        del self.out_map, self.T_weightmap
+
+        outmaps = self.cfg.outmaps  # shortcut
+        if 'U' in outmaps: del self.UC_map
+        if 'S' in outmaps: del self.Sigma_map
+        if 'K' in outmaps: del self.kappa_map
+        if 'T' in outmaps: del self.Tsum_map
+        if 'N' in outmaps: del self.Neff_map
 
         for j_st in range(self.cfg.n1P+2):
             for i_st in range(self.cfg.n1P+2):

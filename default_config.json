@@ -4,33 +4,60 @@
         "/fs/scratch/PCON0003/cond0007/combo-in",
         "dc2_imsim"
     ],
-    "CTR": [
-        53.0,
-        -40.0
-    ],
-    "OUTSIZE": [
-        48,
-        50,
-        0.025
-    ],
-    "BLOCK": 48,
     "FILTER": 4,
-    "KAPPA": [
-        8.12436e-08,
-        8.12436e-07,
-        8.12436e-06
-    ],
     "INPSF": [
         "/fs/scratch/PCON0003/cond0007/combo-in/psf",
         "dc2_imsim",
         8
     ],
-    "OUT": "/users/PAS2055/kailicao/pyimcom_dev/test/test4C_Yband",
-    "STOP": 16,
-    "INPAD": 0.625,
-    "NPIXPSF": 48,
-    "PAD": 2,
-    "EXTRASMOOTH": 0.9554870253240214,
     "PMASK": "/users/PCON0003/cond0007/imcom/coadd-test-fall2022/permanent_mask_220730.fits",
-    "CMASK": 0.00077
+    "CMASK": 0.00077,
+    "EXTRAINPUT": [
+        "truth",
+        "whitenoise1",
+        "1fnoise2",
+        "skyerr",
+        "labnoise",
+        "gsstar14",
+        "cstar14",
+        "gsext14,Seed=1300",
+        "gsext14,Seed=1300,shear=.2:0",
+        "gsext14,Seed=1300,shear=0.:2e-1"
+    ],
+    "LABNOISETHRESHOLD": 3.0,
+    "CTR": [
+        53.0,
+        -40.0
+    ],
+    "BLOCK": 48,
+    "OUTSIZE": [
+        48,
+        50,
+        0.025
+    ],
+    "FADE": 3,
+    "PAD": 2,
+    "PADSIDES": "auto",
+    "STOP": 0,
+    "OUTMAPS": "USKTN",
+    "OUT": "/users/PAS2055/kailicao/pyimcom_dev/test/test4C_Yband",
+    "TEMPFILE": "/tmp/kailicao-tempy",
+    "NOUT": 1,
+    "OUTPSF": "AIRYOBSC",
+    "EXTRASMOOTH": 0.9554870253240214,
+    "NPIXPSF": 48,
+    "AMPPEN": [
+        0.0,
+        0.0
+    ],
+    "FLATPEN": 0.0,
+    "INPAD": 0.625,
+    "LAKERNEL": "Cholesky",
+    "KAPPAC": [
+        1e-05,
+        0.0001,
+        0.001
+    ],
+    "UCMIN": 1e-06,
+    "SMAX": 0.5
 }

@@ -209,6 +209,7 @@ class PSFGrp:
     visualize_psf (staticmethod) : Visualize a PSF.
     _sample_psf : Sample a single PSF or a set of PSFs.
     _build_inpsfgrp : Build a group of input PSFs.
+    _get_outpsf (staticmethod) : Get an output PSF specified by configuration.
     _build_outpsfgrp : Build a group of output PSFs.
     accel_pad_and_rfft2 (staticmethod) : Zero-padding and rfft2.
     clear: Free up memory space.
@@ -431,12 +432,51 @@ class PSFGrp:
                       f'at the upper right corner of InStamp {(self.inst.j_st, self.inst.i_st)}')
         print('using input exposures:', [self.idx_grp2blk[idx] for idx in range(self.n_psf)])
 
+    @staticmethod
+    def _get_outpsf(outpsf: str = 'AIRYOBSC', extrasmooth: float = 0.0,
+                    use_filter: int = 4) -> np.array:
+        '''
+        Get an output PSF specified by configuration.
+
+        Parameters
+        ----------
+        outpsf : str, optional
+            Target output PSF type. The default is 'AIRYOBSC'.
+        extrasmooth : float, optional
+            Target output PSF extra smearing. The default is 0.0.
+        use_filter : int, optional
+            Which filter.
+
+        Returns
+        -------
+        np.array, shape : (PSFGrp.nsamp+1, PSFGrp.nsamp+1)
+            Output PSF specified by configuration.
+
+        '''
+
+        if outpsf == 'GAUSSIAN':
+            return OutPSF.psf_gaussian(PSFGrp.nsamp+1,
+                extrasmooth * PSFGrp.oversamp, extrasmooth * PSFGrp.oversamp)
+
+        elif outpsf == 'AIRYOBSC':
+            return OutPSF.psf_simple_airy(PSFGrp.nsamp+1,
+                Stn.QFilterNative[use_filter] * PSFGrp.oversamp,
+                obsc=Stn.obsc, tophat_conv=0.0, sigma=extrasmooth * PSFGrp.oversamp)
+
+        elif outpsf == 'AIRYUNOBSC':
+            return OutPSF.psf_simple_airy(PSFGrp.nsamp+1,
+                Stn.QFilterNative[use_filter] * PSFGrp.oversamp,
+                obsc=0.0, tophat_conv=0.0, sigma=extrasmooth * PSFGrp.oversamp)
+
+        else:
+            raise RuntimeError('Error: target output PSF type')
+
+
     def _build_outpsfgrp(self, visualize: bool = False) -> None:
         '''
         Build a group of output PSFs.
 
-        Currently this only includes a single PSF returned by OutPSF.psf_simple_airy;
-        in the future, what output PSFs to include will be set by the configuration file.
+        What output PSFs to include is set by the configuration file.
 
         Parameters
         ----------
@@ -449,13 +489,17 @@ class PSFGrp:
 
         '''
 
-        self.n_psf = 1
-        psf_orig = np.zeros((self.n_psf, PSFGrp.nsamp+1, PSFGrp.nsamp+1))
+        cfg = self.blk.cfg  # shortcut
 
-        for idx in range(self.n_psf):
-            psf_orig[idx] = OutPSF.psf_simple_airy(PSFGrp.nsamp+1,
-                Stn.QFilterNative[self.blk.cfg.use_filter] * PSFGrp.oversamp,
-                obsc=Stn.obsc, tophat_conv=0.0, sigma=self.blk.cfg.sigmatarget * PSFGrp.oversamp)
+        self.n_psf = cfg.n_out
+        psf_orig = np.zeros((self.n_psf, PSFGrp.nsamp+1, PSFGrp.nsamp+1))
+        psf_orig[0] = PSFGrp._get_outpsf(cfg.outpsf, cfg.sigmatarget, cfg.use_filter)
+
+        if self.n_psf > 1:
+            for j_out in range(1, self.n_out):
+                psf_orig[j_out] = PSFGrp._get_outpsf(
+                    cfg.outpsf_extra[j_out-1], cfg.sigmatarget_extra[j_out-1], cfg.use_filter)
+
         self._sample_psf(None, psf_orig)  # this produces self.psf_arr
 
         # save the output PSFs to a file

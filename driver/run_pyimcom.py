@@ -10,15 +10,10 @@ if __name__ == '__main__':
         config_file = sys.argv[1]
 
     config = Config(config_file)
-    # config.extrainput = [None, 'truth', 'whitenoise1', '1fnoise2', 'skyerr', 'labnoise',
-    #                       'gsstar14', 'cstar14', 'gsext14,Seed=1300',
-    #                       'gsext14,Seed=1300,shear=.2:0', 'gsext14,Seed=1300,shear=0.:2e-1']
-    # config.n_inframe = len(config.extrainput) - 1
-    config.stoptile = None
-    config.kappa_arr = np.array([8.3908e-09, 8.3908e-08, 8.3908e-07])
-    config.flat_penalty = 0.0
+    config.extrainput = [None]
+    config.n_inframe = 1
+    config.stoptile = 4
     config.pad_sides = 'all'
-    config.tempfile = '/tmp/kailicao-tempy'
 
     # subregion information
     this_sub = 0  # default
