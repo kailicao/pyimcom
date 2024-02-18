@@ -31,7 +31,7 @@ import pytz
 from .config import Timer, Settings as Stn, Config
 from .layer import check_if_idsca_exists, get_all_data, Mask
 from .psfutil import PSFGrp, PSFOvl, SysMatA, SysMatB
-from .lakernel import LAKernel
+from .lakernel import EigenKernel, ChoKernel, IterKernel, EmpirKernel
 
 
 class InImage:
@@ -599,6 +599,13 @@ class OutStamp:
 
     '''
 
+    LAKERNEL = {
+        'Eigen'    : EigenKernel,
+        'Cholesky' : ChoKernel,
+        'Iterative': IterKernel,
+        'Empirical': EmpirKernel,
+    }
+
     def __init__(self, blk: 'Block', j_st: int, i_st: int) -> None:
         '''
         Constructor.
@@ -818,17 +825,11 @@ class OutStamp:
             print()
             self._visualize_system_matrices()
 
-        # kappa_, Sigma_, UC_: (n_out, n_outpix); self.T: (n_out, n_outpix, n_inpix)
-        kappa_, Sigma_, UC_, self.T = LAKernel.get_coadd_matrix_discrete(
-            self.sysmata, self.mhalfb, self.outovlc, self.blk.cfg.kappaC_arr,
-            np.array([self.blk.cfg.uctarget]), smax=self.blk.cfg.sigmamax)
+        lakernel = OutStamp.LAKERNEL[self.blk.cfg.linear_algebra](self)
+        lakernel(); del lakernel
+        # this produces: self.T, self.UC, self.Sigma, self.kappa
+        # T: (n_out, n_outpix, n_inpix); others: (n_out, n2f, n2f)
         if not save_abc: del self.sysmata, self.mhalfb, self.outovlc
-
-        # post processing
-        shape = (self.blk.outpsfgrp.n_psf, self.blk.cfg.n2f, self.blk.cfg.n2f)
-        self.kappa = kappa_.reshape(shape); del kappa_
-        self.Sigma = Sigma_.reshape(shape); del Sigma_
-        self.UC = UC_.reshape(shape); del UC_
 
         print('  n input pix =', self.T.shape[-1])
         sumstats = '  sqUC,sqSig %iles |'
@@ -1692,8 +1693,8 @@ class Block:
 
         if 'S' in outmaps:
             hdulist.append(Block.compress_map(
-                self.Sigma_map[:, fk:-fk, fk:-fk], -20000, np.int16,
-                my_header, 'SIGMA', ('50uB', '-20000*log10(Sigma)')))
+                self.Sigma_map[:, fk:-fk, fk:-fk], -10000, np.int16,
+                my_header, 'SIGMA', ('0.1mB', '-10000*log10(Sigma)')))
 
         if 'K' in outmaps:
             hdulist.append(Block.compress_map(

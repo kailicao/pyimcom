@@ -10,10 +10,14 @@ if __name__ == '__main__':
         config_file = sys.argv[1]
 
     config = Config(config_file)
-    config.extrainput = [None]
-    config.n_inframe = 1
-    config.stoptile = 4
+    # config.extrainput = [None]
+    # config.n_inframe = 1
+    # config.stoptile = 4
     config.pad_sides = 'all'
+
+    config.outstem = '/users/PAS2055/kailicao/pyimcom_dev/test/Iterative'
+    config.linear_algebra = 'Iterative'
+    config.kappaC_arr = np.array([1e-5])
 
     # subregion information
     this_sub = 0  # default

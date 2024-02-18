@@ -432,9 +432,9 @@ class Config:
             "assert self.n_out >= 1, 'NOUT should be at least 1'")
 
         print('# target output PSF type, options include' '\n'
-              '"GAUSSIAN": simple Gaussian' '\n'
-              '"AIRYOBSC": obscured Airy disk convolved with Gaussian' '\n'
-              '"AIRYUNOBSC": unobscured Airy disk convolved with Gaussian', flush=True)
+              '# "GAUSSIAN": simple Gaussian' '\n'
+              '# "AIRYOBSC": obscured Airy disk convolved with Gaussian' '\n'
+              '# "AIRYUNOBSC": unobscured Airy disk convolved with Gaussian', flush=True)
         self._get_attrs_wrapper(
             "OUTPSF = input('OUTPSF (str) [default: \"AIRYOBSC\"]: ')" '\n'
             "assert OUTPSF in ['', 'GAUSSIAN', 'AIRYOBSC', 'AIRYUNOBSC'], 'unrecognized type'" '\n'
@@ -493,10 +493,10 @@ class Config:
         # solving linear systems: LAKERNEL, KAPPAC, UCMIN, SMAX
 
         print('# kernel to solve linear systems, options include' '\n'
-              '"Eigen": kernel using eigendecomposition' '\n'
-              '"Cholesky": kernel using Cholesky decomposition' '\n'
-              '"Iterative": kernel using iterative method' '\n'
-              '"Empirical": kernel using empirical method', flush=True)
+              '# "Eigen": kernel using eigendecomposition' '\n'
+              '# "Cholesky": kernel using Cholesky decomposition' '\n'
+              '# "Iterative": kernel using iterative method' '\n'
+              '# "Empirical": kernel using empirical method', flush=True)
         self._get_attrs_wrapper(
             "LAKERNEL = input('LAKERNEL (str) [default: \"Cholesky\"]: ')" '\n'
             "self.linear_algebra = LAKERNEL if LAKERNEL else 'Cholesky'" '\n'
@@ -504,9 +504,11 @@ class Config:
 
         print('# Lagrange multiplier (kappa) information' '\n'
               '# list of kappa/C values, ascending order' '\n'
-              'if one value: use this fixed kappa/C value' '\n'
-              'if two values: bisection search in this range' '\n'
-              'if three values of more: use these values as nodes', flush=True)
+              '# if LAKERNEL == "Empirical", only the first kappa/C value is used;' '\n'
+              '# otherwise if single value: use this fixed kappa/C value;' '\n'
+              '# if multiple values: "Eigen" performs a bisection search' '\n'
+              '# between the first and last kappa/C values, while "Cholesky"' '\n'
+              '# and "Iterative" kernels use these kappa/C values as nodes', flush=True)
         self._get_attrs_wrapper(
             "KAPPAC = input('KAPPAC (float ...) [default: [1e-5, 1e-4, 1e-3]]: ')" '\n'
             "self.kappaC_arr = np.array(list(map(float, KAPPAC.split(' '))) if KAPPAC else [1e-5, 1e-4, 1e-3])" '\n'
