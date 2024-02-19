@@ -1525,6 +1525,11 @@ class Block:
             if 'T' in outmaps: self.Tsum_map [:, bottom:top, left:right] += outst.Tsum_inpix  # total weight
             if 'N' in outmaps: self.Neff_map [:, bottom:top, left:right] += outst.Neff        # effective coverage
 
+            outst.clear(); self.outstamps[j_st][i_st] = None
+            # coadding the OutStamp above is the last show of the InStamp below
+            inst = self.instamps[j_st-1][i_st-1]
+            inst.clear(); self.instamps[j_st-1][i_st-1] = None
+
     def coadd_output_stamps(self, sim_mode: bool = False) -> None:
         '''
         Coadd output stamps using input stamps.
@@ -1589,6 +1594,15 @@ class Block:
                     gc.collect()  # force a garbage collection
 
             if not sim_mode:
+                for i_st in range(self.i_st_min, self.i_st_max+1, 2):
+                    for dj in range(-1, 1):
+                        inst = self.instamps[j_st+dj][i_st]
+                        if inst is not None:
+                            # print(j_st+dj, i_st)
+                            inst.clear()
+                            self.instamps[j_st+dj][i_st] = None
+                gc.collect()  # force a garbage collection
+
                 print('  --> intermediate output -->\n')
                 self.build_output_file(is_final=False)
 
@@ -1740,6 +1754,13 @@ class Block:
         for j_st in range(self.cfg.n1P+2):
             for i_st in range(self.cfg.n1P+2):
                 inst = self.instamps[j_st][i_st]
-                if inst is not None: inst.clear()
-                outst = self.outstamps[j_st][i_st]
-                if outst is not None: outst.clear()
+                if inst is not None:
+                    inst.clear()
+                    # print('final in', j_st, i_st)
+                    self.instamps[j_st][i_st] = None
+
+                # outst = self.outstamps[j_st][i_st]
+                # if outst is not None:
+                #     outst.clear()
+                #     print('final out', j_st, i_st)
+                #     self.outstamps[j_st][i_st] = None

@@ -10,12 +10,12 @@ if __name__ == '__main__':
         config_file = sys.argv[1]
 
     config = Config(config_file)
-    # config.extrainput = [None]
-    # config.n_inframe = 1
+    config.extrainput = [None, 'whitenoise1', '1fnoise2', 'skyerr', 'cstar14']
+    config.n_inframe = len(config.extrainput)
     # config.stoptile = 4
     config.pad_sides = 'all'
 
-    config.outstem = '/users/PAS2055/kailicao/pyimcom_dev/test/Iterative'
+    # config.outstem = '/users/PAS2055/kailicao/pyimcom_dev/test/Iterative'
     config.linear_algebra = 'Iterative'
     config.kappaC_arr = np.array([1e-5])
 

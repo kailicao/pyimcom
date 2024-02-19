@@ -368,7 +368,7 @@ class IterKernel(_LAKernel):
             # loop over output pixels
             for a in range(m):
                 slctn = np.where(relevant_matrix[a])[0]
-                A_a = A[np.ix_(slctn, slctn)]
+                A_a = AA[np.ix_(slctn, slctn)]
                 b_a = mBhalf[j_out, a, :][slctn]
                 T_a, exit_code = cg(A_a, b_a, atol=1e-5)
                 if exit_code != 0: print('exit_code != 0', f'{a = }')
@@ -429,7 +429,7 @@ class IterKernel(_LAKernel):
                 # loop over output pixels
                 for a in range(m):
                     slctn = np.where(relevant_matrix[a])[0]
-                    A_a = A[np.ix_(slctn, slctn)]
+                    A_a = AA[np.ix_(slctn, slctn)]
                     b_a = mBhalf[j_out, a, :][slctn]
                     T_a, exit_code = cg(A_a, b_a, atol=1e-5)
                     if exit_code != 0: print('exit_code != 0', f'{a = }')
