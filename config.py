@@ -247,9 +247,12 @@ class Config:
 
         # kernel to solve linear systems
         self.linear_algebra = cfg_dict.get('LAKERNEL', 'Cholesky')
+
         # Lagrange multiplier (kappa) information
         # list of kappa/C values, ascending order
         self.kappaC_arr = np.array(cfg_dict.get('KAPPAC', [1e-5, 1e-4, 1e-3]))
+        if self.linear_algebra == 'Empirical' or self.kappaC_arr.size == 1:
+            self.outmaps = self.outmaps.replace('K', '')
         # target (minimum) leakage
         self.uctarget = cfg_dict.get('UCMIN', 1e-6)
         # maximum allowed value of Sigma
@@ -513,6 +516,8 @@ class Config:
             "KAPPAC = input('KAPPAC (float ...) [default: [1e-5, 1e-4, 1e-3]]: ')" '\n'
             "self.kappaC_arr = np.array(list(map(float, KAPPAC.split(' '))) if KAPPAC else [1e-5, 1e-4, 1e-3])" '\n'
             "assert np.all(np.diff(self.kappaC_arr) > 0.0), 'must be in ascending order'")
+        if self.linear_algebra == 'Empirical' or self.kappaC_arr.size == 1:
+            self.outmaps = self.outmaps.replace('K', '')
 
         print('# target (minimum) leakage', flush=True)
         self._get_attrs_wrapper(

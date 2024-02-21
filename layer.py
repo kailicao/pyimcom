@@ -221,7 +221,7 @@ class GalSimInject:
             m = re.search(r'^shear=([^ \:]+)\:([^ \:]+)$', arg, re.IGNORECASE)
             if m: shear = [float(m.group(1)), float(m.group(2))]
 
-        print('rng seed =', seed, '  transform: rot=', rot, 'shear=', shear)
+        # print('rng seed =', seed, '  transform: rot=', rot, 'shear=', shear)
 
         refscale = 0.11  # reference pixel size in arcsec
         ra_cent, dec_cent = mywcs.all_pix2world((sca_nside-1)/2, (sca_nside-1)/2, 0)
@@ -245,7 +245,7 @@ class GalSimInject:
         # generate object parameters
         galstring = 'exp1'
         galtype = GalSimInject.genobj(12*4**res, ipix, galstring, seed)
-        print(galtype)
+        # print(galtype)
 
         n_in_stamp = 280
         pad = n_in_stamp+2*(d+1)
@@ -539,20 +539,11 @@ class Mask:
     @staticmethod
     def load_cr_mask(inimage: 'coadd.InImage'):
         config = inimage.blk.cfg  # shortcut
-        # cr_mask_rate = inimage.blk.cfg.cr_mask_rate
-        # extrainput = inimage.blk.cfg.extrainput
 
         if config.cr_mask_rate > 0:
-            # cr_mask = np.ones((len(block.obslist), Stn.sca_nside, Stn.sca_nside), dtype=bool)
             cr_mask = Mask.randmask(inimage.idsca, config.cr_mask_rate)
-            print('Cosmic ray mask:')
-            print('good pix --> ', np.count_nonzero(cr_mask), '/', 4088**2)
+            print('Cosmic ray mask: good pix --> ', np.count_nonzero(cr_mask), '/', 4088**2)
 
-            # for i, slice_ in enumerate(config.extrainput):
-            #     if slice_ == 'labnoise':
-            #         cr_mask = np.logical_and(cr_mask, np.abs(
-            #             inimage.indata[i]) < config.labnoisethreshold)
-            # print('good pix --> ', np.count_nonzero(cr_mask), '/', 4088**2)
             try:
                 idx = config.extrainput.index('labnoise')
             except:
@@ -560,7 +551,7 @@ class Mask:
             else:
                 cr_mask = np.logical_and(cr_mask, np.abs(
                     inimage.indata[idx]) < config.labnoisethreshold)
-                print('good pix --> ', np.count_nonzero(cr_mask), '/', 4088**2)
+                print('Lab noise threshold: good pix --> ', np.count_nonzero(cr_mask), '/', 4088**2)
 
         else:
             cr_mask = None

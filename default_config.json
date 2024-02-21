@@ -35,7 +35,7 @@
         50,
         0.025
     ],
-    "FADE": 3,
+    "FADE": 0,
     "PAD": 2,
     "PADSIDES": "auto",
     "STOP": 0,
@@ -54,9 +54,7 @@
     "INPAD": 0.625,
     "LAKERNEL": "Cholesky",
     "KAPPAC": [
-        1e-05,
-        0.0001,
-        0.001
+        1e-05
     ],
     "UCMIN": 1e-06,
     "SMAX": 0.5
