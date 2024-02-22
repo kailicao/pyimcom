@@ -10,6 +10,7 @@ from os.path import exists
 import galsim
 import json
 import re
+from outimage_utils.helper import HDU_to_bels
 
 bd = 40 # padding size
 bd2 = 8
@@ -34,7 +35,7 @@ outstem = sys.argv[3]
 
 outfile_g = outstem + '_StarCat_galsim_{:s}.fits'.format(filter)
 
-fhist = numpy.zeros((61,),dtype=numpy.uint32)
+fhist = numpy.zeros((81,),dtype=numpy.uint32)
 
 for iblock in range(nstart,nblockmax**2):
 
@@ -78,8 +79,9 @@ for iblock in range(nstart,nblockmax**2):
     mywcs = wcs.WCS(f[0].header)
     map = f[0].data[0,use_slice,:,:]
     wt = numpy.sum(numpy.where(f['INWEIGHT'].data[0,:,:,:]>0.01, 1, 0), axis=0)
-    fmap = f['FIDELITY'].data[0,:,:].astype(numpy.float32)
-    for fy in range(61): fhist[fy] += numpy.count_nonzero(f['FIDELITY'].data[0,bdpad:-bdpad,bdpad:-bdpad]==fy)
+    fmap = f['FIDELITY'].data[0,:,:].astype(numpy.float32) * HDU_to_bels(f['FIDELITY'])/.1 # convert to dB
+    fmap = numpy.floor(fmap).astype(numpy.int16) # and round to integer
+    for fy in range(81): fhist[fy] += numpy.count_nonzero(fmap[bdpad:-bdpad,bdpad:-bdpad]==fy)
 
   ra_cent, dec_cent = mywcs.all_pix2world([(n-1)/2], [(n-1)/2], [0.], [0.], 0, ra_dec_order=True)
   ra_cent = ra_cent[0]; dec_cent = dec_cent[0]
@@ -163,5 +165,5 @@ fits.HDUList([fits.PrimaryHDU(image.astype(numpy.float32))]).writeto(outfile_g, 
 
 numpy.savetxt(outstem + '_StarCat_{:s}.txt'.format(filter), pos)
 
-for fy in range(20,61):
+for fy in range(20,81):
   print('{:2d} {:8.6f} {:8.6f}'.format(fy, fhist[fy]/numpy.sum(fhist), numpy.sum(fhist[:fy+1])/numpy.sum(fhist)))
