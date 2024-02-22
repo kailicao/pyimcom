@@ -689,8 +689,7 @@ class OutStamp:
 
         # acceptance radius in units of output pixels
         rpix_search = (self.blk.cfg.instamp_pad / Stn.arcsec) \
-        / (self.blk.cfg.dtheta * u.degree.to('arcsec'))  # \
-        # + self.blk.cfg.fade_kernel * np.sqrt(2.0)
+        / (self.blk.cfg.dtheta * u.degree.to('arcsec'))
 
         # now select input pixels
         for idx, ji_st_in in enumerate(self.ji_st_in_s):
@@ -707,7 +706,7 @@ class OutStamp:
         self.inpix_cumsum = np.cumsum([0] + list(self.inpix_count), dtype=np.uint16)
 
         if visualize:
-            for instamp, selection in zip(self.instamps, self):
+            for instamp, selection in zip(self.instamps, self.selections):
                 if selection is None: plt.scatter(instamp.x_val, instamp.y_val, s=1)
                 plt.scatter(instamp.x_val[selection], instamp.y_val[selection], s=1)
             plt.axis('equal')
@@ -847,7 +846,7 @@ class OutStamp:
             fade_kernel = self.blk.cfg.fade_kernel  # shortcut
             OutStamp.trapezoid(self.kappa, fade_kernel)
             OutStamp.trapezoid(self.Sigma, fade_kernel)
-            OutStamp.trapezoid(self.UC, fade_kernel)
+            OutStamp.trapezoid(self.UC,    fade_kernel)
 
     def _visualize_system_matrices(self) -> None:
         '''
@@ -1598,7 +1597,6 @@ class Block:
                     for dj in range(-1, 1):
                         inst = self.instamps[j_st+dj][i_st]
                         if inst is not None:
-                            # print(j_st+dj, i_st)
                             inst.clear()
                             self.instamps[j_st+dj][i_st] = None
                 gc.collect()  # force a garbage collection
@@ -1667,7 +1665,8 @@ class Block:
         '''
 
         # shortcuts
-        fk = self.cfg.fade_kernel  
+        fk = self.cfg.fade_kernel
+        NsidePf = self.cfg.NsideP + fk * 2
         outmaps = self.cfg.outmaps
 
         if is_final:  # recover block boundaries
@@ -1679,7 +1678,7 @@ class Block:
             if 'N' in outmaps: OutStamp.trapezoid(self.Neff_map,  fk, recover_mode=True)
 
         my_header = self.outwcs.to_header()
-        maphdu = fits.PrimaryHDU(self.out_map[:, :, fk:-fk, fk:-fk], header=my_header)
+        maphdu = fits.PrimaryHDU(self.out_map[:, :, fk:NsidePf-fk, fk:NsidePf-fk], header=my_header)
         config_hdu = fits.TableHDU.from_columns(
             [fits.Column(name='text', array=self.cfg.to_file(None).splitlines(), format='A512', ascii=True)])
         config_hdu.header['EXTNAME'] = 'CONFIG'
@@ -1702,27 +1701,27 @@ class Block:
 
         if 'U' in outmaps:
             hdulist.append(Block.compress_map(
-                self.UC_map[:, fk:-fk, fk:-fk], -5000, np.uint16,
+                self.UC_map[:, fk:NsidePf-fk, fk:NsidePf-fk], -5000, np.uint16,
                 my_header, 'FIDELITY', ('0.2mB', '-5000*log10(U/C)')))
 
         if 'S' in outmaps:
             hdulist.append(Block.compress_map(
-                self.Sigma_map[:, fk:-fk, fk:-fk], -10000, np.int16,
+                self.Sigma_map[:, fk:NsidePf-fk, fk:NsidePf-fk], -10000, np.int16,
                 my_header, 'SIGMA', ('0.1mB', '-10000*log10(Sigma)')))
 
         if 'K' in outmaps:
             hdulist.append(Block.compress_map(
-                self.kappa_map[:, fk:-fk, fk:-fk], -5000, np.uint16,
+                self.kappa_map[:, fk:NsidePf-fk, fk:NsidePf-fk], -5000, np.uint16,
                 my_header, 'KAPPA', ('0.2mB', '-5000*log10(kappa)')))
 
         if 'T' in outmaps:
             hdulist.append(Block.compress_map(
-                self.Tsum_map[:, fk:-fk, fk:-fk], 200000, np.int16,
+                self.Tsum_map[:, fk:NsidePf-fk, fk:NsidePf-fk], 200000, np.int16,
                 my_header, 'INWTSUM', ('5uB', '200000*log10(Tsum)')))
 
         if 'N' in outmaps:
             hdulist.append(Block.compress_map(
-                self.Neff_map[:, fk:-fk, fk:-fk], 50000, np.uint16,
+                self.Neff_map[:, fk:NsidePf-fk, fk:NsidePf-fk], 50000, np.uint16,
                 my_header, 'EFFCOVER', ('2uB', '50000*log10(Neff)')))
 
         hdu_list = fits.HDUList(hdulist)
@@ -1756,11 +1755,4 @@ class Block:
                 inst = self.instamps[j_st][i_st]
                 if inst is not None:
                     inst.clear()
-                    # print('final in', j_st, i_st)
                     self.instamps[j_st][i_st] = None
-
-                # outst = self.outstamps[j_st][i_st]
-                # if outst is not None:
-                #     outst.clear()
-                #     print('final out', j_st, i_st)
-                #     self.outstamps[j_st][i_st] = None
