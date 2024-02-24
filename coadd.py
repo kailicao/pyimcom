@@ -11,9 +11,12 @@ Block : Driver for block coaddition.
 '''
 
 from os.path import exists
-import pathlib
 from itertools import combinations, product
 import gc
+
+from pathlib import Path
+import datetime
+import pytz
 
 from astropy import units as u
 from astropy.table import Table
@@ -24,9 +27,6 @@ from astropy.io import fits
 from astropy import wcs
 import fitsio
 import matplotlib.pyplot as plt
-
-import datetime
-import pytz
 
 from .config import Timer, Settings as Stn, Config
 from .layer import check_if_idsca_exists, get_all_data, Mask
@@ -1245,13 +1245,11 @@ class Block:
               ibx, iby, self.cfg.nblock, self.cfg.nblock, self.cfg.nblock**2))
         self.outstem = self.cfg.outstem + '_{:02d}_{:02d}'.format(ibx, iby)
         print('outputs directed to -->', self.outstem)
-        if self.cfg.tempfile is None:
-            self.cache_dir = pathlib.Path(self.outstem + '_cache')
-        else:
-            self.cache_dir = pathlib.Path(self.cfg.tempfile + '_{:04d}_{:s}_cache'.format(self.this_sub,
+        if self.cfg.tempfile is not None:
+            self.cache_dir = Path(self.cfg.tempfile + '_{:04d}_{:s}_cache'.format(self.this_sub,
                 datetime.datetime.now(pytz.timezone('UTC')).strftime("%Y%m%d%H%M%S%f")))
-        print('temporary storage directed to -->', self.cache_dir)
-        self.cache_dir.mkdir(exist_ok=True)
+            self.cache_dir.mkdir(exist_ok=True)
+            print('temporary storage directed to -->', self.cache_dir)
 
         # make the WCS
         self.outwcs = wcs.WCS(naxis=2)
@@ -1737,7 +1735,7 @@ class Block:
 
         '''
 
-        self.cache_dir.rmdir()
+        if self.cfg.tempfile is not None: self.cache_dir.rmdir()
 
         del self.obsdata, self.obslist, self.outwcs
         del self.outpsfgrp, self.outpsfovl, self.sysmata, self.sysmatb

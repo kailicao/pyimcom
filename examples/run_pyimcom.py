@@ -1,6 +1,6 @@
 import sys
 import numpy as np
-from pyimcom.config import Config
+from pyimcom.config import Config  #, Settings as Stn
 from pyimcom.coadd import Block
 
 if __name__ == '__main__':
@@ -15,9 +15,9 @@ if __name__ == '__main__':
     # config.stoptile = 4
     config.pad_sides = 'all'
 
-    # config.outstem = '/users/PAS2055/kailicao/pyimcom_dev/test/Iterative'
-    config.linear_algebra = 'Iterative'
+    config.outstem = '/users/PAS2055/kailicao/pyimcom_dev/test/kappa=1e-5'
     config.kappaC_arr = np.array([1e-5])
+    # config.instamp_pad = 0.25 * Stn.arcsec
 
     # subregion information
     this_sub = 0  # default

@@ -16,11 +16,10 @@ from warnings import warn
 import numpy as np
 from scipy.linalg import cholesky, cho_solve
 from astropy import units as u
-from scipy.sparse.linalg import cg
 
 from numba import njit
 from pyimcom_croutines import lakernel1, build_reduced_T_wrap
-from .config import Settings as Stn  #, Timer
+from .config import Settings as Stn
 
 
 class _LAKernel:
@@ -409,26 +408,13 @@ class IterKernel(_LAKernel):
         m, n = np.shape(mBhalf)
         Ti = np.zeros((m, n), dtype=np.float32)
 
-        # timer = Timer()
-        # t_pre = t_sol = t_post = 0.0
-
         # loop over output pixels
         for a in range(m):
             selection = np.where(relevant_matrix[a])[0]
-            # t_pre += timer(reset=True)
-            # Ta, exit_code = cg(AA[np.ix_(selection, selection)],
-            #                    mBhalf[a, selection], atol=1e-5)
             Ta = IterKernel.conjugate_gradient(
                 AA[np.ix_(selection, selection)], mBhalf[a, selection])
             # if exit_code != 0: print('exit_code != 0', f'{a = }')
-            # t_sol += timer(reset=True)
             Ti[a, selection] = Ta; del selection, Ta
-            # t_post += timer(reset=True)
-
-        # t_tot = t_pre + t_sol + t_post
-        # print(f'{t_pre = :.6f} ({t_pre/t_tot*100:.6f}%)')    #  0.381627%
-        # print(f'{t_sol = :.6f} ({t_sol/t_tot*100:.6f}%)')    # 99.065048%
-        # print(f'{t_post = :.6f} ({t_post/t_tot*100:.6f}%)')  #  0.553325%
 
         return Ti
 

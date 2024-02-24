@@ -39,7 +39,7 @@
     "PAD": 2,
     "PADSIDES": "auto",
     "STOP": 0,
-    "OUTMAPS": "USKTN",
+    "OUTMAPS": "USTN",
     "OUT": "/users/PAS2055/kailicao/pyimcom_dev/test/test4C_Yband",
     "TEMPFILE": "/tmp/kailicao-tempy",
     "NOUT": 1,
@@ -52,7 +52,7 @@
     ],
     "FLATPEN": 0.0,
     "INPAD": 0.625,
-    "LAKERNEL": "Cholesky",
+    "LAKERNEL": "Iterative",
     "KAPPAC": [
         1e-05
     ],

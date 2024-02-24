@@ -1410,15 +1410,16 @@ class SysMatA:
             return
 
         if (ji_st1, ji_st2) not in self.iisubmats:
-            # load virtual memory when available
-            fname = 'iisubmat_' + '_'.join(f'{ji:02d}' for ji in ji_st1 + ji_st2) + '.npy'
-            fpath = self.blk.cache_dir / fname
-            if fpath.exists():
-                # print(f'VIRMEM: loading {fname}')
-                self.iisubmats[(ji_st1, ji_st2)] = np.load(str(fpath))
-                fpath.unlink(); del fname, fpath
-            else:
-                self._compute_iisubmats(ji_st1, ji_st2, sim_mode)
+            if ji_st_out is not None:
+                # load virtual memory when available
+                fname = 'iisubmat_' + '_'.join(f'{ji:02d}' for ji in ji_st1 + ji_st2) + '.npy'
+                fpath = self.blk.cache_dir / fname
+                if fpath.exists():
+                    # print(f'VIRMEM: loading {fname}')
+                    self.iisubmats[(ji_st1, ji_st2)] = np.load(str(fpath))
+                    fpath.unlink(); del fname, fpath
+                else: self._compute_iisubmats(ji_st1, ji_st2, sim_mode)
+            else: self._compute_iisubmats(ji_st1, ji_st2, sim_mode)
         arr = self.iisubmats[(ji_st1, ji_st2)]
 
         self.iisubmats_ref[ji_dist] -= 1
