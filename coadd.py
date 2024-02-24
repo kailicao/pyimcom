@@ -830,6 +830,11 @@ class OutStamp:
         # T: (n_out, n_outpix, n_inpix); others: (n_out, n2f, n2f)
         if not save_abc: del self.sysmata, self.mhalfb, self.outovlc
 
+        if self.blk.cfg.linear_algebra == 'Iterative':
+            # these could be negative as the iterative kernel is not exact
+            self.UC    = np.maximum(self.UC,    1e-32)
+            self.Sigma = np.maximum(self.Sigma, 1e-32)
+
         print('  n input pix =', self.T.shape[-1])
         sumstats = '  sqUC,sqSig %iles |'
         for i in [50, 90, 98, 99]:

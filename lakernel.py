@@ -9,6 +9,13 @@ ChoKernel : LA kernel using Cholesky decomposition.
 IterKernel : LA kernel using iterative method.
 EmpirKernel : Fake LA kernel using empirical relation.
 
+Functions
+---------
+conjugate_gradient : Simplified version of scipy.sparse.linalg.cg.
+_extract_submatrix : Extract a submatrix from a symmetric matrix.
+_extract_subvector : Extract a subvector from a vector.
+_assign_subvector : Assign values to a subvector of a vector.
+
 '''
 
 from warnings import warn
@@ -320,13 +327,174 @@ class ChoKernel(_LAKernel):
             del out_kappa, out_Sigma, out_UC, out_w
 
 
+@njit
+def conjugate_gradient(A: np.array, b: np.array, rtol: float = 1.5e-3,
+                       maxiter: int = 30) -> np.array:
+    '''
+    Simplified version of scipy.sparse.linalg.cg.
+
+    Parameters
+    ----------
+    A : np.array, shape : (n, n)
+        System matrix A.
+    b : np.array, shape : (n,)
+        Column vector b.
+    atol : float, optional
+        Absolute tolerance. The default is 1e-5.
+    maxiter : int, optional
+        Maximum number of iteration. The default is 30.
+
+    Returns
+    -------
+    x : np.array, shape : (n,)
+        Solution vector b.
+
+    '''
+
+    atol = np.linalg.norm(b) * rtol
+
+    x = np.zeros_like(b)
+    r = b.copy()
+
+    rho_prev = 0.0
+    p = r.copy()  # First spin
+
+    for iteration in range(maxiter):
+        rho_cur = np.dot(r, r)
+        if rho_cur ** 0.5 < atol:  # Are we done?
+            break
+
+        if iteration > 0:
+            p *= rho_cur / rho_prev  # beta
+            p += r
+
+        q = A @ p
+        alpha = rho_cur / np.dot(p, q)
+        x += alpha * p
+        r -= alpha * q
+        rho_prev = rho_cur
+
+    return x
+
+
+@njit
+def _extract_submatrix(mat_orig: np.array, selection: np.array) -> np.array:
+    '''
+    Extract a submatrix from a symmetric matrix.
+
+    Parameters
+    ----------
+    mat_orig : np.array, shape : (n, n)
+        Symmetric matrix to be extracted.
+    selection : np.array, shape : (n,)
+        Boolean array indicating whether to extract a row or column.
+
+    Returns
+    -------
+    mat_copy : np.array, shape : (n_, n_)
+        Extracted submatrix. n_ is number of selected rows or columns.
+
+    '''
+
+    n = selection.size
+    n_ = selection.sum()
+    mat_copy = np.empty((n_, n_))
+
+    j_ = 0
+    for j in range(n):
+        if not selection[j]: continue
+
+        i_ = 0
+        for i in range(n):
+            if not selection[i]: continue
+
+            mat_copy[j_, i_] = mat_orig[j, i]
+            i_ += 1
+            if i_ > j_: break
+
+        j_ += 1
+        if j_ == n_: break
+
+    for j_ in range(n_):
+        for i_ in range(j_+1, n_):
+            mat_copy[j_, i_] = mat_copy[i_, j_]
+
+    return mat_copy
+
+
+@njit
+def _extract_subvector(vec_orig: np.array, selection: np.array) -> np.array:
+    '''
+    Extract a subvector from a vector.
+
+    Parameters
+    ----------
+    vec_orig : np.array, shape : (n,)
+        Vector to be extracted.
+    selection : np.array, shape : (n,)
+        Boolean array indicating whether to extract an element.
+
+    Returns
+    -------
+    vec_copy : np.array, shape : (n_,)
+        Extracted subvector. n_ is number of selected elements.
+
+    '''
+
+    n = selection.size
+    n_ = selection.sum()
+    vec_copy = np.empty((n_,))
+
+    i_ = 0
+    for i in range(n):
+        if not selection[i]: continue
+
+        vec_copy[i_] = vec_orig[i]
+        i_ += 1
+        if i_ == n_: break
+
+    return vec_copy
+
+
+@njit
+def _assign_subvector(vec_left: np.array, vec_right: np.array,
+                      selection: np.array) -> None:
+    '''
+    Assign values to a subvector of a vector.
+
+    Parameters
+    ----------
+    vec_left : np.array, shape : (n,)
+        Vector to be assigned to.
+    vec_right : np.array, shape : (n_,)
+        Subvector of values to assign.
+    selection : np.array, shape : (n,)
+        Boolean array indicating whether to assign to an element.
+
+    Returns
+    -------
+    None.
+
+    '''
+
+    n = selection.size
+    n_ = selection.sum()
+
+    i_ = 0
+    for i in range(n):
+        if not selection[i]: continue
+
+        vec_left[i] = vec_right[i_]
+        i_ += 1
+        if i_ == n_: break
+
+
 class IterKernel(_LAKernel):
     '''
     LA kernel using iterative method.
 
     Methods
     -------
-    conjugate_gradient (staticmethod) : Simplified version of scipy.sparse.linalg.cg.
     _iterative_wrapper (staticmethod) : Wrapper for iterative method.
     _call_single_kappa : Solve linear systems for single kappa node.
     _call_multi_kappa : Solve linear systems for multiple kappa nodes.
@@ -335,55 +503,6 @@ class IterKernel(_LAKernel):
 
     @staticmethod
     @njit
-    def conjugate_gradient(A: np.array, b: np.array, atol: float = 1e-5,
-                           maxiter: int = 30) -> np.array:
-        '''
-        Simplified version of scipy.sparse.linalg.cg.
-
-        Parameters
-        ----------
-        A : np.array, shape : (n, n)
-            System matrix A.
-        b : np.array, shape : (n,)
-            Column vector b.
-        atol : float, optional
-            Absolute tolerance. The default is 1e-5.
-        maxiter : int, optional
-            Maximum number of iteration. The default is 30.
-
-        Returns
-        -------
-        x : np.array, shape : (n,)
-            Solution vector b.
-
-        '''
-
-        x = np.zeros_like(b)
-        r = b.copy()
-
-        rho_prev = 0.0
-        p = r.copy()  # First spin
-
-        for iteration in range(maxiter):
-            rho_cur = np.dot(r, r)
-            if rho_cur ** 0.5 < atol:  # Are we done?
-                return x
-
-            if iteration > 0:
-                p *= rho_cur / rho_prev  # beta
-                p += r
-
-            q = A @ p
-            alpha = rho_cur / np.dot(p, q)
-            x += alpha * p
-            r -= alpha * q
-            rho_prev = rho_cur
-
-        else:
-            # warn('for loop exhausted, return incomplete progress')
-            return x
-
-    @staticmethod
     def _iterative_wrapper(AA: np.array, mBhalf: np.array,
                            relevant_matrix: np.array) -> np.array:
         '''
@@ -396,7 +515,7 @@ class IterKernel(_LAKernel):
         mBhalf : np.array, shape : (n, n)
             System matrix -B/2 (for a single target PSF).
         relevant_matrix : np.array, shape : (m, n)
-            Boolean indicating whether to use an input pixel for an output pixel.
+            Boolean array indicating whether to use an input pixel for an output pixel.
 
         Returns
         -------
@@ -410,11 +529,9 @@ class IterKernel(_LAKernel):
 
         # loop over output pixels
         for a in range(m):
-            selection = np.where(relevant_matrix[a])[0]
-            Ta = IterKernel.conjugate_gradient(
-                AA[np.ix_(selection, selection)], mBhalf[a, selection])
-            # if exit_code != 0: print('exit_code != 0', f'{a = }')
-            Ti[a, selection] = Ta; del selection, Ta
+            _assign_subvector(Ti[a], conjugate_gradient(
+                _extract_submatrix(AA, relevant_matrix[a]),
+                _extract_subvector(mBhalf[a], relevant_matrix[a])), relevant_matrix[a])
 
         return Ti
 
