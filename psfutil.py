@@ -22,7 +22,10 @@ except:
     import numpy.fft as numpy_fft
 
 from .config import Settings as Stn
-from pyimcom_croutines import iD5512C, iD5512C_sym, gridD5512C
+try:
+    from pyimcom_croutines import iD5512C, iD5512C_sym, gridD5512C
+except:
+    from .routine import iD5512C, iD5512C_sym, gridD5512C
 
 
 class OutPSF:
@@ -296,6 +299,12 @@ class PSFGrp:
             # this produces the following instance attributes:
             # n_psf, psf_arr
 
+        if False:  # KC's experimental feature
+            ro = np.hypot(PSFGrp.xyo[0], PSFGrp.xyo[1])
+            self.psf_arr *= (ro < PSFGrp.nc+0.5)  # circular cutout
+            psf_arr_ = np.moveaxis(self.psf_arr, 0, -1)  # create a view
+            psf_arr_ /= self.psf_arr.sum(axis=(-2, -1))  # normalization
+
         self.psf_rft = PSFGrp.accel_pad_and_rfft2(self.psf_arr)
         del self.psf_arr  # remove the PSFs since they are only used for FFT purposes
 
@@ -376,9 +385,15 @@ class PSFGrp:
             del out_arr
 
         else:  # sample a group of output PSFs at the same time
-            out_arr = np.zeros((self.n_psf, PSFGrp.nsamp**2))
-            iD5512C(psf, xyco[1].ravel()+xctr, xyco[0].ravel()+yctr, out_arr)
-            self.psf_arr = out_arr.reshape((self.n_psf, PSFGrp.nsamp, PSFGrp.nsamp))
+            # out_arr = np.zeros((self.n_psf, PSFGrp.nsamp**2))
+            # iD5512C(psf, xyco[1].ravel()+xctr, xyco[0].ravel()+yctr, out_arr)
+            # self.psf_arr = out_arr.reshape((self.n_psf, PSFGrp.nsamp, PSFGrp.nsamp))
+            self.psf_arr = np.zeros((self.n_psf, PSFGrp.nsamp, PSFGrp.nsamp))
+            out_arr = np.zeros((1, PSFGrp.nsamp**2))
+            for idx in range(self.n_psf):
+                gridD5512C(psf[idx], PSFGrp.xyo[None, 1, 0, :]+xctr,
+                           PSFGrp.xyo[None, 0, :, 0]+yctr, out_arr)
+                self.psf_arr[idx] = out_arr.reshape((PSFGrp.nsamp, PSFGrp.nsamp))
             del out_arr
 
     def _build_inpsfgrp(self, visualize: bool = False) -> None:
@@ -469,7 +484,7 @@ class PSFGrp:
                 obsc=0.0, tophat_conv=0.0, sigma=extrasmooth * PSFGrp.oversamp)
 
         else:
-            raise RuntimeError('Error: target output PSF type')
+            raise RuntimeError('Error: unsupported target output PSF type')
 
 
     def _build_outpsfgrp(self, visualize: bool = False) -> None:
