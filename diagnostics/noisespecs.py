@@ -124,10 +124,18 @@ for iblock in range(nstart,nstart+nblockuse):
       f.close()
 
       nradbins = L//16 # Number of radial bins is side length div. into 8 from binning and then (floor) div. by 2.
+
+      m= re.search(r'white', noiselayer)
+      if m:
+          norm = ((L * (s_in/s_out) ** 2))
+      m= re.search(r'1f', noiselayer)
+      if m:
+          norm = ((L * (s_in/s_out) ** 2))
+      m= re.search(r'lab', noiselayer)
+      if m:
+          norm = tfr/gain * ABstd/h * area * 10**(-0.4*m_ab) * s_out**2
       
-      norm = tfr/gain * ABstd/h * area * 10**(-0.4*m_ab) * s_out**2
-      
-      def measure_power_spectrum(noiseframe, bin=True):
+      def measure_power_spectrum(noiseframe, noisetype, bin=True):
           """
           Measure the 2D power spectrum of image.
           :param noiseframe: 2D ndarray
@@ -140,9 +148,9 @@ for iblock in range(nstart,nstart+nblockuse):
           :return: 2D ndarray, ps
            the 2D power spectrum of the image.
           """
-          noiseframe = noiseframe/norm
+          
           fft = np.fft.fftshift(np.fft.fft2(noiseframe))
-          ps = ((np.abs(fft)) ** 2) / ((L * (s_in/s_out) ** 2))
+          ps = ((np.abs(fft)) ** 2) / norm
           if bin:
               print('# 2D spectrum is 8x8 binned\n')
               binned_ps = np.average(np.reshape(ps, (L//8, 8, L//8, 8)), axis = (1,3))
