@@ -127,15 +127,15 @@ for iblock in range(nstart,nstart+nblockuse):
 
       m= re.search(r'white', noiselayer)
       if m:
-          norm = ((L * (s_in/s_out) ** 2))
+          norm = (L * (s_in/s_out) )** 2
       m= re.search(r'1f', noiselayer)
       if m:
-          norm = ((L * (s_in/s_out) ** 2))
+          norm = (L * (s_in/s_out)) ** 2
       m= re.search(r'lab', noiselayer)
       if m:
           norm = tfr/gain * ABstd/h * area * 10**(-0.4*m_ab) * s_out**2
       
-      def measure_power_spectrum(noiseframe, noisetype, bin=True):
+      def measure_power_spectrum(noiseframe, bin=True):
           """
           Measure the 2D power spectrum of image.
           :param noiseframe: 2D ndarray
