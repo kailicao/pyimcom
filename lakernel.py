@@ -25,8 +25,11 @@ from scipy.linalg import cholesky, cho_solve
 from astropy import units as u
 
 from numba import njit
-from pyimcom_croutines import lakernel1, build_reduced_T_wrap
 from .config import Settings as Stn
+try:
+    from pyimcom_croutines import lakernel1, build_reduced_T_wrap
+except:
+    from .routine import lakernel1, build_reduced_T_wrap
 
 
 class _LAKernel:
@@ -66,7 +69,7 @@ class _LAKernel:
 
         self.kappaC_arr = cfg.kappaC_arr  # eigenvalue nodes, vector, length nv, ascending order
         self.nv = np.size(self.kappaC_arr)
-        self.ucmin = np.array([cfg.uctarget] * self.n_out)
+        self.ucmin = cfg.uctarget
         # allowable leakage of target PSF(n_out,) / minimum U/C (after this focus on noise)
         self.smax = cfg.sigmamax  # maximum noise to allow / maximum allowed Sigma
 
@@ -172,7 +175,7 @@ class EigenKernel(_LAKernel):
 
         for k in range(n_out):
             # using kCmin*C[k], kCmax*C[k] instead of kCmin, kCmax produces reasonable results
-            lakernel1(lam, Q, mBhalf[k, :, :] @ Q, C[k], self.ucmin[k], kCmin*C[k], kCmax*C[k], nbis,
+            lakernel1(lam, Q, mBhalf[k, :, :] @ Q, C[k], self.ucmin, kCmin*C[k], kCmax*C[k], nbis,
                       self.kappa_[k, :], self.Sigma_[k, :], self.UC_[k, :], tt, self.smax)
             self.kappa_ [k, :] *= C[k]
             self.outst.T[k, :, :] = tt @ Q.T

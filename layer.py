@@ -31,7 +31,10 @@ import galsim
 import healpy
 
 from .config import Settings as Stn
-from pyimcom_croutines import iD5512C
+try:
+    from pyimcom_croutines import iD5512C
+except:
+    from .routine import iD5512C
 
 
 class GalSimInject:
