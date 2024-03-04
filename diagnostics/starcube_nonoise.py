@@ -163,7 +163,8 @@ image = image[1:,:,:]
 
 fits.HDUList([fits.PrimaryHDU(image.astype(numpy.float32))]).writeto(outfile_g, overwrite=True)
 
-numpy.savetxt(outstem + '_StarCat_{:s}.txt'.format(filter), pos)
+numpy.savetxt(outstem + '_StarCat_{:s}.txt'.format(filter), pos,
+  header = ' {:14.8E}'.format(numpy.median(newpos[:,13])))
 
 for fy in range(20,81):
   print('{:2d} {:8.6f} {:8.6f}'.format(fy, fhist[fy]/numpy.sum(fhist), numpy.sum(fhist[:fy+1])/numpy.sum(fhist)))
