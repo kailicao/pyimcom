@@ -36,6 +36,7 @@ try:
 except:
     from .routine import iD5512C
 
+from .fpadata import fpaCoords
 
 class GalSimInject:
     '''
@@ -54,14 +55,39 @@ class GalSimInject:
         Inputs:
           res = HEALPix resolution (nside = 2**res)
           mywcs = WCS object (astropy.wcs format)
-          OUTDATED --> inpsf, idsca, obsdata = PSF information to pass to get_psf_pos
+          idsca = observation ID and SCA numbers
+          OUTDATED --> inpsf, obsdata = PSF information to pass to get_psf_pos
           sca_nside = side length of the SCA (4088 for Roman)
-          extraargs = for future compatibility
+          extraargs = either None (default) or a dictionary
+              if a dictionary, can search for the following parameters:
+              angleTransient (boolean): if True, then includes a transient source that is on or off
+                  depending on the roll angle (maps to time of year). odd pixels are on for PA=0, even for PA=180
 
           Output: [when complete]
           nside x nside SCA with a grid of stars with unit flux
 
         '''
+
+        # extract the extraargs
+        #
+        angleTransient = False
+        FieldDependentModulation = False
+        if isinstance(extraargs, dict):
+            # angleTransient: transient depending on roll angle?
+            if 'angleTransient' in extraargs.keys(): angleTransient = extraargs['angleTransient']
+            if angleTransient:
+                # need to know whether the image points 'up' or 'down'
+                ra1,dec1 = mywcs.all_pix2world(.5*(nside-1), nside-1. ,0)
+                ra2,dec2 = mywcs.all_pix2world(.5*(nside-1), 0. ,0)
+                s = 0
+                if dec2>dec1: s=1
+                idsca[1]%3==0: s=1-s # top row of SCAs is flipped
+                print('.. idsca', idsca, 'ddec', dec1-dec2, 'direction', s, '# 0 for PA 0, 1 for PA 180')
+
+           # FieldDependentModulation: change intensity depending on distance from field center?
+           if 'FieldDependentModulation' un extraargs.keys():
+              FieldDependentModulation = True
+              FieldDependentModulationAmplitude = extraargs['FieldDependentModulation']
 
         ra_cent, dec_cent = mywcs.all_pix2world((sca_nside-1)/2, (sca_nside-1)/2, 0)
 
@@ -86,6 +112,11 @@ class GalSimInject:
         sca_image = galsim.ImageF(sca_nside+pad, sca_nside+pad, scale=0.11)
 
         for n in range(num_obj):
+
+            # if angle transient mode is on, check if we really need this object
+            if angleTransient:
+                if (qp[n]+s)%2==1: continue
+
             psf = inpsf((my_ra[n],my_dec[n]), None)[0]  # now with PSF variation
             psf_image = galsim.Image(psf, scale=0.11/inpsf_oversamp)
             interp_psf = galsim.InterpolatedImage(psf_image, x_interpolant='lanczos50')
@@ -99,7 +130,11 @@ class GalSimInject:
                                ymax=xyI.y+n_in_stamp//2+pad//2)
 
             sub_image = sca_image[b]
-            st_model = galsim.DeltaFunction(flux=1.)
+            if FieldDependentModulation:
+               xfpa, yfpa = fpaCoords.pix2fpa(idsca[1], x_sca[n], y_sca[n])
+               st_model = galsim.DeltaFunction(flux=1. + FieldDependentModulationAmplitude*(xfpa**2+yfpa**2)/fpaCoords.Rfpa**2)
+            else:
+               st_model = galsim.DeltaFunction(flux=1.)
             source = galsim.Convolve([interp_psf, st_model])
             source.drawImage(sub_image, offset=draw_offset, add_to_image=True, method='no_pixel')
 
@@ -743,6 +778,25 @@ def get_all_data(inimage: 'coadd.InImage'):
             print('making grid using GalSim: ', res, idsca)
             inimage.indata[i, :, :] = GalSimInject.galsim_star_grid(
                 res, inwcs, inpsf, idsca, obsdata, Stn.sca_nside, inpsf_oversamp)
+
+        # galsim angle-based transient star grid
+        # (a test of what happens when a point source is present in one pass but not the other)
+        m = re.search(r'^gstrstar(\d+)$', extrainput[i], re.IGNORECASE)
+        if m:
+            res = int(m.group(1))
+            print('making grid using GalSim: ', res, idsca)
+            inimage.indata[i, :, :] = GalSimInject.galsim_star_grid(
+                res, inwcs, inpsf, idsca, obsdata, Stn.sca_nside, inpsf_oversamp, extraargs={'angleTransient': True})
+
+        # galsim field-dependent amplitude star grid
+        # (a test of what a source does if its SED causes it to be brighter (+) or fainter (-) as one moves away from zero field angle)
+        m = re.search(r'^gsfdstar(\d+),(.+)+$', extrainput[i], re.IGNORECASE)
+        if m:
+            res = int(m.group(1))
+            amp = float(m.group(2))
+            print('making grid using GalSim: ', res, idsca)
+            inimage.indata[i, :, :] = GalSimInject.galsim_star_grid(
+                res, inwcs, inpsf, idsca, obsdata, Stn.sca_nside, inpsf_oversamp, extraargs={'FieldDependentModulation': amp})
 
         # galsim extobj grid
         m = re.search(r'^gsext(\d+)', extrainput[i], re.IGNORECASE)
