@@ -77,17 +77,17 @@ class GalSimInject:
             if 'angleTransient' in extraargs.keys(): angleTransient = extraargs['angleTransient']
             if angleTransient:
                 # need to know whether the image points 'up' or 'down'
-                ra1,dec1 = mywcs.all_pix2world(.5*(nside-1), nside-1. ,0)
-                ra2,dec2 = mywcs.all_pix2world(.5*(nside-1), 0. ,0)
+                ra1,dec1 = mywcs.all_pix2world(.5*(fpaCoords.nside-1), fpaCoords.nside-1. ,0)
+                ra2,dec2 = mywcs.all_pix2world(.5*(fpaCoords.nside-1), 0. ,0)
                 s = 0
                 if dec2>dec1: s=1
-                idsca[1]%3==0: s=1-s # top row of SCAs is flipped
+                if idsca[1]%3==0: s=1-s # top row of SCAs is flipped
                 print('.. idsca', idsca, 'ddec', dec1-dec2, 'direction', s, '# 0 for PA 0, 1 for PA 180')
 
-           # FieldDependentModulation: change intensity depending on distance from field center?
-           if 'FieldDependentModulation' un extraargs.keys():
-              FieldDependentModulation = True
-              FieldDependentModulationAmplitude = extraargs['FieldDependentModulation']
+            # FieldDependentModulation: change intensity depending on distance from field center?
+            if 'FieldDependentModulation' in extraargs.keys():
+               FieldDependentModulation = True
+               FieldDependentModulationAmplitude = extraargs['FieldDependentModulation']
 
         ra_cent, dec_cent = mywcs.all_pix2world((sca_nside-1)/2, (sca_nside-1)/2, 0)
 
