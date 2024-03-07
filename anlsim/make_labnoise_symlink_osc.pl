@@ -7,8 +7,8 @@
 #
 # -C.H.
 
-$indir = '/fs/scratch/PCON0003/cond0007/anl-run-in/simple/';
-$linkdir = '/fs/scratch/PCON0003/cond0007/anl-run-in/labnoise/';
+$indir = '/fs/scratch/PCON0003/cond0007/anl-run-in-prod/simple/';
+$linkdir = '/fs/scratch/PCON0003/cond0007/anl-run-in-prod/labnoise/';
 
 @files = split ' ', `ls $indir`;
 
@@ -24,7 +24,7 @@ for $infile (@files) {
 
   # make target
   $count_sca[$sca-1]++;
-  $target = sprintf "/users/PCON0003/cond0007/Noise%03d/SFSCU%02d/SFSCU%02d_slopes_refcor.fits", 1, $sca, $sca;
+  $target = sprintf "/fs/scratch/PCON0003/cond0007/labnoise/Noise%03d_SCA%02d_slopes_refcor.fits", $count_sca[$i], $sca;
   $link = $linkdir.(sprintf "slope_%d_%d.fits", $obs, $sca);
   print "\n $link -> $target\n\n";
   system "ln -s $target $link";
