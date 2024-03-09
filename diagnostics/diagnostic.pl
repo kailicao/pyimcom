@@ -41,7 +41,7 @@ $fname = "results/$tag-$band\_dynrange.dat";
 ($ymax) = (split ' ', $data_[0])[-1]; # max y-value
 ($ymin) = (split ' ', $data_[-1])[2]; # max y-value
 if ($ymin>=-30) {$ymin=-30;}
-if ($ymax<40000) {$ymax=40000;}
+if ($ymax<50000) {$ymax=50000;}
 open(G, "| gnuplot") or die;
 print G qq~set term postscript enhanced eps 16 color\n~;
 print G qq~set output "results/$tag-$band\_all.eps"\n~;
