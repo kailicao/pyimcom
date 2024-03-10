@@ -24,7 +24,7 @@ for $infile (@files) {
 
   # make target
   $count_sca[$sca-1]++;
-  $target = sprintf "/fs/scratch/PCON0003/cond0007/labnoise/Noise%03d_SCA%02d_slopes_refcor.fits", $count_sca[$i], $sca;
+  $target = sprintf "/fs/scratch/PCON0003/cond0007/labnoise/Noise%03d_SCA%02d_slopes_refcor.fits", $count_sca[$sca-1], $sca;
   $link = $linkdir.(sprintf "slope_%d_%d.fits", $obs, $sca);
   print "\n $link -> $target\n\n";
   system "ln -s $target $link";
