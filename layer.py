@@ -219,6 +219,15 @@ class GalSimInject:
             g2 = .5*np.sqrt(data[1, :])*np.sin(2*np.pi*data[2, :])
             mydict = {'sersic': {'n': 1., 'r': .5/4**data[0, :], 't__r': 8.},
                       'g': np.stack((g1, g2))}
+        elif galstring == 'Flex':
+            data = GalSimInject.subgen_multirow(rngX, lenpix, subpix, 3)
+            #KL need a more realistic way to guess at Flexion values
+            F1= .15*np.sqrt(data[1, :])*np.cos(2*np.pi*data[2, :])
+            F2= .15*np.sqrt(data[1, :])*np.sin(2*np.pi*data[2, :])
+            G1= .15*np.sqrt(data[2, :])*np.sin(2*np.pi*data[1, :])
+            G2= .15*np.sqrt(data[2, :])*np.cos(2*np.pi*data[1, :])
+            mydict = {'sersic': {'n': 1., 'r': .5/4**data[0, :], 't__r': 8.},
+                      'Fparams': np.stack((F1, F2, G1, G2))}
         else:
             mydict = {}
 
@@ -348,7 +357,137 @@ class GalSimInject:
             source.drawImage(sub_image, offset=draw_offset, add_to_image=True, method='no_pixel')
 
         return sca_image.array[pad//2:-pad//2, pad//2:-pad//2]
+   
+    @staticmethod
+    def galsim_flexobj_grid(res, mywcs, inpsf, idsca, obsdata, sca_nside, inpsf_oversamp, extraargs=[]):
+        '''
+        Function to make a grid of flexed galaxies:
 
+        Inputs:
+          res = HEALPix resolution (nside = 2**res)
+          mywcs = WCS object (astropy.wcs format)
+          OUTDATED --> inpsf, idsca, obsdata = PSF information to pass to get_psf_pos
+          sca_nside = side length of the SCA (4088 for Roman)
+          extraargs = for potential future use
+
+          Output: [when complete]
+          nside x nside SCA with a grid of flexed galaxies with unit flux
+
+        '''
+
+        # default parameters
+        seed = 4096
+        rot = None
+        shear = None
+
+        # unpack extraargs
+        for arg in extraargs:
+            m = re.search(r'^seed=(\d+)$', arg, re.IGNORECASE)
+            if m: seed = int(m.group(1))
+            m = re.search(r'^rot=(\S+)$', arg, re.IGNORECASE)
+            if m: rot = float(m.group(1))
+            m = re.search(r'^shear=([^ \:]+)\:([^ \:]+)$', arg, re.IGNORECASE)
+            if m: shear = [float(m.group(1)), float(m.group(2))]
+
+        print('rng seed =', seed, '  transform: rot=', rot, 'shear=', shear)
+
+        refscale = 0.11  # reference pixel size in arcsec
+        ra_cent, dec_cent = mywcs.all_pix2world((sca_nside-1)/2, (sca_nside-1)/2, 0)
+
+        search_radius = (sca_nside * 0.11)/3600*(np.pi/180.)*np.sqrt(2)
+        vec = healpy.ang2vec(ra_cent, dec_cent, lonlat=True)
+        qp = healpy.query_disc(2**res, vec, search_radius, nest=True)
+        ra_hpix, dec_hpix = healpy.pix2ang(2**res, qp, nest=True, lonlat=True)
+
+        # convert to SCA coordinates
+        x_sca, y_sca = mywcs.all_world2pix(ra_hpix, dec_hpix, 0)
+        d = 128
+        msk_sca = ((x_sca >= -d) & (x_sca <= 4087+d) &
+                   (y_sca >= -d) & (y_sca <= 4087+d))
+        x_sca = x_sca[msk_sca]; y_sca = y_sca[msk_sca]
+        ipix = qp[msk_sca]  # pixel index of the objects within the SCA
+        my_ra = ra_hpix[msk_sca]
+        my_dec = dec_hpix[msk_sca]
+        num_obj = len(x_sca)
+
+        # generate object parameters
+        galstring = 'Flex'
+        galtype = GalSimInject.genobj(12*4**res, ipix, galstring, seed)
+        print(galtype)
+        
+        #Base configuration dictionary.
+        base = {
+            'modules' : ['flex'],
+            'sersic' : galtype['sersic']
+            'Fparams' : { 'kappa' : '0.0', 'gamma1': '0.0', 'gamma2': '0.0'}}
+
+        n_in_stamp = 280
+        pad = n_in_stamp+2*(d+1)
+        sca_image = galsim.ImageF(sca_nside+pad, sca_nside+pad, scale=refscale)
+        for n in range(num_obj):
+            psf = inpsf((my_ra[n],my_dec[n]), None)[0]  # now with PSF variation
+            psf_image = galsim.Image(psf, scale=0.11/inpsf_oversamp)
+            interp_psf = galsim.InterpolatedImage(
+                psf_image, x_interpolant='lanczos50')
+
+            # Jacobian
+            Jac = wcs.utils.local_partial_pixel_derivatives(
+                mywcs, x_sca[n], y_sca[n])
+            Jac[0, :] *= -np.cos(my_dec[n]*np.pi/180.)
+            # convert to reference pixel size
+            Jac /= refscale / 3600.
+            # now we have d(X,Y)|_{zweibein: X=E,Y=N} / d(X,Y)|_{pixel coords}
+
+            xy = galsim.PositionD(x_sca[n], y_sca[n])
+            xyI = xy.round()
+            draw_offset = (xy - xyI) + galsim.PositionD(0.5, 0.5)
+            b = galsim.BoundsI(xmin=xyI.x-n_in_stamp//2+pad//2+1,
+                               ymin=xyI.y-n_in_stamp//2+pad//2+1,
+                               xmax=xyI.x+n_in_stamp//2+pad//2,
+                               ymax=xyI.y+n_in_stamp//2+pad//2)
+
+            sub_image = sca_image[b]
+            st_model_round = galsim.DeltaFunction(flux=1.)
+            # now consider the possible non-point profiles
+            #
+            
+            #Instead of making a sersic and reshaping it like above, I want to make my FlexedGalaxy custom objecct into a profile type and just call it directly here.
+            
+            if 'Fparams' in galtype:
+                base['Fparams']['F1'] = galtype['Fparams'][0,n]
+                base['Fparams']['F2'] = galtype['Fparams'][1,n]
+                base['Fparams']['G1'] = galtype['Fparams'][2,n]
+                base['Fparams']['G2'] = galtype['Fparams'][3,n]
+                
+                #Make a flexed galaxy using the BuldFlexedGalaxy custom object function defined in flex.py
+                st_model, safe = galsim.FlexedGalaxy(base['Fparams'], base, None, None, None)
+                                               
+                                        
+            else:
+                st_model = galsim.Sersic(galtype['sersic']['n'], half_light_radius=galtype['sersic']['r'][n], flux=1.0,
+                                               trunc=galtype['sersic']['t__r']*galtype['sersic']['r'][n])
+            # rotate, if desired
+            if rot is not None:
+                theta = rot * np.pi/180.  # convert to radians
+                jrot = np.asarray(
+                    [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+                st_model = galsim.Transformation(
+                    st_model, jac=jrot, offset=(0., 0.), flux_ratio=1)
+            # applied shear, if desired
+            if shear is not None:
+                jsh = scipy.linalg.expm(np.asarray(
+                    [[shear[0], shear[1]], [shear[1], -shear[0]]]))
+                st_model = galsim.Transformation(
+                    st_model_undist, jac=jsh, offset=(0., 0.), flux_ratio=1)
+
+            # and convert to image coordinates
+            st_model_img = galsim.Transformation(st_model, jac=np.linalg.inv(Jac),
+                                             offset=(0., 0.), flux_ratio=np.abs(np.linalg.det(Jac)))
+
+            source = galsim.Convolve([interp_psf, st_model_img])
+            source.drawImage(sub_image, offset=draw_offset, add_to_image=True, method='no_pixel')
+
+        return sca_image.array[pad//2:-pad//2, pad//2:-pad//2]
 
 class GridInject:
     '''
@@ -807,4 +946,12 @@ def get_all_data(inimage: 'coadd.InImage'):
             inimage.indata[i, :, :] = GalSimInject.galsim_extobj_grid(
                 res, inwcs, inpsf, idsca, obsdata, Stn.sca_nside, inpsf_oversamp, extraargs=extargs)
 
+        #galsim flexioned obj grid
+         m = re.search(r'^gsflex(\d+)', extrainput[i], re.IGNORECASE)
+        if m:
+            res = int(m.group(1))
+            extargs = extrainput[i].split(',')[1:]
+            print('making grid using GalSim: ', res, idsca, 'extended object type:', extargs)
+            inimage.indata[i, :, :] = GalSimInject.galsim_flexobj_grid(
+                res, inwcs, inpsf, idsca, obsdata, Stn.sca_nside, inpsf_oversamp, extraargs=extargs)
         sys.stdout.flush()
