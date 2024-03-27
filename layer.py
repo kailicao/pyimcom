@@ -418,7 +418,7 @@ class GalSimInject:
         #Base configuration dictionary.
         base = {
             'modules' : ['flex'],
-            'sersic' : galtype['sersic']
+            'sersic' : galtype['sersic'],
             'Fparams' : { 'kappa' : '0.0', 'gamma1': '0.0', 'gamma2': '0.0'}}
 
         n_in_stamp = 280
