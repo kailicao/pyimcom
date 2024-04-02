@@ -59,7 +59,8 @@ for iblock in range(nstart,nstart+nblockuse):
     
 for k in range(0, n):
     total_2D[:, :, k] = total_2D[:, :, k] / nblockuse
-    total_1D[k, :] = total_1D[k,:] / nblockuse
+
+total_1D= total_1D/nblockuse
     
 hdu1 = fits.PrimaryHDU(np.transpose(total_2D, (2, 0, 1)))
 hdr = hdu1.header
