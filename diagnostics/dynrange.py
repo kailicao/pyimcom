@@ -4,6 +4,9 @@
 # usage:
 # python dyrange.py <pathstem>
 
+nscale=1
+# nscale=10 # this line is for bug compensation --- will remove it later
+
 import warnings
 import sys
 import numpy
@@ -91,7 +94,7 @@ for iby in range(nblockmax):
         warnings.warn('No valid noise frame: '+infile)
 
       try:
-        neff_ = 10**(HDU_to_bels(f['EFFCOVER'])*f['EFFCOVER'].data[0,bd:-bd,bd:-bd]) # effective coverage
+        neff_ = 10**(HDU_to_bels(f['EFFCOVER'])*f['EFFCOVER'].data[0,bd:-bd,bd:-bd]*nscale) # effective coverage
         for j in range(N_neff):
           countneff[j,1] = countneff[j,1] + numpy.count_nonzero(numpy.logical_and(neff_/d_neff>=j, neff_/d_neff<j+1))
         tneff = tneff + numpy.size(neff_)
@@ -116,6 +119,7 @@ for iby in range(nblockmax):
     npix = len(x)
 
     print('# read grid postion:', (ibx, iby), n, 'number of HEALPix pixels =', npix)
+    sys.stdout.flush()
 
     # extract profile around each object
     x_, y_ = numpy.meshgrid(range(n),range(n))

@@ -89,6 +89,15 @@ class _LAKernel:
 
         '''
 
+        # special handling for n=0 (no input pixels in this postage stamp)
+        if self.n==0:
+            self.outst.T     = np.zeros((self.n_out, self.m, 0), dtype=np.float32)
+            shape = (self.n_out, self.n2f, self.n2f)
+            self.outst.UC    = np.ones(shape)  # leakage metric U=C since the 'true' output PSF is zero
+            self.outst.Sigma = np.zeros(shape) # all zeros, no noise
+            self.outst.kappa = np.ones(shape)  # not relevant but will fill with 1's to avoid log errors
+            return
+
         # outputs
         self.outst.T = np.zeros((self.n_out, self.m, self.n), dtype=np.float32)
         self.UC_     = np.zeros((self.n_out, self.m), dtype=np.float32)

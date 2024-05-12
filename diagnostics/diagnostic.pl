@@ -5,8 +5,8 @@
 ## Generate data ##
 
 chdir q:..:;
-system "python -m diagnostics.dynrange $dir/$tag-$band diagnostics/results/$tag-$band\_ > diagnostics/results/$tag-$band\_dynrange.dat";
-system "python -m diagnostics.starcube_nonoise $band $dir/$tag- diagnostics/results/$tag-";
+system "python -m diagnostics.dynrange $dir/$tag\_$band diagnostics/results/$tag-$band\_ > diagnostics/results/$tag-$band\_dynrange.dat";
+system "python -m diagnostics.starcube_nonoise $band $dir/$tag\_ diagnostics/results/$tag-";
 chdir 'diagnostics';
 
 $N=0;

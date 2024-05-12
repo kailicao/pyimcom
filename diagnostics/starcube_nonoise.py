@@ -119,7 +119,11 @@ for iblock in range(nstart,nblockmax**2):
     newimage[k,:,:] = map[yi[k]+1-bd:yi[k]+bd,xi[k]+1-bd:xi[k]+bd]
 
     # PSF shape
-    moms = galsim.Image(newimage[k,:,:]).FindAdaptiveMom()
+    try:
+      moms = galsim.Image(newimage[k,:,:]).FindAdaptiveMom()
+    except:
+      continue
+
     newpos[k,10] = moms.moments_amp
     newpos[k,11] = moms.moments_centroid.x-bd-dx[k]
     newpos[k,12] = moms.moments_centroid.y-bd-dy[k]
@@ -153,6 +157,8 @@ for iblock in range(nstart,nblockmax**2):
     # coverage
     newpos[k,21] = wt[yi[k]//bd,xi[k]//bd]
 
+    # flush
+    sys.stdout.flush()
     # end galaxy loop
 
   pos = numpy.concatenate((pos, newpos), axis=0)
