@@ -28,16 +28,22 @@ nblockuse = 250
 
 if filter=='Y': 
   filtername='Y106'
-  area= 5915 #cm^2
+  area= 7006 #cm^2
 if filter=='J': 
   filtername='J129'
-  area= 6051
+  area= 7111
 if filter=='H': 
   filtername='H158'
-  area= 5978
+  area= 7340
 if filter=='F': 
   filtername='F184'
-  area= 3929
+  area= 4840
+if filter == 'W':
+  filtername = 'W146'
+  area = 22085
+if filter == 'K':
+  filtername = 'K213'
+  area = 4654
 
 
 # prefix and suffix
