@@ -220,6 +220,16 @@ class Config:
         # virtual memory will be used if this is not empty str
         self.tempfile = cfg_dict.get('TEMPFILE', '')
         if not self.tempfile: self.tempfile = None
+        # cache input layers here
+        self.inlayercache = cfg_dict.get('INLAYERCACHE', '')
+        if not self.inlayercache: self.inlayercache = None
+
+        # if PSF splitting is used
+        self.psfsplit = cfg_dict.get('PSFSPLIT', '')
+        if self.psfsplit:
+           self.psfsplit_r1 = float(self.psfsplit[0])
+           self.psfsplit_r2 = float(self.psfsplit[1])
+           self.psfsplit_epsilon = float(self.psfsplit[2])
 
         # number of target output PSF(s)
         self.n_out = cfg_dict.get('NOUT', 1)
@@ -304,7 +314,7 @@ class Config:
         print('### GENERAL NOTE: INPUT NOTHING TO USE DEFAULT ###' '\n', flush=True)
 
         print('### SECTION I: INPUT FILES ###' '\n', flush=True)
-        # input files: OBSFILE, INDATA, FILTER, INPSF
+        # input files: OBSFILE, INDATA, FILTER, INPSF, PSFSPLIT
 
         print('# input observation list', flush=True)
         self._get_attrs_wrapper(
@@ -323,6 +333,11 @@ class Config:
         self._get_attrs_wrapper(
             "self.inpsf_path, self.inpsf_format, OVERSAMP = input('INPSF (str str int): ').split(' ')" '\n'
             "self.inpsf_oversamp = int(OVERSAMP)")
+
+        print('# PSF splitting', flush=True)
+        self._get_attrs_wrapper(
+            "self.psfsplit_r1, self.psfsplit_r2, self.psfsplit_eps = input('PSFSPLIT (float float float) [default: no split]: ').split(' ')" '\n'
+            "self.psfsplit = [self.psfsplit_r1, self.psfsplit_r2, self.psfsplit_eps] if self.psfsplit_r1 else ''")
 
         print('### SECTION II: MASKS AND LAYERS ###' '\n', flush=True)
         # masks and layers: PMASK, CMASK, EXTRAINPUT, LABNOISETHRESHOLD
@@ -401,7 +416,7 @@ class Config:
             "self.stoptile = int(STOP) if STOP else 0")
 
         print('### SECTION V: WHAT AND WHERE TO OUTPUT ###' '\n', flush=True)
-        # what and where to output: OUTMAPS, OUT, TEMPFILE
+        # what and where to output: OUTMAPS, OUT, TEMPFILE, INLAYERCACHE
 
         print('# choose which outputs to report' '\n'
               '# U = PSF leakage map (U_alpha/C)' '\n'
@@ -423,6 +438,11 @@ class Config:
         self._get_attrs_wrapper(
             "TEMPFILE = input('TEMPFILE (str) [default: '']: ')" '\n'
             "self.tempfile = TEMPFILE", newline=False)
+
+        print('# input layer cache (prefix):', flush=True)
+        self._get_attrs_wrapper(
+            "INLAYERCACHE = input('INLAYERCACHE (str) [default: '']: ')" '\n'
+            "self.inlayercache = INLAYERCACHE", newline=False)
 
         print('### SECTION VI: TARGET OUTPUT PSF(S) ###' '\n', flush=True)
         # target output PSF(s): NOUT, OUTPSF, EXTRASMOOTH
@@ -557,6 +577,7 @@ class Config:
         cfg_dict['INDATA'] = [self.inpath, self.informat]
         cfg_dict['FILTER'] = self.use_filter
         cfg_dict['INPSF'] = [self.inpsf_path, self.inpsf_format, self.inpsf_oversamp]
+        if self.psfsplit: cfg_dict['PSFSPLIT'] = [self.psfsplit_r1, self.psfsplit_r2, self.psfsplit_epsilon]
 
         # masks and layers
         cfg_dict['PMASK'] = self.permanent_mask
@@ -579,6 +600,7 @@ class Config:
         cfg_dict['OUTMAPS'] = self.outmaps
         cfg_dict['OUT'] = self.outstem
         cfg_dict['TEMPFILE'] = self.tempfile if self.tempfile else ''
+        cfg_dict['INLAYERCACHE'] = self.inlayercache if self.inlayercache else ''
 
         # target output PSF(s)
         cfg_dict['NOUT'] = self.n_out

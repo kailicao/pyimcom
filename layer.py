@@ -19,6 +19,7 @@ get_all_data : Makes a 3D array of the image data.
 from os.path import exists
 import re
 import sys
+from filelock import Timeout, FileLock
 
 import numpy as np
 import scipy.linalg
@@ -684,6 +685,27 @@ def get_all_data(inimage: 'coadd.InImage'):
     inpsf_oversamp = inimage.blk.cfg.inpsf_oversamp
     extrainput = inimage.blk.cfg.extrainput  # make multiple maps (list of types, first should be None, rest strings)
 
+    # does the user want us to save the input layer cube?
+    InLayerCache = False
+    if bool(inimage.blk.cfg.inlayercache):
+        InLayerCache = True
+        inlayer_filepath = inimage.blk.cfg.inlayercache + '_{:08d}_{:02d}.fits'.format(idsca[0],idsca[1])
+        inlayer_lockpath = inlayer_filepath + '.lock'
+        lock = FileLock(inlayer_lockpath)
+
+    # try to load the data, if not available keep going
+    if InLayerCache:
+        try:
+            with lock.acquire(timeout=30):
+                if exists(inlayer_filepath):
+                    print('loading input layer <<', inlayer_filepath)
+                    with fits.open(inlayer_filepath) as f:
+                        inimage.indata = f[0].data.astype(np.float32)
+                    sys.stdout.flush()
+                    return
+        except Timeout:
+            pass
+    # not available yet, we have to build it. start by making the input data array
     inimage.indata = np.zeros((n_inframe, Stn.sca_nside, Stn.sca_nside), dtype=np.float32)
 
     # now fill in each slice in *this* observation
@@ -696,7 +718,7 @@ def get_all_data(inimage: 'coadd.InImage'):
                 inimage.indata[0, :, :] = f['SCI'].data - float(f['SCI'].header['SKY_MEAN'])
     #
     # now for the extra inputs
-    if n_inframe == 1: return
+    # if n_inframe == 1: return <-- for saving purposes, don't want to exit here
 
     for i in range(1, n_inframe):
         # truth image (no noise)
@@ -808,3 +830,14 @@ def get_all_data(inimage: 'coadd.InImage'):
                 res, inwcs, inpsf, idsca, obsdata, Stn.sca_nside, inpsf_oversamp, extraargs=extargs)
 
         sys.stdout.flush()
+
+    # this is the end of building the data cube
+    # save it if specified in the configuration file
+    if InLayerCache:
+        try:
+            with lock.acquire(timeout=1):
+                if not exists(inlayer_filepath):
+                    print('saving input layer >>', inlayer_filepath)
+                    fits.PrimaryHDU(inimage.indata).writeto(inlayer_filepath)
+        except Timeout:
+            pass

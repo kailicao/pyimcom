@@ -17,7 +17,9 @@ import gc
 from pathlib import Path
 import datetime
 import pytz
+from filelock import Timeout, FileLock
 
+import sys
 from astropy import units as u
 from astropy.table import Table
 import numpy as np
@@ -214,6 +216,30 @@ class InImage:
             mask = np.logical_and(mask, cr_mask)
         del cr_mask
 
+        # if there's already a mask, *REPLACE* it here
+        # This is important in the iterative PSF approach because we may need to change the input
+        # layers at various stages of the calculation.
+        if bool(self.blk.cfg.inlayercache):
+            inlayer_mask_filepath = self.blk.cfg.inlayercache + '_{:08d}_{:02d}_mask.fits'.format(self.idsca[0],self.idsca[1])
+            inlayer_mask_lockpath = inlayer_mask_filepath + '.lock'
+            lock = FileLock(inlayer_mask_lockpath)
+            if exists(inlayer_mask_filepath):
+                try:
+                    with lock.acquire(timeout=300):
+                        print('loading input mask <<', inlayer_mask_filepath)
+                        with fits.open(inlayer_mask_filepath) as f:
+                            mask = f[0].data>0
+                except Timeout:
+                    raise Exception('timeout while waiting for file:', inlayer_mask_filepath)
+            else:
+                try:
+                    with lock.acquire(timeout=300):
+                        print('saving input mask >>', inlayer_mask_filepath)
+                        fits.PrimaryHDU(np.where(mask,1,0).astype(np.uint8)).writeto(inlayer_mask_filepath)
+                except Timeout:
+                    raise Exception('timeout while waiting for file:', inlayer_mask_filepath)
+        sys.stdout.flush()
+
         # now loop over the regions set by the sparse grid
         for j_sp in range(sp_res):
             for i_sp in range(sp_res):
@@ -368,9 +394,11 @@ class InImage:
         arr = np.outer(va,ua).flatten()
         return arr
 
-    def get_psf_and_distort_mat(self, psf_compute_point, dWdp_out) -> tuple:
+    def get_psf_and_distort_mat(self, psf_compute_point, dWdp_out, use_shortrange=False) -> tuple:
         '''
         Get input PSF array and the corresponding distortion matrix.
+
+        If use_shortrange is True and PSFSPLIT is set, then pulls only the short-range PSF G^(S).
 
         This is an interface for psfutil.PSFGrp._build_inpsfgrp.
 
@@ -404,9 +432,16 @@ class InImage:
         elif self.blk.cfg.inpsf_format == 'anlsim':
             if not hasattr(self, 'inpsf_cube'):
                 fname = self.blk.cfg.inpsf_path + '/psf_polyfit_{:d}.fits'.format(self.idsca[0])
+                sskip = 0
+                readskip = False
+                if use_shortrange and self.blk.cfg.psfsplit:
+                    fname = self.blk.cfg.inlayercache + '.psf/psf_{:d}.fits'.format(self.idsca[0])
+                    readskip = True
                 assert exists(fname), 'Error: input psf does not exist'
-                with fitsio.FITS(fname) as fileh:
-                    self.inpsf_cube = fileh[self.idsca[1]][:, :, :]
+                with fits.open(fname) as f:
+                    if readskip: sskip = int(f[0].header['GSSKIP'])
+                    self.inpsf_cube = f[self.idsca[1]+sskip].data[:, :, :]
+                    print(' <<', fname, sskip)
 
             # order = 1
             lpoly = InImage.LPolyArr(1, (pixloc[0]-2043.5)/2044., (pixloc[1]-2043.5)/2044.)
