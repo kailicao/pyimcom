@@ -440,7 +440,7 @@ class PSFGrp:
         for idx in range(self.n_psf):
             # print('PSF info -->', self.idx_grp2blk[idx], end=' ')
             this_psf, distort_matrice = self.inst.blk.inimages[self.idx_grp2blk[idx]].\
-                get_psf_and_distort_mat(psf_compute_point, dWdp_out)            
+                get_psf_and_distort_mat(psf_compute_point, dWdp_out, use_shortrange=True)
             self._sample_psf(idx, this_psf, distort_matrice, visualize=visualize)
             if visualize:
                 print(f'The above PSF is from InImage {(self.inst.blk.inimages[self.idx_grp2blk[idx]].idsca)}',
