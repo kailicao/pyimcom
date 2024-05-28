@@ -5,6 +5,7 @@ Classes
 -------
 Timer : All-purpose timer.
 Settings : pyimcom background settings.
+fpaCoords : some basic data on the Roman FPA coordinates, needed for some of the tests.
 Config : pyimcom configuration, with JSON file interface.
 
 '''
@@ -105,6 +106,49 @@ class Settings:
     ])
 
 
+class fpaCoords:
+   '''This contains some static data on the FPA coordinate system.
+
+   It also has some associated static methods.
+   '''
+
+   # focal plane coordinates of SCA centers, in mm
+   xfpa = np.array([-22.14, -22.29, -22.44, -66.42, -66.92, -67.42,-110.70,-111.48,-112.64,
+                     22.14,  22.29,  22.44,  66.42,  66.92,  67.42, 110.70, 111.48, 112.64])
+   yfpa = np.array([ 12.15, -37.03, -82.06,  20.90, -28.28, -73.06,  42.20,  -6.98, -51.06,
+                     12.15, -37.03, -82.06,  20.90, -28.28, -73.06,  42.20,  -6.98, -51.06])
+   # radius to circumscribe FPAs
+   Rfpa = 151.07129575137697
+
+
+   # orientation of SCAs
+   # -1 orient means SCA +x pointed along FPA -x, SCA +y pointed along FPA -y
+   # +1 orient means SCA +x pointed along FPA +x, SCA +y pointed along FPA +y (SCA #3,6,9,12,15,18)
+   sca_orient = np.array([-1,-1,1,-1,-1,1,-1,-1,1,-1,-1,1,-1,-1,1,-1,-1,1]).astype(np.int16)
+
+   pixsize = 0.01 # in mm
+   nside = 4088 # number of active pixels on a side
+
+   @classmethod
+   def pix2fpa(cls, sca, x, y):
+      '''Method to convert pixel (x,y) on a given sca to focal plane coordinates.
+
+      Inputs:
+         sca (in form 1..18)
+         x and y (in pixels)
+         sca, x, y may be scalars or arrays
+
+      Outputs:
+         xfpa, yfpa (in mm)
+      '''
+
+      if np.amin(sca)<1 or np.amax(sca)>18:
+         raise ValueError('Invalid SCA in fpadata.pix2fpa, range={:d},{:d}'.format(np.amin(sca),np.amax(sca)))
+
+      return (cls.xfpa[sca-1] + cls.pixsize*(x-(cls.nside-1)/2.)*cls.sca_orient[sca-1],
+              cls.yfpa[sca-1] + cls.pixsize*(y-(cls.nside-1)/2.)*cls.sca_orient[sca-1])
+
+
 class Config:
     '''
     pyimcom configuration, with JSON file interface.
@@ -112,7 +156,7 @@ class Config:
     Methods
     -------
     __init__ : Constructor.
-    _from_file : Build a configuration from a JSON file.
+    _from_dict : Build a configuration from a dictionary.
     _get_attrs_wrapper: Wrapper for getting an attribute or a set of attributes.
     _build_config : Terminal interface to build a configuration from scratch.
     to_file : Save the configuration to a JSON file.
@@ -172,6 +216,7 @@ class Config:
 
         '''
 
+        ### SECTION I: INPUT FILES ###
         # input files
         self.obsfile = cfg_dict['OBSFILE']
         self.inpath, self.informat = cfg_dict['INDATA']
@@ -180,6 +225,14 @@ class Config:
         # input PSF information
         self.inpsf_path, self.inpsf_format, self.inpsf_oversamp = cfg_dict['INPSF']
 
+        # if PSF splitting is used
+        self.psfsplit = cfg_dict.get('PSFSPLIT', '')
+        if self.psfsplit:
+           self.psfsplit_r1 = float(self.psfsplit[0])
+           self.psfsplit_r2 = float(self.psfsplit[1])
+           self.psfsplit_epsilon = float(self.psfsplit[2])
+
+        ### SECTION II: MASKS AND LAYERS ###
         # permanent mask file
         self.permanent_mask = cfg_dict.get('PMASK', None)
         # CR hit probability for stochastic mask
@@ -190,6 +243,7 @@ class Config:
         # threshold for masking lab noise data
         self.labnoisethreshold = cfg_dict.get('LABNOISETHRESHOLD', 3.0)
 
+        ### SECTION III: WHAT AREA TO COADD ###
         # tile center in degrees RA, DEC
         self.ra, self.dec = cfg_dict['CTR']
         # if we are doing a nblock x nblock array on the same projection
@@ -203,6 +257,7 @@ class Config:
         self.dtheta *= u.arcsec.to('degree')
         self.Nside = self.n1 * self.n2
 
+        ### SECTION IV: MORE ABOUT POSTAGE STAMPS ###
         # fading kernel width
         self.fade_kernel = cfg_dict.get('FADE', 3)
         # pad this many IMCOM postage stamps around the edge
@@ -212,6 +267,7 @@ class Config:
         # stop bulding the tile after a certain number of postage stamps
         self.stoptile = cfg_dict.get('STOP', 0)
 
+        ### SECTION V: WHAT AND WHERE TO OUTPUT ###
         # choose which outputs to report
         self.outmaps = cfg_dict.get('OUTMAPS', 'USKTN')
         # output stem
@@ -224,13 +280,7 @@ class Config:
         self.inlayercache = cfg_dict.get('INLAYERCACHE', '')
         if not self.inlayercache: self.inlayercache = None
 
-        # if PSF splitting is used
-        self.psfsplit = cfg_dict.get('PSFSPLIT', '')
-        if self.psfsplit:
-           self.psfsplit_r1 = float(self.psfsplit[0])
-           self.psfsplit_r2 = float(self.psfsplit[1])
-           self.psfsplit_epsilon = float(self.psfsplit[2])
-
+        ### SECTION VI: TARGET OUTPUT PSF(S) ###
         # number of target output PSF(s)
         self.n_out = cfg_dict.get('NOUT', 1)
         # target output PSF type
@@ -245,6 +295,7 @@ class Config:
                 self.outpsf_extra.append(cfg_dict.get(f'OUTPSF{j_out+1}', 'AIRYOBSC'))
                 self.sigmatarget_extra.append(cfg_dict.get(f'EXTRASMOOTH{j_out+1}', 1.5 / 2.355))
 
+        ### SECTION VII: BUILDING LINEAR SYSTEMS ###
         # width of PSF sampling/overlap arrays in native pixels
         self.npixpsf = cfg_dict.get('NPIXPSF', 48)
         # experimental feature to change the weighting of Fourier modes
@@ -255,6 +306,7 @@ class Config:
         # input stamp size padding (aka acceptance radius)
         self.instamp_pad = cfg_dict.get('INPAD', 1.055) * Settings.arcsec
 
+        ### SECTION VIII: SOLVING LINEAR SYSTEMS ###
         # kernel to solve linear systems
         self.linear_algebra = cfg_dict.get('LAKERNEL', 'Cholesky')
 
@@ -287,16 +339,15 @@ class Config:
 
         '''
 
-        status = True
-        while status:
+        while True:
             try:
                 exec(code)
             except Exception as error:
                 print(error)
                 print('# Invalid input, please try again.', flush=True)
             else:
-                status = False
-                if newline: print()
+                break
+        if newline: print()
 
     def _build_config(self) -> None:
         '''
@@ -572,37 +623,37 @@ class Config:
 
         cfg_dict = {}
 
-        # input files
+        ### SECTION I: INPUT FILES ###
         cfg_dict['OBSFILE'] = self.obsfile
         cfg_dict['INDATA'] = [self.inpath, self.informat]
         cfg_dict['FILTER'] = self.use_filter
         cfg_dict['INPSF'] = [self.inpsf_path, self.inpsf_format, self.inpsf_oversamp]
         if self.psfsplit: cfg_dict['PSFSPLIT'] = [self.psfsplit_r1, self.psfsplit_r2, self.psfsplit_epsilon]
 
-        # masks and layers
+        ### SECTION II: MASKS AND LAYERS ###
         cfg_dict['PMASK'] = self.permanent_mask
         cfg_dict['CMASK'] = self.cr_mask_rate
         cfg_dict['EXTRAINPUT'] = self.extrainput[1:]
         cfg_dict['LABNOISETHRESHOLD'] = self.labnoisethreshold
 
-        # what area to coadd
+        ### SECTION III: WHAT AREA TO COADD ###
         cfg_dict['CTR'] = [self.ra, self.dec]
         cfg_dict['BLOCK'] = self.nblock
         cfg_dict['OUTSIZE'] = [self.n1, self.n2, self.dtheta * u.degree.to('arcsec')]
 
-        # more about postage stamps
+        ### SECTION IV: MORE ABOUT POSTAGE STAMPS ###
         cfg_dict['FADE'] = self.fade_kernel
         cfg_dict['PAD'] = self.postage_pad
         cfg_dict['PADSIDES'] = self.pad_sides
         cfg_dict['STOP'] = self.stoptile
 
-        # what and where to output
+        ### SECTION V: WHAT AND WHERE TO OUTPUT ###
         cfg_dict['OUTMAPS'] = self.outmaps
         cfg_dict['OUT'] = self.outstem
         cfg_dict['TEMPFILE'] = self.tempfile if self.tempfile else ''
         cfg_dict['INLAYERCACHE'] = self.inlayercache if self.inlayercache else ''
 
-        # target output PSF(s)
+        ### SECTION VI: TARGET OUTPUT PSF(S) ###
         cfg_dict['NOUT'] = self.n_out
         cfg_dict['OUTPSF'] = self.outpsf
         cfg_dict['EXTRASMOOTH'] = self.sigmatarget
@@ -611,13 +662,13 @@ class Config:
                 cfg_dict[f'OUTPSF{j_out+1}'] = self.outpsf_extra[j_out-1]
                 cfg_dict[f'EXTRASMOOTH{j_out+1}'] = self.sigmatarget_extra[j_out-1]
 
-        # building linear systems
+        ### SECTION VII: BUILDING LINEAR SYSTEMS ###
         cfg_dict['NPIXPSF'] = self.npixpsf
         cfg_dict['AMPPEN'] = self.amp_penalty
         cfg_dict['FLATPEN'] = self.flat_penalty
         cfg_dict['INPAD'] = self.instamp_pad / Settings.arcsec
 
-        # solving linear systems
+        ### SECTION VIII: SOLVING LINEAR SYSTEMS ###
         cfg_dict['LAKERNEL'] = self.linear_algebra
         cfg_dict['KAPPAC'] = list(self.kappaC_arr)
         cfg_dict['UCMIN'] = self.uctarget

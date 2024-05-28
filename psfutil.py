@@ -385,9 +385,6 @@ class PSFGrp:
             del out_arr
 
         else:  # sample a group of output PSFs at the same time
-            # out_arr = np.zeros((self.n_psf, PSFGrp.nsamp**2))
-            # iD5512C(psf, xyco[1].ravel()+xctr, xyco[0].ravel()+yctr, out_arr)
-            # self.psf_arr = out_arr.reshape((self.n_psf, PSFGrp.nsamp, PSFGrp.nsamp))
             self.psf_arr = np.zeros((self.n_psf, PSFGrp.nsamp, PSFGrp.nsamp))
             out_arr = np.zeros((1, PSFGrp.nsamp**2))
             for idx in range(self.n_psf):
@@ -441,6 +438,7 @@ class PSFGrp:
             # print('PSF info -->', self.idx_grp2blk[idx], end=' ')
             this_psf, distort_matrice = self.inst.blk.inimages[self.idx_grp2blk[idx]].\
                 get_psf_and_distort_mat(psf_compute_point, dWdp_out, use_shortrange=True)
+            # Note: use_shortrange=True does not take effect when PSFSPLIT is not set.
             self._sample_psf(idx, this_psf, distort_matrice, visualize=visualize)
             if visualize:
                 print(f'The above PSF is from InImage {(self.inst.blk.inimages[self.idx_grp2blk[idx]].idsca)}',
@@ -595,7 +593,7 @@ class PSFOvl:
     -------
     setup (classmethod) : Set up class attribute.
     __init__ : Constructor.
-    _idx_square2triangle : Convert a 2-d square index to a 1-d triangle index.
+    _idx_square2triangle : Convert a 2D square index to a 1D triangle index.
     accel_irfft2_and_extract (staticmethod) : irfft2 and extraction.
     _build_psfovl : Build the PSF overlap array.
     visualize_psfovl : Visualize the PSF overlap array.
@@ -677,7 +675,7 @@ class PSFOvl:
 
     def _idx_square2triangle(self, idx1: int, idx2: int) -> int:
         '''
-        Convert a 2-d square index to a 1-d triangle index.
+        Convert a 2D square index to a 1D triangle index.
 
         The motivation is that, in the input self-overlap case,
         the overlap between psf_arr[idx2] and psf_arr[idx1] is simply
@@ -698,12 +696,12 @@ class PSFOvl:
         Parameters
         ----------
         idx1, idx2 : int, int
-            2-d square index.
+            2D square index.
 
         Returns
         -------
         int
-            1-d triangle index.
+            1D triangle index.
 
         '''
 
@@ -1169,6 +1167,7 @@ class SysMatA:
     iisubmat_dist (staticmethod) : Calculate the index for iisubmats_ref.
     _compute_iisubmats : Make input-input PSFOvl and compute A submatrices.
     get_iisubmat : Return a requested A submatrix.
+    clear : Free up memory space.
 
     '''
 
@@ -1248,7 +1247,7 @@ class SysMatA:
         Calculate the index for iisubmats_ref.
 
         Specifically, calculate the "distance" between two input postage stamps
-        in order to store the reference counts in the 3-d array iisubmats_ref
+        in order to store the reference counts in the 3D array iisubmats_ref
         using indices (ji_st1[0], ji_st1[1], dist), which this static method returns.
 
         The "distance" is defined as follows:
@@ -1430,7 +1429,6 @@ class SysMatA:
                 fname = 'iisubmat_' + '_'.join(f'{ji:02d}' for ji in ji_st1 + ji_st2) + '.npy'
                 fpath = self.blk.cache_dir / fname
                 if fpath.exists():
-                    # print(f'VIRMEM: loading {fname}')
                     self.iisubmats[(ji_st1, ji_st2)] = np.load(str(fpath))
                     fpath.unlink(); del fname, fpath
                 else: self._compute_iisubmats(ji_st1, ji_st2, sim_mode)
@@ -1445,11 +1443,23 @@ class SysMatA:
             and (ji_st_out[1] == min(ji_st1[1], ji_st2[1]) + 1):
             # save virtual memory when needed
             fname = 'iisubmat_' + '_'.join(f'{ji:02d}' for ji in ji_st1 + ji_st2) + '.npy'
-            fpath = self.blk.cache_dir / fname  #; print(f'VIRMEM: saving {fname}')
+            fpath = self.blk.cache_dir / fname
             with open(str(fpath), 'wb') as f: np.save(f, arr)
             del self.iisubmats[(ji_st1, ji_st2)], fname, fpath
 
         return arr
+
+    def clear(self) -> None:
+        '''
+        Free up memory space.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        del self.iisubmats_ref
 
 
 class SysMatB:
@@ -1463,6 +1473,7 @@ class SysMatB:
     -------
     __init__ : Constructor.
     get_iosubmat : Return a requested B submatrix.
+    clear : Free up memory space.
 
     '''
 
@@ -1546,3 +1557,15 @@ class SysMatB:
         if self.iopsfovls_ref[inpsf_key] == 0:
             self.iopsfovls[inpsf_key].clear(); del self.iopsfovls[inpsf_key]
         return iosubmat
+
+    def clear(self) -> None:
+        '''
+        Free up memory space.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        del self.iopsfovls_ref

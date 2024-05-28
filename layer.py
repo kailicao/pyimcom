@@ -5,7 +5,7 @@ Classes
 -------
 GalSimInject : Utilities to inject objects using GalSim.
 GridInject : Utilities to inject stars using furry-parakeet C routine.
-Noise : Utilities to generate 1/f noise.
+CplxNoise : Utilities to generate 1/f noise.
 Mask : Utilities for permanent and cosmic ray masks.
 
 Functions
@@ -31,19 +31,18 @@ from astropy import wcs
 import galsim
 import healpy
 
-from .config import Settings as Stn
+from .config import Settings as Stn, fpaCoords
 try:
     from pyimcom_croutines import iD5512C
 except:
     from .routine import iD5512C
 
-from .fpadata import fpaCoords
 
 class GalSimInject:
     '''
     Utilities to inject objects using GalSim.
 
-    fluffy-garbanzo/inject_galsim_obj.py
+    Based on fluffy-garbanzo/inject_galsim_obj.py.
     # This file will contain routines to make an input image of injected objects using GalSim.
 
     '''
@@ -118,7 +117,7 @@ class GalSimInject:
             if angleTransient:
                 if (qp[n]+s)%2==1: continue
 
-            psf = inpsf((my_ra[n],my_dec[n]), None)[0]  # now with PSF variation
+            psf = inpsf((my_ra[n], my_dec[n]), dWdp_out=None)  # now with PSF variation
             psf_image = galsim.Image(psf, scale=0.11/inpsf_oversamp)
             interp_psf = galsim.InterpolatedImage(psf_image, x_interpolant='lanczos50')
 
@@ -140,19 +139,6 @@ class GalSimInject:
             source.drawImage(sub_image, offset=draw_offset, add_to_image=True, method='no_pixel')
 
         return sca_image.array[pad//2:-pad//2, pad//2:-pad//2]
-
-    # @staticmethod (never used)
-    # def auxgen(rng, n):
-    #     '''
-    #     auxiliary function to skip n numbers in rng
-
-    #     '''
-
-    #     block = 262144
-    #     for i in range(n//block):
-    #         dump = rng.uniform(size=block)
-    #     if n % block > 0:
-    #         dump = rng.uniform(size=n % block)
 
     @staticmethod
     def subgen(rngX, lenpix, subpix):
@@ -290,7 +276,7 @@ class GalSimInject:
         pad = n_in_stamp+2*(d+1)
         sca_image = galsim.ImageF(sca_nside+pad, sca_nside+pad, scale=refscale)
         for n in range(num_obj):
-            psf = inpsf((my_ra[n],my_dec[n]), None)[0]  # now with PSF variation
+            psf = inpsf((my_ra[n], my_dec[n]), dWdp_out=None)  # now with PSF variation
             psf_image = galsim.Image(psf, scale=0.11/inpsf_oversamp)
             interp_psf = galsim.InterpolatedImage(
                 psf_image, x_interpolant='lanczos50')
@@ -355,7 +341,7 @@ class GridInject:
     '''
     Utilities to inject stars using furry-parakeet C routine.
 
-    fluffy-garbanzo/grid_inject.py
+    Based on fluffy-garbanzo/grid_inject.py.
 
     '''
 
@@ -459,7 +445,7 @@ class GridInject:
         d = 64  # region to draw
 
         for istar in range(len(ipix)):
-            thispsf = inpsf((rapix[istar], decpix[istar]), None)[0]  # now with PSF variation
+            thispsf = inpsf((rapix[istar], decpix[istar]), dWdp_out=None)  # now with PSF variation
             this_xmax = min(nside_sca, int(xsca[istar])+d)
             this_xmin = max(0, int(xsca[istar])-d)
             this_ymax = min(nside_sca, int(ysca[istar])+d)
@@ -487,11 +473,11 @@ class GridInject:
         return thisimage
 
 
-class Noise:
+class CplxNoise:
     '''
     Utilities to generate 1/f noise.
 
-    fluffy-garbanzo/inject_complex_noise.py
+    Based on fluffy-garbanzo/inject_complex_noise.py.
 
     '''
 
@@ -613,7 +599,7 @@ def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
     returns None if unrecognized format
 
     '''
-    
+
     # for the ANL sims
     if format_ == 'anlsim':
         out = path+'/simple/Roman_WAS_simple_model_{:s}_{:d}_{:d}.fits'.format(
@@ -647,21 +633,21 @@ def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
 
     return out
 
+
 def check_if_idsca_exists(cfg, obsdata, idsca):
     '''
     Determines whether an observation (id,sca) pair exists.
-    
+
     Inputs:
       cfg = configuration information; must have inpath, informat
       obsdata = observation table
-    
+
     Returns:
       exists_ = True or False
       fname = file name
     '''
-    
+
     fname = _get_sca_imagefile(cfg.inpath, idsca, obsdata, cfg.informat)
-    
     exists_ = exists(fname)
     return exists_, fname
 
@@ -743,7 +729,7 @@ def get_all_data(inimage: 'coadd.InImage'):
             q = int(m.group(1))
             seed = 1000000*(18*q+idsca[1]) + idsca[0]
             print('noise rng: frame_q={:d}, seed={:d}'.format(q, seed), '--> 1/f')
-            inimage.indata[i, :, :] = Noise.noise_1f_frame(seed)
+            inimage.indata[i, :, :] = CplxNoise.noise_1f_frame(seed)
 
         # lab noise frames (if applicable)
         if extrainput[i].casefold() == 'labnoise'.casefold():

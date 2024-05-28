@@ -394,7 +394,7 @@ def lsolve_sps(N: int, A: np.array, x: np.array, b: np.array) -> None:
         for k in range(i):
             sum_ += A[i, k]*A[i, k]
         A[i, i] = np.sqrt(A[i, i]-sum_)
-    # ... now the lower part of A is the Cholesky decomposition L: A = LL^T */
+    # ... now the lower part of A is the Cholesky decomposition L: A = LL^T
 
     # now get p1 = LT-1 b
     p1 = np.empty((N,))

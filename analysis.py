@@ -13,10 +13,10 @@ from astropy.io import fits
 
 import matplotlib as mpl
 from matplotlib import rcParams
-rcParams.update({'font.family' : 'serif', 'mathtext.fontset' : 'dejavuserif',
-                 'font.size' : 12, 'text.latex.preamble' : r"\usepackage{amsmath}",
-                 'xtick.major.pad' : 2, 'ytick.major.pad' : 2, 'xtick.major.size' : 6, 'ytick.major.size' : 6,
-                 'xtick.minor.size' : 3, 'ytick.minor.size' : 3, 'axes.linewidth' : 2, 'axes.labelpad' : 1})
+rcParams.update({'font.family': 'serif', 'mathtext.fontset': 'dejavuserif',
+                 'font.size': 12, 'text.latex.preamble': r"\usepackage{amsmath}",
+                 'xtick.major.pad': 2, 'ytick.major.pad': 2, 'xtick.major.size': 6, 'ytick.major.size': 6,
+                 'xtick.minor.size': 3, 'ytick.minor.size': 3, 'axes.linewidth': 2, 'axes.labelpad': 1})
 
 from .config import Config
 
@@ -72,7 +72,7 @@ class OutImage:
 
         '''
 
-        assert layer in self.cfg.extrainput, f"Error: layer '{layer}' not found"
+        assert layer in ['SCI']+self.cfg.extrainput[1:], f"Error: layer '{layer}' not found"
         idx = self.cfg.extrainput.index(layer if layer != 'SCI' else None)
 
         data = np.zeros((self.cfg.NsideP, self.cfg.NsideP), dtype=np.float32)
@@ -109,7 +109,7 @@ class OutImage:
         return data
 
     @staticmethod
-    def format_axis(ax: mpl.axes._axes.Axes, grid_on: bool = True) -> None:
+    def format_axis(ax: 'mpl.axes._axes.Axes', grid_on: bool = True) -> None:
         '''
         Format a panel (an axis) of a figure.
 

@@ -13,13 +13,13 @@ Block : Driver for block coaddition.
 from os.path import exists
 from itertools import combinations, product
 import gc
+import sys
 
 from pathlib import Path
 import datetime
 import pytz
 from filelock import Timeout, FileLock
 
-import sys
 from astropy import units as u
 from astropy.table import Table
 import numpy as np
@@ -46,10 +46,10 @@ class InImage:
     generate_idx_grid (staticmethod) : Generate a grid of indices.
     _inpix2world2outpix : Composition of pix2world and world2pix.
     partition_pixels : Partition input pixels into postage stamps.
-    extract_layers : Make and extract input layers.
+    extract_layers : Extract input layers.
     clear : Free up memory space.
 
-    smooth_and_pad (staticmethod): Utility to smear a PSF with a tophat and a Gaussian.
+    smooth_and_pad (staticmethod) : Utility to smear a PSF with a tophat and a Gaussian.
     LPolyArr (staticmethod) : Utility to generate an array of Legendre polynomials.
     get_psf_and_distort_mat : Get input PSF array and the corresponding distortion matrix.
 
@@ -283,7 +283,7 @@ class InImage:
 
     def extract_layers(self, verbose: bool = False) -> None:
         '''
-        Make and extract input layers.
+        Extract input layers.
 
         Returns
         -------
@@ -400,7 +400,7 @@ class InImage:
 
         If use_shortrange is True and PSFSPLIT is set, then pulls only the short-range PSF G^(S).
 
-        This is an interface for psfutil.PSFGrp._build_inpsfgrp.
+        This is an interface for layer.get_all_data and psfutil.PSFGrp._build_inpsfgrp.
 
         Parameters
         ----------
@@ -454,7 +454,7 @@ class InImage:
             raise RuntimeError('Error: input psf does not exist')
 
         # when distort_matrice is not required
-        if dWdp_out is None: return this_psf, None
+        if dWdp_out is None: return this_psf
 
         # get the distortion matrices d[(X,Y)perfect]/d[(X,Y)native]
         # Note that rotations and magnifications are included in the distortion matrix, as well as shear
@@ -585,7 +585,7 @@ class InStamp:
 
         '''
 
-        if sim_mode:  # count references, no actual inpsfgrp invovled
+        if sim_mode:  # count references, no actual inpsfgrp involved
             self.inpsfgrp_ref += 1
             return
 
@@ -666,7 +666,7 @@ class OutStamp:
         # the final _s indicates plural
         self.ji_st_in_s = [(j_st+dj, i_st+di) for dj in range(-1, 2) for di in range(-1, 2)]
 
-        # count references to PSF overlaps and system matrices
+        # count references to PSF overlaps and system submatrices
         for ji_st_in in self.ji_st_in_s:
             blk.sysmata.get_iisubmat(ji_st_in, ji_st_in, sim_mode=True)
             blk.sysmatb.get_iosubmat(ji_st_in, (j_st, i_st), sim_mode=True)
@@ -793,8 +793,6 @@ class OutStamp:
     def _build_system_matrices(self, visualize: bool = False, save_abc: bool = False) -> None:
         '''
         Build system matrices and coaddition matrices.
-
-        This method probably needs to be split.
 
         Parameters
         ----------
@@ -972,7 +970,7 @@ class OutStamp:
             f'insufficient patch size, {n= } {fade_kernel= }'
         if not fk2 > 0: return
 
-        s = np.arange(1, fk2+1, dtype=float) / (fk2+1)
+        s = np.arange(1, fk2+1, dtype=np.float64) / (fk2+1)
         if use_trunc_sinc:
             s -= np.sin(2*np.pi*s)/(2*np.pi)
 
@@ -1112,7 +1110,7 @@ class OutStamp:
             ax1.axhline(              0, c='b', ls='--')
             ax1.axvline(self.blk.cfg.n2, c='r', ls='--')
 
-            signal = np.empty_like(accrad, dtype=float)
+            signal = np.empty_like(accrad, dtype=np.float64)
             for i in range(accrad.shape[0]):
                 T_arr = np.where(dist <= accrad[i], T_elems, 0.0)
                 signal[i] = T_arr @ self.indata[0]
@@ -1144,6 +1142,10 @@ class OutStamp:
 
         del self.inpix_count, self.inpix_cumsum
         self.selections.clear(); del self.selections
+
+        if hasattr(self, 'sysmata'): del self.sysmata, self.mhalfb, self.outovlc
+        if hasattr(self, 'T'):       del self.T
+
         del self.kappa, self.Sigma, self.UC
         del self.Tsum_stamp, self.Tsum_inpix, self.Neff
         del self.yx_val, self.outimage
@@ -1167,7 +1169,7 @@ class Block:
 
     _output_stamp_wrapper : Wrapper for output stamp coaddition.
     coadd_output_stamps : Coadd output stamps using input stamps.
-    compress_map: Compress float32 map to (u)int16 to save storage.
+    compress_map : Compress float32 map to (u)int16 to save storage.
     build_output_file : Build the output FITS file.
     clear_all : Free up all memory spaces.
 
@@ -1216,12 +1218,12 @@ class Block:
         self.parse_config()
         # this produces: obsdata, outwcs, outpsfgrp, outpsfovl
         self.process_input_images()
-        # this produces: obslist, inimages (1-d list), n_inimage
+        # this produces: obslist, inimages (1D list), n_inimage
         self.build_input_stamps()
-        # this produces: instamps (2-d list)
+        # this produces: instamps (2D list)
 
         self.coadd_output_stamps(sim_mode=True)
-        # this produces: sysmata (object), sysmatb (object), outstamps (2-d list)
+        # this produces: sysmata (object), sysmatb (object), outstamps (2D list)
         self.coadd_output_stamps(sim_mode=False)
         # this produces: out_map, T_weightmap, and additional output maps
 
@@ -1540,7 +1542,7 @@ class Block:
 
         assert 1 <= i_st <= self.cfg.n1P and 1 <= j_st <= self.cfg.n1P, 'outstamp out of boundary'
 
-        if sim_mode:  # count references to PSF overlaps and system matrices
+        if sim_mode:  # count references to PSF overlaps and system submatrices
             self.outstamps[j_st][i_st] = OutStamp(self, j_st, i_st)
         else:
             print('postage stamp {:2d},{:2d}  {:6.3f}% t= {:9.2f} s'.format(
@@ -1584,7 +1586,7 @@ class Block:
 
         '''
 
-        if sim_mode:  # count references to PSF overlaps and system matrices
+        if sim_mode:  # count references to PSF overlaps and system submatrices
             self.sysmata = SysMatA(self)
             self.sysmatb = SysMatB(self)
             self.outstamps = [[None for i_st in range(self.cfg.n1P+2)]
@@ -1676,7 +1678,7 @@ class Block:
             a_min, a_max = -32768, 32767
 
         my_map = np.clip(np.floor(coef*np.log10(np.clip(
-            map_, 1e-32, None))), a_min, a_max).astype(dtype)
+            map_, 1e-32, None)) + 0.5), a_min, a_max).astype(dtype)
         my_hdu = fits.ImageHDU(my_map, header=header); del my_map
         my_hdu.header['EXTNAME'] = EXTNAME
         my_hdu.header['UNIT'] = UNIT
@@ -1687,8 +1689,7 @@ class Block:
         '''
         Build the output FITS file.
 
-        Currently the kappa maps are in a separate file.
-        Those will be merged into the main FITS file.
+        The kappa maps have been unified and merged into the main FITS file.
 
         Parameters
         ----------
@@ -1760,7 +1761,7 @@ class Block:
         if 'N' in outmaps:
             hdulist.append(Block.compress_map(
                 self.Neff_map[:, fk:NsidePf-fk, fk:NsidePf-fk], 50000, np.uint16,
-                my_header, 'EFFCOVER', ('2uB', '50000*log10(Neff)')))
+                my_header, 'EFFCOVER', ('20uB', '50000*log10(Neff)')))
 
         hdu_list = fits.HDUList(hdulist)
         hdu_list.writeto(self.outstem+'_map.fits', overwrite=True)
@@ -1778,7 +1779,9 @@ class Block:
         if self.cfg.tempfile is not None: self.cache_dir.rmdir()
 
         del self.obsdata, self.obslist, self.outwcs
-        del self.outpsfgrp, self.outpsfovl, self.sysmata, self.sysmatb
+        del self.outpsfgrp, self.outpsfovl
+        self.sysmata.clear(); del self.sysmata
+        self.sysmatb.clear(); del self.sysmatb
         del self.out_map, self.T_weightmap
 
         outmaps = self.cfg.outmaps  # shortcut

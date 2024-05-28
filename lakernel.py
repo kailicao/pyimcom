@@ -89,13 +89,15 @@ class _LAKernel:
 
         '''
 
+        # shape of self.outst.UC, self.outst.Sigma, and self.outst.kappa
+        shape = (self.n_out, self.n2f, self.n2f)
+
         # special handling for n=0 (no input pixels in this postage stamp)
-        if self.n==0:
+        if self.n == 0:
             self.outst.T     = np.zeros((self.n_out, self.m, 0), dtype=np.float32)
-            shape = (self.n_out, self.n2f, self.n2f)
-            self.outst.UC    = np.ones(shape)  # leakage metric U=C since the 'true' output PSF is zero
-            self.outst.Sigma = np.zeros(shape) # all zeros, no noise
-            self.outst.kappa = np.ones(shape)  # not relevant but will fill with 1's to avoid log errors
+            self.outst.UC    = np.ones (shape, dtype=np.float32)  # leakage metric U=C since the 'true' output PSF is zero
+            self.outst.Sigma = np.zeros(shape, dtype=np.float32)  # all zeros, no noise
+            self.outst.kappa = np.ones (shape, dtype=np.float32)  # not relevant but will fill with 1's to avoid log errors
             return
 
         # outputs
@@ -110,7 +112,6 @@ class _LAKernel:
             self._call_multi_kappa()
 
         # post processing
-        shape = (self.n_out, self.n2f, self.n2f)
         self.outst.UC    = self.UC_.   reshape(shape); del self.UC_
         self.outst.Sigma = self.Sigma_.reshape(shape); del self.Sigma_
         self.outst.kappa = self.kappa_.reshape(shape); del self.kappa_
@@ -230,12 +231,12 @@ class ChoKernel(_LAKernel):
             # if matrix is not quite positive definite, we can rectify it
             w, v = np.linalg.eigh(A)
             # AA[di] += kappa_arr[j] + np.abs(w[0])
-            AA[di] += np.abs(w[0]) + 1e-32  # KC: this seems right
+            AA[di] += np.abs(w[0]) + 1e-16  # KC: this seems right
             del v
             warn('Warning: pyimcom_lakernel Cholesky decomposition failed; '
                  'fixed negative eigenvalue {:19.12e}'.format(w[0]))
             L = cholesky(AA, lower=True, check_finite=False)
-            AA[di] -= np.abs(w[0]) + 1e-32  # KC: let's recover AA
+            AA[di] -= np.abs(w[0]) + 1e-16  # KC: let's recover AA
 
         return L
 
@@ -732,7 +733,6 @@ class EmpirKernel(_LAKernel):
             # make outputs
             self.kappa_ [j_out, :] = my_kappa
             self.Sigma_ [j_out, :] = N
-            # self.UC_    [j_out, :] = 1.0 - (my_kappa*N + D)/C[j_out]
             self.UC_    [j_out, :] = 1.0 + (E - 2*D)/C[j_out]
             self.outst.T[j_out, :, :] = Ti
             del D, N, Ti
