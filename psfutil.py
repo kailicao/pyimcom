@@ -26,6 +26,7 @@ try:
     from pyimcom_croutines import iD5512C, iD5512C_sym, gridD5512C
 except:
     from .routine import iD5512C, iD5512C_sym, gridD5512C
+from .analysis import OutImage
 
 
 class OutPSF:
@@ -225,7 +226,7 @@ class PSFGrp:
     nfft = 768
 
     @classmethod
-    def setup(cls, npixpsf: int = 48, oversamp: int = 8) -> None:
+    def setup(cls, npixpsf: int = 48, oversamp: int = 8, dtheta: float = 0.025/3600) -> None:
         '''
         Set up class attributes.
 
@@ -235,6 +236,8 @@ class PSFGrp:
             Size of PSF postage stamp in native pixels. The default is 48.
         oversamp : int, optional
             PSF oversampling factor relative to native pixel scale. The default is 8.
+        dtheta : float, optional
+            Output pixel scale in degrees. The default is 0.025/3600.
 
         Returns
         -------
@@ -249,13 +252,16 @@ class PSFGrp:
 
         # unrotated grid of sampling positions
         # never modified (but frequently referred to) after initialization
-        cls.xyo = np.mgrid[(1-cls.nsamp)/2:(cls.nsamp-1)/2:cls.nsamp*1j,
+        cls.yxo = np.mgrid[(1-cls.nsamp)/2:(cls.nsamp-1)/2:cls.nsamp*1j,
                            (1-cls.nsamp)/2:(cls.nsamp-1)/2:cls.nsamp*1j]
         # dsample (sampling rate of overlap matrices) has been fixed to 1.0.
 
         # nfft0div8 = 2**(int(np.ceil(np.log2(cls.nsamp-0.5)))-2)
         # cls.nfft = nfft0div8 * int(np.ceil(2*cls.nsamp/nfft0div8))  # 1280 by default
         cls.nfft = npixpsf * oversamp * 2  # 768 by default
+
+        # scale conversion for interpolations in PSF arrays
+        cls.dscale = (Stn.pixscale_native/Stn.arcsec) / oversamp / (dtheta*3600)
 
     def __init__(self, in_or_out: bool = True,
                  inst: 'coadd.InStamp' = None, blk: 'coadd.Block' = None,
@@ -269,6 +275,8 @@ class PSFGrp:
             True if input PSF group, False if output PSF group. The default is True.
         inst : coadd.InStamp, must be provided when in_or_out is True
         blk : coadd.Block, must be provided when in_or_out is False
+        verbose : bool, optional
+            Whether to print additional information. The default is False.
         visualize : bool, optional
             Whether to visualize PSFs and sampling positions. The default is False.
 
@@ -300,7 +308,7 @@ class PSFGrp:
             # n_psf, psf_arr
 
         if False:  # KC's experimental feature
-            ro = np.hypot(PSFGrp.xyo[0], PSFGrp.xyo[1])
+            ro = np.hypot(PSFGrp.yxo[0], PSFGrp.yxo[1])
             self.psf_arr *= (ro < PSFGrp.nc+0.5)  # circular cutout
             psf_arr_ = np.moveaxis(self.psf_arr, 0, -1)  # create a view
             psf_arr_ /= self.psf_arr.sum(axis=(-2, -1))  # normalization
@@ -309,7 +317,7 @@ class PSFGrp:
         del self.psf_arr  # remove the PSFs since they are only used for FFT purposes
 
     @staticmethod
-    def visualize_psf(psf_: np.array, xyco: np.array,
+    def visualize_psf(psf_: np.array, yxco: np.array,
                       xctr: float, yctr: float) -> None:
         '''
         Visualize a single PSF, together with sampling positions.
@@ -318,7 +326,7 @@ class PSFGrp:
         ----------
         psf_ : np.array, shape : (ny, nx)
             A single PSF.
-        xyco : np.array
+        yxco : np.array
             Sampling positions, with (0, 0) at the PSF center.
         xctr, yctr : float, float
             Position of the PSF center.
@@ -329,12 +337,19 @@ class PSFGrp:
 
         '''
 
-        plt.imshow(np.log10(psf_), origin='lower')
-        plt.colorbar()
-        plt.scatter(xyco[0].ravel()+xctr, xyco[1].ravel()+yctr, s=1e-5)
+        fig, ax = plt.subplots(figsize=(4.8, 3.6))
+
+        vmin = max(psf_.min(), psf_.max() / 1e6)
+        im = ax.imshow(np.log10(np.clip(psf_, a_min=vmin, a_max=None)),
+                       origin='lower', vmin=np.log10(vmin))
+        plt.colorbar(im, ax=ax)
+        ax.scatter(yxco[1, ::10, ::10].ravel()+xctr,
+                   yxco[0, ::10, ::10].ravel()+yctr, c='r', s=0.05)
+
+        OutImage.format_axis(ax, False)
         plt.show()
 
-    def _sample_psf(self, idx: int, psf: np.array, distort_mat: np.array = None,
+    def _sample_psf(self, idx: int, psf: np.array, outpix2world2inpix: 'method' = None,
                     visualize: bool = False) -> None:
         '''
         Perform interpolations to sample a single PSF or a set of PSFs.
@@ -342,12 +357,16 @@ class PSFGrp:
         Parameters
         ----------
         idx : int
-            Index of the single PSF (int); sample a set of PSFs at the same time.
+            Index of the single PSF (int).
+            If None, sample a set of PSFs at the same time.
         psf : np.array, shape : (n_psf, ny, nx)
             PSF(s) to be sampled.
-        distort_mat : np.array, shape : (2, 2)
-            Distortion matrix of the original input PSF.
+        outpix2world2inpix : method, optional
+            InImage outpix2world2inpix of the appropriate InImage instance.
             The default is None, meaning not to rotate the sampling positions.
+        # distort_mat : np.array, shape : (2, 2)
+        #     Distortion matrix of the original input PSF.
+        #     The default is None, meaning not to rotate the sampling positions.
         visualize : bool, optional
             Whether to visualize PSFs and sampling positions. The default is False.
 
@@ -362,25 +381,31 @@ class PSFGrp:
         yctr = (ny-1) / 2.0
 
         # get sampling positions
-        if distort_mat is None:
-            xyco = PSFGrp.xyo
-        else:  # succinct way to rotate
-            rotate_mat = np.linalg.inv(distort_mat)
-            xyo_ = np.flip(np.moveaxis(PSFGrp.xyo, 0, -1), axis=-1)
-            xyco = np.moveaxis(np.flip(xyo_ @ rotate_mat.T, axis=-1), -1, 0)
-            del rotate_mat, xyo_
+        if outpix2world2inpix is None:
+            yxco = PSFGrp.yxo
+        else:
+            xyo_ = np.flip(PSFGrp.yxo, axis=0).reshape((2, -1)).T * PSFGrp.dscale
+            yxco = outpix2world2inpix(xyo_ + self.inst.psf_compute_point_pix)
+            yxco -= outpix2world2inpix(np.array([self.inst.psf_compute_point_pix]))
+            yxco = np.flip(yxco * PSFGrp.oversamp, axis=-1).T.reshape(2, PSFGrp.nsamp, PSFGrp.nsamp)
+            del xyo_
+        # else:  # succinct way to rotate
+        #     rotate_mat = np.linalg.inv(distort_mat)
+        #     xyo_ = np.flip(np.moveaxis(PSFGrp.yxo, 0, -1), axis=-1)
+        #     yxco = np.moveaxis(np.flip(xyo_ @ rotate_mat.T, axis=-1), -1, 0)
+        #     del rotate_mat, xyo_
 
         if visualize:
             if idx is not None:
-                PSFGrp.visualize_psf(psf, xyco, xctr, yctr)
+                PSFGrp.visualize_psf(psf, yxco, xctr, yctr)
             else:  # sampling a group of output PSFs at the same time
                 for psf_ in psf:
-                    PSFGrp.visualize_psf(psf_, xyco, xctr, yctr)
+                    PSFGrp.visualize_psf(psf_, yxco, xctr, yctr)
 
         if idx is not None:
             out_arr = np.zeros((1, PSFGrp.nsamp**2))
-            iD5512C(psf.reshape((1, ny, nx)),
-                    xyco[1].ravel()+xctr, xyco[0].ravel()+yctr, out_arr)
+            iD5512C(np.pad(psf, 6).reshape((1, ny+12, nx+12)),
+                    yxco[1].ravel()+xctr+6, yxco[0].ravel()+yctr+6, out_arr)
             self.psf_arr[idx] = out_arr.reshape((PSFGrp.nsamp, PSFGrp.nsamp))
             del out_arr
 
@@ -388,8 +413,8 @@ class PSFGrp:
             self.psf_arr = np.zeros((self.n_psf, PSFGrp.nsamp, PSFGrp.nsamp))
             out_arr = np.zeros((1, PSFGrp.nsamp**2))
             for idx in range(self.n_psf):
-                gridD5512C(psf[idx], PSFGrp.xyo[None, 1, 0, :]+xctr,
-                           PSFGrp.xyo[None, 0, :, 0]+yctr, out_arr)
+                gridD5512C(np.pad(psf[idx], 6), PSFGrp.yxo[None, 1, 0, :]+xctr+6,
+                           PSFGrp.yxo[None, 0, :, 0]+yctr+6, out_arr)
                 self.psf_arr[idx] = out_arr.reshape((PSFGrp.nsamp, PSFGrp.nsamp))
             del out_arr
 
@@ -436,13 +461,14 @@ class PSFGrp:
         self.psf_arr = np.zeros((self.n_psf, PSFGrp.nsamp, PSFGrp.nsamp))
         for idx in range(self.n_psf):
             # print('PSF info -->', self.idx_grp2blk[idx], end=' ')
-            this_psf, distort_matrice = self.inst.blk.inimages[self.idx_grp2blk[idx]].\
-                get_psf_and_distort_mat(psf_compute_point, dWdp_out, use_shortrange=True)
+            inimage = self.inst.blk.inimages[self.idx_grp2blk[idx]]
+            this_psf, distort_matrice = inimage.get_psf_and_distort_mat(
+                psf_compute_point, dWdp_out, use_shortrange=True)
             # Note: use_shortrange=True does not take effect when PSFSPLIT is not set.
-            self._sample_psf(idx, this_psf, distort_matrice, visualize=visualize)
             if visualize:
-                print(f'The above PSF is from InImage {(self.inst.blk.inimages[self.idx_grp2blk[idx]].idsca)}',
+                print(f'The PSF below is from InImage {(self.inst.blk.inimages[self.idx_grp2blk[idx]].idsca)}',
                       f'at the upper right corner of InStamp {(self.inst.j_st, self.inst.i_st)}')
+            self._sample_psf(idx, this_psf, inimage.outpix2world2inpix, visualize=visualize)
         print('using input exposures:', [self.idx_grp2blk[idx] for idx in range(self.n_psf)])
 
     @staticmethod
@@ -514,6 +540,10 @@ class PSFGrp:
                     cfg.outpsf_extra[j_out-1], cfg.sigmatarget_extra[j_out-1], cfg.use_filter)
 
         self._sample_psf(None, psf_orig)  # this produces self.psf_arr
+        if visualize:
+            for j_out, psf_ in enumerate(self.psf_arr):
+                print(f'output PSF: {j_out}')
+                PSFGrp.visualize_psf(psf_, PSFGrp.yxo, PSFGrp.nc, PSFGrp.nc)
 
         # save the output PSFs to a file
         # OutputPSFHDU = fits.HDUList([fits.PrimaryHDU()] + [fits.ImageHDU(x) for x in psf_orig])
@@ -568,6 +598,11 @@ class PSFGrp:
 
         Use this in addition to the default __del__ method to make sure that
         the PSF array is removed when it is no longer used.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            Whether to print additional information. The default is False.
 
         Returns
         -------
@@ -629,7 +664,7 @@ class PSFOvl:
         cls.flat_penalty = flat_penalty
 
     def __init__(self, psfgrp1: PSFGrp, psfgrp2: PSFGrp = None,
-                 verbose: bool = False) -> None:
+                 verbose: bool = False, visualize: bool = False) -> None:
         '''
         Constructor.
 
@@ -640,6 +675,10 @@ class PSFOvl:
         psfgrp2 : PSFGrp, optional
             The second PSFGrp instance.
             The default is None, indicating the self-overlap of psfgrp1.
+        verbose : bool, optional
+            Whether to print additional information. The default is False.
+        visualize : bool, optional
+            Whether to visualize the PSF overlap array. The default is False.
 
         Returns
         -------
@@ -667,11 +706,7 @@ class PSFOvl:
                     print(f'--> building output-self PSFOvl for Block this_sub={psfgrp1.blk.this_sub}',
                           '@', psfgrp1.blk.timer(), 's')
 
-        self._build_psfovl()  # this produces self.ovl_arr
-
-        # scale conversion for interpolations in PSF overlap arrays
-        dtheta = psfgrp1.inst.blk.cfg.dtheta if psfgrp1.in_or_out else psfgrp1.blk.cfg.dtheta
-        self.dscale = (Stn.pixscale_native/Stn.arcsec) / (dtheta*3600) / PSFGrp.oversamp
+        self._build_psfovl(visualize)  # this produces self.ovl_arr
 
     def _idx_square2triangle(self, idx1: int, idx2: int) -> int:
         '''
@@ -759,9 +794,14 @@ class PSFOvl:
 
         return ovl_m1
 
-    def _build_psfovl(self) -> None:
+    def _build_psfovl(self, visualize: bool = False) -> None:
         '''
         Build the PSF overlap array.
+
+        Parameters
+        ----------
+        visualize : bool, optional
+            Whether to visualize the PSF overlap array. The default is False.
 
         Returns
         -------
@@ -777,6 +817,8 @@ class PSFOvl:
                 self.ovl_arr[idx] = PSFOvl.accel_irfft2_and_extract(ovl_rft)
                 del ovl_rft
 
+            if visualize: self.visualize_psfovl()
+
         elif self.grp1.in_or_out:  # input self-overlap
             n_psf = self.grp1.n_psf  # shortcut
             self.ovl_arr = np.zeros((n_psf*(n_psf+1)//2, PSFGrp.nsamp, PSFGrp.nsamp))
@@ -787,6 +829,8 @@ class PSFOvl:
                 self.ovl_arr[start:start+n_psf-idx] = PSFOvl.accel_irfft2_and_extract(ovl_rft)
                 del ovl_rft
 
+            if visualize: self.visualize_psfovl()
+
         else:  # output self-overlap
             ovl_rft = self.grp1.psf_rft * self.grp1.psf_rft.conjugate()
             # we do not need overlaps between different output PSFs
@@ -795,6 +839,8 @@ class PSFOvl:
 
             # extract C value(s)
             self.outovlc = self.ovl_arr[:, PSFGrp.nc, PSFGrp.nc]
+
+            if visualize: self.visualize_psfovl()
             del self.ovl_arr  # move this to PSFOvl.clear
             # if the entire output self-overlap array is needed
 
@@ -811,7 +857,7 @@ class PSFOvl:
         if self.grp2 is not None:  # cross-overlap
             n_psf1, n_psf2 = self.ovl_arr.shape[:2]  # shortcuts
             fig, axs = plt.subplots(
-                n_psf1, n_psf2, figsize=(3.2*min(n_psf2, 4), 2.4*min(n_psf1, 4)))
+                n_psf1, n_psf2, figsize=(4.8*min(n_psf2, 4), 3.6*min(n_psf1, 4)))
 
             for idx1 in range(n_psf1):
                 for idx2 in range(n_psf2):
@@ -822,34 +868,49 @@ class PSFOvl:
                         if n_psf2 > 1: ax = axs[idx2]
                         else: ax = axs
 
-                    im = ax.imshow(np.log10(self.ovl_arr[idx1, idx2]), origin='lower')
-                    plt.colorbar(im)
+                    ovl_ = self.ovl_arr[idx1, idx2]
+                    vmin = max(ovl_.min(), ovl_.max() / 1e6)
+                    im = ax.imshow(np.log10(np.clip(ovl_, a_min=vmin, a_max=None)),
+                                   origin='lower', vmin=np.log10(vmin))
+                    plt.colorbar(im, ax=ax)
 
+                    OutImage.format_axis(ax, False)
             plt.show()
             del fig, axs
-        
-        else:  # self overlap
+
+        else:  # self-overlap
             n_psf = self.grp1.n_psf  # shortcut
 
             if n_psf == 1:
-                plt.imshow(np.log10(self.ovl_arr[0]), origin='lower')
-                plt.colorbar()
+                fig, ax = plt.subplots(figsize=(4.8, 3.6))
+
+                ovl_ = self.ovl_arr[0]
+                vmin = max(ovl_.min(), ovl_.max() / 1e6)
+                im = ax.imshow(np.log10(np.clip(ovl_, a_min=vmin, a_max=None)),
+                               origin='lower', vmin=np.log10(vmin))
+                plt.colorbar(im, ax=ax)
+
+                OutImage.format_axis(ax, False)
                 plt.show()
 
             else:
                 fig, axs = plt.subplots(
-                    n_psf, n_psf, figsize=(3.2*min(n_psf, 4), 2.4*min(n_psf, 4)))
+                    n_psf, n_psf, figsize=(4.8*min(n_psf, 4), 3.6*min(n_psf, 4)))
 
                 for idx1 in range(n_psf):
                     for idx2 in range(n_psf):
+                        ax = axs[idx1, idx2]
                         if idx2 < idx1:
-                            axs[idx1, idx2].axis('off')
+                            ax.axis('off')
                             continue
 
-                        im = axs[idx1, idx2].imshow(np.log10(
-                            self.ovl_arr[self._idx_square2triangle(idx1, idx2)]), origin='lower')
-                        plt.colorbar(im)
+                        ovl_ = self.ovl_arr[self._idx_square2triangle(idx1, idx2)]
+                        vmin = max(ovl_.min(), ovl_.max() / 1e6)
+                        im = ax.imshow(np.log10(np.clip(ovl_, a_min=vmin, a_max=None)),
+                                       origin='lower', vmin=np.log10(vmin))
+                        plt.colorbar(im, ax=ax)
 
+                        OutImage.format_axis(ax, False)
                 plt.show()
                 del fig, axs
 
@@ -905,13 +966,13 @@ class PSFOvl:
 
         res = np.zeros((st1.pix_cumsum[-1], st2.pix_cumsum[-1]))
         ddx = st1.x_val[:, None] - st2.x_val[None, :]
-        ddx /= self.dscale; ddx += PSFGrp.nc
+        ddx /= PSFGrp.dscale; ddx += PSFGrp.nc
         ddy = st1.y_val[:, None] - st2.y_val[None, :]
-        ddy /= self.dscale; ddy += PSFGrp.nc
+        ddy /= PSFGrp.dscale; ddy += PSFGrp.nc
 
         n_psf1, n_psf2 = self.ovl_arr.shape[:2]
         if visualize:
-            fig, axs = plt.subplots(n_psf1, n_psf2, figsize=(6.4*n_psf2, 4.8*n_psf1))
+            fig, axs = plt.subplots(n_psf1, n_psf2, figsize=(4.8*min(n_psf2, 4), 3.6*min(n_psf1, 4)))
         n_in = (n_psf1 * n_psf2) ** 0.5  # for flat_penalty
 
         for j_im in range(st1.blk.n_inimage):
@@ -930,15 +991,19 @@ class PSFOvl:
                         if n_psf2 > 1: ax = axs[self.grp2.idx_blk2grp[i_im]]
                         else: ax = axs
 
-                    im = ax.imshow(np.log10(self.ovl_arr[
-                        self.grp1.idx_blk2grp[j_im], self.grp2.idx_blk2grp[i_im]]), origin='lower')
-                    plt.colorbar(im)
-                    ax.scatter(ddx[slice_].ravel(), ddy[slice_].ravel(), s=1e-2)
+                    ovl_arr_ = self.ovl_arr[self.grp1.idx_blk2grp[j_im], self.grp2.idx_blk2grp[i_im]]
+                    vmin = max(ovl_arr_.min(), ovl_arr_.max() / 1e6)
+                    im = ax.imshow(np.log10(np.clip(ovl_arr_, a_min=vmin, a_max=None)),
+                                   origin='lower', vmin=np.log10(vmin))
+                    plt.colorbar(im, ax=ax)
+                    ax.scatter(ddx[slice_][::2, ::2].ravel(),
+                               ddy[slice_][::2, ::2].ravel(), c='r', s=0.005)
+                    OutImage.format_axis(ax, False)
 
                 out_arr = np.zeros((1, st1.pix_count[j_im] * st2.pix_count[i_im]))
-                iD5512C(self.ovl_arr[self.grp1.idx_blk2grp[j_im], self.grp2.idx_blk2grp[i_im]].\
-                        reshape((1, PSFGrp.nsamp, PSFGrp.nsamp)),
-                        ddx[slice_].ravel(), ddy[slice_].ravel(), out_arr)
+                iD5512C(np.pad(self.ovl_arr[self.grp1.idx_blk2grp[j_im], self.grp2.idx_blk2grp[i_im]], 6).
+                        reshape((1, PSFGrp.nsamp+12, PSFGrp.nsamp+12)),
+                        ddx[slice_].ravel()+6, ddy[slice_].ravel()+6, out_arr)
 
                 res[slice_] = out_arr.reshape((st1.pix_count[j_im], st2.pix_count[i_im]))
                 del out_arr
@@ -992,13 +1057,13 @@ class PSFOvl:
             res = np.zeros((self.grp2.n_psf, n_outpix, selection.shape[0]))
 
         ddx = x_val_[:, None] - st2.yx_val[None, 1, 0, :]
-        ddx /= self.dscale; ddx += PSFGrp.nc
+        ddx /= PSFGrp.dscale; ddx += PSFGrp.nc
         ddy = y_val_[:, None] - st2.yx_val[None, 0, :, 0]
-        ddy /= self.dscale; ddy += PSFGrp.nc
+        ddy /= PSFGrp.dscale; ddy += PSFGrp.nc
 
         if visualize:
             n_psf1, n_psf2 = self.ovl_arr.shape[:2]
-            fig, axs = plt.subplots(n_psf1, n_psf2, figsize=(6.4*n_psf2, 4.8*n_psf1))
+            fig, axs = plt.subplots(n_psf1, n_psf2, figsize=(4.8*min(n_psf2, 4), 3.6*min(n_psf1, 4)))
 
         for i_psf in range(self.grp2.n_psf):
             for j_im in range(st1.blk.n_inimage):
@@ -1012,19 +1077,25 @@ class PSFOvl:
                         if n_psf1 > 1: ax = axs[self.grp1.idx_blk2grp[j_im], i_psf]
                         else: ax = axs[i_psf]
 
-                    im = ax.imshow(np.log10(self.ovl_arr[self.grp1.idx_blk2grp[j_im], i_psf]), origin='lower')
-                    plt.colorbar(im)
-                    ddx_ = st1.x_val[:, None] - st2.yx_val[1, ::10, ::10].ravel()[None, :]
-                    ddx_ /= self.dscale; ddx_ += PSFGrp.nc
-                    ddy_ = st1.y_val[:, None] - st2.yx_val[0, ::10, ::10].ravel()[None, :]
-                    ddy_ /= self.dscale; ddy_ += PSFGrp.nc
-                    ax.scatter(ddx_.ravel(), ddy_.ravel(), s=1e-2, c='r')
+                    ovl_ = self.ovl_arr[self.grp1.idx_blk2grp[j_im], i_psf]
+                    vmin = max(ovl_.min(), ovl_.max() / 1e6)
+                    im = ax.imshow(np.log10(np.clip(ovl_, a_min=vmin, a_max=None)),
+                                   origin='lower', vmin=np.log10(vmin))
+                    plt.colorbar(im, ax=ax)
+
+                    n2f = self.grp2.blk.cfg.n2f
+                    ddx_ = st1.x_val[:, None] - st2.yx_val[1, ::(n2f-1), ::(n2f-1)].ravel()[None, :]
+                    ddx_ /= PSFGrp.dscale; ddx_ += PSFGrp.nc
+                    ddy_ = st1.y_val[:, None] - st2.yx_val[0, ::(n2f-1), ::(n2f-1)].ravel()[None, :]
+                    ddy_ /= PSFGrp.dscale; ddy_ += PSFGrp.nc
+                    ax.scatter(ddx_.ravel(), ddy_.ravel(), s=0.005, c='r')
                     del ddx_, ddy_
+                    OutImage.format_axis(ax, False)
 
                 out_arr = np.zeros((pix_count_[j_im], n_outpix))
-                gridD5512C(self.ovl_arr[self.grp1.idx_blk2grp[j_im], i_psf],
-                           ddx[pix_cumsum_[j_im]:pix_cumsum_[j_im+1], :],
-                           ddy[pix_cumsum_[j_im]:pix_cumsum_[j_im+1], :], out_arr)
+                gridD5512C(np.pad(self.ovl_arr[self.grp1.idx_blk2grp[j_im], i_psf], 6),
+                           ddx[pix_cumsum_[j_im]:pix_cumsum_[j_im+1], :]+6,
+                           ddy[pix_cumsum_[j_im]:pix_cumsum_[j_im+1], :]+6, out_arr)
                 res[i_psf, :, pix_cumsum_[j_im]:pix_cumsum_[j_im+1]] = out_arr.T
                 del out_arr
 
@@ -1066,18 +1137,18 @@ class PSFOvl:
         ddx = st1.x_val[:, None] - st2.x_val[None, :]
         ddy = st1.y_val[:, None] - st2.y_val[None, :]
 
-        if visualize:
-            for arr in [ddx, ddy]:
-                plt.imshow(arr, origin='upper')
-                plt.colorbar()
-                plt.show()
+        # if visualize:
+        #     for arr in [ddx, ddy]:
+        #         plt.imshow(arr, origin='upper')
+        #         plt.colorbar()
+        #         plt.show()
 
-        ddx /= self.dscale; ddx += PSFGrp.nc
-        ddy /= self.dscale; ddy += PSFGrp.nc
+        ddx /= PSFGrp.dscale; ddx += PSFGrp.nc
+        ddy /= PSFGrp.dscale; ddy += PSFGrp.nc
 
         if visualize:
             n_psf = self.grp1.n_psf  # shortcut
-            fig, axs = plt.subplots(n_psf, n_psf, figsize=(6.4*n_psf, 4.8*n_psf))
+            fig, axs = plt.subplots(n_psf, n_psf, figsize=(4.8*min(n_psf, 4), 3.6*min(n_psf, 4)))
 
         for j_im in range(st1.blk.n_inimage):
             if st1.pix_count[j_im] == 0: continue
@@ -1094,16 +1165,21 @@ class PSFOvl:
                 slice_ = np.s_[st1.pix_cumsum[j_im]:st1.pix_cumsum[j_im+1],
                                st2.pix_cumsum[i_im]:st2.pix_cumsum[i_im+1]]
 
-                if visualize:
+                if visualize and j_im <= i_im:
                     ax = axs[self.grp1.idx_blk2grp[j_im], self.grp1.idx_blk2grp[i_im]] if n_psf > 1 else axs
-                    im = ax.imshow(np.log10(ovl_arr_), origin='lower')
-                    plt.colorbar(im)
-                    ax.scatter(ddx[slice_].ravel(), ddy[slice_].ravel(), s=1e-2)
+
+                    vmin = max(ovl_arr_.min(), ovl_arr_.max() / 1e6)
+                    im = ax.imshow(np.log10(np.clip(ovl_arr_, a_min=vmin, a_max=None)),
+                                   origin='lower', vmin=np.log10(vmin))
+                    plt.colorbar(im, ax=ax)
+                    ax.scatter(ddx[slice_][::2, ::2].ravel(),
+                               ddy[slice_][::2, ::2].ravel(), c='r', s=0.005)
+                    OutImage.format_axis(ax, False)
 
                 out_arr = np.zeros((1, st1.pix_count[j_im] * st2.pix_count[i_im]))
                 interpolator = iD5512C_sym if same_inst and j_im == i_im else iD5512C
-                interpolator(ovl_arr_.reshape((1, PSFGrp.nsamp, PSFGrp.nsamp)),
-                             ddx[slice_].ravel(), ddy[slice_].ravel(), out_arr)
+                interpolator(np.pad(ovl_arr_, 6).reshape((1, PSFGrp.nsamp+12, PSFGrp.nsamp+12)),
+                             ddx[slice_].ravel()+6, ddy[slice_].ravel()+6, out_arr)
 
                 res[slice_] = out_arr.reshape((st1.pix_count[j_im], st2.pix_count[i_im]))
 
@@ -1138,6 +1214,11 @@ class PSFOvl:
 
         Use this in addition to the default __del__ method to make sure that
         the huge PSF overlap array is removed when it is no longer used.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            Whether to print additional information. The default is False.
 
         Returns
         -------
@@ -1317,6 +1398,8 @@ class SysMatA:
         sim_mode : bool, optional
             Whether to count references without actually computing submatrices.
             The default is False.
+        verbose : bool, optional
+            Whether to print additional information. The default is False.
 
         Returns
         -------

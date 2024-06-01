@@ -34,6 +34,7 @@ from .config import Timer, Settings as Stn, Config
 from .layer import check_if_idsca_exists, get_all_data, Mask
 from .psfutil import PSFGrp, PSFOvl, SysMatA, SysMatB
 from .lakernel import EigenKernel, ChoKernel, IterKernel, EmpirKernel
+from .analysis import OutImage
 
 
 class InImage:
@@ -45,6 +46,8 @@ class InImage:
     __init__ : Constructor.
     generate_idx_grid (staticmethod) : Generate a grid of indices.
     _inpix2world2outpix : Composition of pix2world and world2pix.
+    outpix2world2inpix : Inverse function of _inpix2world2outpix.
+
     partition_pixels : Partition input pixels into postage stamps.
     extract_layers : Extract input layers.
     clear : Free up memory space.
@@ -120,6 +123,25 @@ class InImage:
         return self.blk.outwcs.all_world2pix(
                     self.inwcs.all_pix2world(inxys, 0), 0)
 
+    def outpix2world2inpix(self, outxys: np.array) -> np.array:
+        '''
+        Inverse function of _inpix2world2outpix.
+
+        Parameters
+        ----------
+        outxys : np.array, shape : (npix, 2)
+            x and y positions in the output block coordinates.
+
+        Returns
+        -------
+        np.array, shape : (npix, 2)
+            x and y positions in the input image coordinates.
+
+        '''
+
+        return self.inwcs.all_world2pix(
+                    self.blk.outwcs.all_pix2world(outxys, 0), 0)
+
     def partition_pixels(self, sp_res: int = 90, relax_coef: float = 1.05,
                          verbose: bool = False, visualize: bool = False) -> None:
         '''
@@ -153,13 +175,6 @@ class InImage:
         pix_lower =                     - self.blk.cfg.n2 - 0.5
         pix_upper = self.blk.cfg.NsideP + self.blk.cfg.n2 - 0.5
 
-        if visualize:
-            for i in range(2):
-                plt.imshow(sp_outxys[i], origin='lower')
-                plt.colorbar()
-                plt.contour(sp_outxys[i], levels=[pix_lower, pix_upper], colors='r')
-                plt.show()
-
         self.is_relevant = False  # whether the input image is relevant to the output block
         relevant_matrix = np.zeros((sp_res, sp_res), dtype=bool)
         for j in range(1, sp_res):
@@ -177,12 +192,27 @@ class InImage:
                     # we will study all the adjacent input pixels
                     relevant_matrix[max(j-2, 0):min(j+3, sp_res),
                                     max(i-2, 0):min(i+3, sp_res)] = True
-        del sp_outxys
 
-        if visualize:
-            plt.imshow(relevant_matrix, origin='lower')
-            plt.colorbar()
-            plt.show()
+        if visualize and self.is_relevant:
+            fig, axs = plt.subplots(2, 2, figsize=(10.8, 9.6))
+
+            for i in range(2):
+                ax = axs[0, i]
+                im = ax.imshow(sp_outxys[i] / self.blk.cfg.n2, origin='lower')
+                plt.colorbar(im, ax=ax)
+                ax.contour(sp_outxys[i], levels=[pix_lower, pix_upper], colors='r')
+
+            im = axs[1, 0].imshow(relevant_matrix, origin='lower', cmap='YlGn')
+            plt.colorbar(im, ax=axs[1, 0])
+
+            for ax, title in zip([*axs[0], axs[1, 0]],
+                                 ['stamp index $i$', 'stamp index $j$', 'relevant matrix']):
+                ax.set_xlabel('sparse grid $i$')
+                ax.set_ylabel('sparse grid $j$')
+                ax.set_title(title)
+                OutImage.format_axis(ax, False)
+
+        del sp_outxys
 
         if not self.is_relevant:
             del sp_arr, relevant_matrix
@@ -269,9 +299,16 @@ class InImage:
 
                 del inxys, outxys
 
-        if visualize:
-            plt.imshow(self.pix_count, origin='lower')
-            plt.colorbar()
+        if visualize and self.is_relevant:
+            ax = axs[1, 1]
+            im = ax.imshow(self.pix_count, origin='lower', cmap='plasma')
+            plt.colorbar(im, ax=ax)
+
+            ax.set_xlabel('stamp index $i$')
+            ax.set_ylabel('stamp index $j$')
+            ax.set_title('pixel count')
+            OutImage.format_axis(ax, False)
+
             plt.show()
 
         if verbose:
@@ -412,12 +449,13 @@ class InImage:
         tuple : (this_psf, distort_matrice)
             Smeared input PSF array : np.array, see smooth_and_pad
             and distortion matrix : np.array, shape : (2, 2)
+        or simply this_psf, if dWdp_out is None.
 
         '''
 
         # get the pixel location on the input image
         # (moved this up since some PSF models need it)
-        pixloc = self.inwcs.all_world2pix(np.array([[psf_compute_point[0], psf_compute_point[1]]]).astype(np.float64), 0)[0]
+        pixloc = self.inwcs.all_world2pix(np.array([[*psf_compute_point]]).astype(np.float64), 0)[0]
 
         if self.blk.cfg.inpsf_format == 'dc2_imsim':
             if not hasattr(self, 'inpsf_arr'):
@@ -628,6 +666,7 @@ class OutStamp:
     _visualize_system_matrices : Visualize system matrices.
     _visualize_coadd_matrices : Visualize coaddition matrices.
     _perform_coaddition : Perform the actual multiplication.
+    _visualize_weight_computations : Display weight computations.
     _show_in_and_out_images : Display input and output images.
     _study_individual_pixels : Study individual input and output pixels.
     clear : Free up memory space.
@@ -741,10 +780,16 @@ class OutStamp:
         self.inpix_cumsum = np.cumsum([0] + list(self.inpix_count), dtype=np.uint16)
 
         if visualize:
-            for instamp, selection in zip(self.instamps, self.selections):
-                if selection is None: plt.scatter(instamp.x_val, instamp.y_val, s=1)
-                plt.scatter(instamp.x_val[selection], instamp.y_val[selection], s=1)
-            plt.axis('equal')
+            fig, ax = plt.subplots(figsize=(4.8, 4.8))
+
+            for idx, instamp, selection in zip(range(9), self.instamps, self.selections):
+                if selection is None: plt.scatter(instamp.x_val, instamp.y_val, s=2, c=f'C{idx}')
+                ax.scatter(instamp.x_val[selection], instamp.y_val[selection], s=2, c=f'C{idx}')
+            ax.axis('equal')
+
+            ax.set_xlabel('output grid $i$')
+            ax.set_ylabel('output grid $j$')
+            OutImage.format_axis(ax)
             plt.show()
 
         # read input pixel positions and signals
@@ -902,25 +947,38 @@ class OutStamp:
         print(f'{self.sysmata.shape=}')  # (n_inpix, n_inpix)
         print(f'{np.all(self.sysmata == self.sysmata.T)=}')
 
-        plt.figure(figsize=(12.8, 9.6))
-        plt.imshow(np.log10(self.sysmata))
-        plt.colorbar()
+        fig, ax = plt.subplots(figsize=(12.8, 9.6))
+        vmin = self.sysmata.max() / (self.mhalfb.max() / self.mhalfb.min()) ** 2
+        im = ax.imshow(np.log10(np.clip(self.sysmata, a_min=vmin, a_max=None)), vmin=np.log10(vmin))
+        plt.colorbar(im, ax=ax)
 
         for xy in self.inpix_cumsum[1:-1]:
-            plt.axvline(xy, c='r', ls='--', lw=0.5)
-            plt.axhline(xy, c='r', ls='--', lw=0.5)
+            ax.axvline(xy, c='r', ls='--', lw=1.5)
+            ax.axhline(xy, c='r', ls='--', lw=1.5)
+
+        ax.set_xlabel('input pixel $i$')
+        ax.set_ylabel('input pixel $j$')
+        ax.set_title(r'$A$ matrix: $\log_{10} (A_{ij})$')
+        OutImage.format_axis(ax, False)
         plt.show()
 
         # now the mBhalf matrix
         print(f'{self.mhalfb.shape=}')  # (n_out, n_outpix, n_inpix)
+        n_out, n_outpix, n_inpix = self.mhalfb.shape
+        height = 9.6 / n_inpix * n_outpix
 
         for mhalfb_ in self.mhalfb:
-            plt.figure(figsize=(12.8, 4.8))
-            plt.imshow(np.log10(mhalfb_))
-            plt.colorbar()
+            fig, ax = plt.subplots(figsize=(12.8, height))
+            im = ax.imshow(np.log10(mhalfb_))
+            plt.colorbar(im, ax=ax)
 
             for x in self.inpix_cumsum[1:-1]:
-                plt.axvline(x, c='r', ls='--', lw=1.0)
+                ax.axvline(x, c='r', ls='--', lw=1.5)
+
+            ax.set_xlabel(r'output pixel $\alpha$')
+            ax.set_ylabel('input pixel $i$')
+            ax.set_title(r'$B$ matrix: $\log_{10} (-B_{\alpha i}/2)$')
+            OutImage.format_axis(ax, False)
             plt.show()
 
         # and C
@@ -937,23 +995,41 @@ class OutStamp:
         '''
 
         print('OutStamp._visualize_coadd_matrices')
+        fk = self.blk.cfg.fade_kernel  # shortcut
 
         for j_out, T_ in enumerate(self.T):
-            # print(f'{j_out=}')
+            print(f'output PSF: {j_out}')
 
-            fig, axs = plt.subplots(1, 3, figsize=(12.8, 4.8))
-            for i, map_ in enumerate([self.kappa, self.Sigma, self.UC]):
-                im = axs[i].imshow(np.log10(map_[j_out]), origin='lower')
-                plt.colorbar(im)
+            fig, axs = plt.subplots(1, 3, figsize=(14.4, 3.6))
+            for ax, map_, title in zip(axs, [self.UC, self.Sigma, self.kappa],
+                                       [r'PSF leakage: $\log_{10} (U/C)$',
+                                        r'Noise amplification: $\log_{10} \Sigma$',
+                                        r'Lagrange multiplier: $\log_{10} \kappa$']):
+                im = ax.imshow(np.log10(map_[j_out]), origin='lower',
+                               extent=[self.left-fk, self.right+fk, self.bottom-fk, self.top+fk])
+                plt.colorbar(im, ax=ax)
+
+                ax.set_title(title)
+                ax.set_xlabel('output grid $i$')
+                ax.set_ylabel('output grid $j$')
+                OutImage.format_axis(ax, False)
             plt.show()
 
             vmin, vmax = np.percentile(T_.ravel(), [1, 99])
-            plt.hist(T_.ravel(), bins=np.linspace(vmin, vmax, 31))
-            plt.show()
+            n_out, n_outpix, n_inpix = self.mhalfb.shape
+            height = 9.6 / n_inpix * n_outpix
 
-            plt.figure(figsize=(12.8, 4.8))
-            plt.imshow(T_, vmin=vmin, vmax=vmax)
-            plt.colorbar()
+            fig, ax = plt.subplots(figsize=(12.8, height))
+            im = ax.imshow(T_, vmin=vmin, vmax=vmax)
+            plt.colorbar(im, ax=ax)
+
+            for x in self.inpix_cumsum[1:-1]:
+                ax.axvline(x, c='r', ls='--', lw=1.5)
+
+            ax.set_xlabel(r'output pixel $\alpha$')
+            ax.set_ylabel('input pixel $i$')
+            ax.set_title(r'$T$ matrix: $T_{\alpha i}$')
+            OutImage.format_axis(ax, False)
             plt.show()
 
     @staticmethod
@@ -1011,23 +1087,12 @@ class OutStamp:
         n2f = self.blk.cfg.n2f
         fade_kernel = self.blk.cfg.fade_kernel
 
+        # multiplication by the trapezoid filter with transition width fade_kernel
         if fade_kernel > 0:
             # self.T: (n_out, n_outpix, n_inpix)
             T_view = np.moveaxis(self.T, 1, -1).reshape(
                 (n_out, self.inpix_cumsum[-1], n2f, n2f))
             OutStamp.trapezoid(T_view, fade_kernel)
-
-        # the actual multiplication. includes multiplication
-        # by the trapezoid filter with transition width fade_kernel
-        self.outimage = np.einsum('oaj,ij->oia', self.T, self.indata).reshape(
-            (n_out, self.blk.cfg.n_inframe, n2f, n2f))
-
-        if visualize:
-            print()
-            self._show_in_and_out_images()
-            print()
-            self._study_individual_pixels()
-        del self.iny_val, self.inx_val, self.indata
 
         # weight computations
         Tsum_image = np.zeros(self.T.shape[:2] + (self.blk.n_inimage,))  # (n_out, n_outpix, n_inimage)
@@ -1042,14 +1107,69 @@ class OutStamp:
             for i_im in range(self.blk.n_inimage):
                 Tsum_image[:, :, i_im] += np.sum(self.T[:, :, my_cumsum[i_im]:my_cumsum[i_im+1]], axis=2)
 
-        self.Tsum_stamp = np.sum(Tsum_image, axis=1) / self.blk.cfg.n2 ** 2 # (n_out, n_inimage)
+        self.Tsum_stamp = np.sum(Tsum_image, axis=1) / self.blk.cfg.n2 ** 2  # (n_out, n_inimage)
         self.Tsum_inpix = np.sum(Tsum_image, axis=2).reshape((n_out, n2f, n2f))
         Tsum_norm = Tsum_image / np.abs(Tsum_image).sum(axis=2)[:, :, None]
-        self.Neff = 1. / np.sum(np.square(Tsum_norm), axis=2).reshape((n_out, n2f, n2f))
+        self.Neff = 1.0 / np.sum(np.square(Tsum_norm), axis=2).reshape((n_out, n2f, n2f))
         if fade_kernel > 0: OutStamp.trapezoid(self.Neff, fade_kernel)
 
-        if not save_t: del self.T
         del Tsum_image, Tsum_norm
+        if visualize:
+            print()
+            self._visualize_weight_computations()
+
+        # the actual multiplication
+        self.outimage = np.einsum('oaj,ij->oia', self.T, self.indata).reshape(
+            (n_out, self.blk.cfg.n_inframe, n2f, n2f))
+
+        if visualize:
+            print()
+            self._show_in_and_out_images()
+            print()
+            self._study_individual_pixels()
+        del self.iny_val, self.inx_val, self.indata
+        if not save_t: del self.T
+
+    def _visualize_weight_computations(self) -> None:
+        
+        '''
+        Display weight computations.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        print('OutStamp._visualize_weight_computations')
+        fk = self.blk.cfg.fade_kernel  # shortcut
+
+        for j_out in range(self.blk.outpsfgrp.n_psf):
+            print(f'output PSF: {j_out}')
+
+            fig, axs = plt.subplots(1, 3, figsize=(14.4, 3.6))
+
+            ax = axs[0]
+            ax.barh([f'${inimage.idsca}$' for inimage in self.blk.inimages], self.Tsum_stamp[0],
+                     color=[f'C{i}' for i in range(self.blk.n_inimage)])
+
+            ax.set_title('Total contribution')
+            ax.set_xlabel(r'$\sum {}_\alpha \sum {}_{i \in \bar{i}} T_{\alpha i}$')
+            ax.set_ylabel('input image')
+            OutImage.format_axis(ax, False)
+
+            for ax, map_, title in zip(axs[1:], [self.Tsum_inpix, self.Neff],
+                                       [r'Total weight: $T_{\rm tot}$',
+                                        r'Effective coverage: $\bar{n}_{\rm eff}$']):
+                im = ax.imshow(map_[j_out], origin='lower',
+                               extent=[self.left-fk, self.right+fk, self.bottom-fk, self.top+fk])
+                plt.colorbar(im, ax=ax)
+
+                ax.set_title(title)
+                ax.set_xlabel('output grid $i$')
+                ax.set_ylabel('output grid $j$')
+                OutImage.format_axis(ax, False)
+            plt.show()
 
     def _show_in_and_out_images(self) -> None:
         '''
@@ -1062,17 +1182,35 @@ class OutStamp:
         '''
 
         print('OutStamp._show_in_and_out_images')
+        fk = self.blk.cfg.fade_kernel  # shortcut
 
         for j_in in range(self.blk.cfg.n_inframe):
-            plt.scatter(self.inx_val, self.iny_val, c=self.indata[j_in], cmap='viridis', s=5)
-            plt.colorbar()
-            for x in [self.left, self.right]: plt.axvline(x, c='r', ls='--')
-            for y in [self.bottom, self.top]: plt.axhline(y, c='r', ls='--')
-            plt.show()
+            n_out = self.blk.outpsfgrp.n_psf
+            fig, axs = plt.subplots(1, 1+n_out, figsize=(4.8*(1+n_out), 3.6))
 
-            # to be upgraded for the n_out > 1 case
-            plt.imshow(self.outimage[0, j_in], origin='lower')
-            plt.colorbar()
+            ax = axs[0]
+            im = ax.scatter(self.inx_val, self.iny_val, c=self.indata[j_in], cmap='viridis', s=5)
+            plt.colorbar(im, ax=ax)
+            for x in [self.left-0.5, self.right+0.5]: ax.axvline(x, c='r', ls='--')
+            for y in [self.bottom-0.5, self.top+0.5]: ax.axhline(y, c='r', ls='--')
+
+            ax.axis('equal')
+            ax.set_xlabel('output grid $i$')
+            ax.set_ylabel('output grid $j$')
+            ax.set_title('layer: ' + ('SCI' if j_in == 0 else self.blk.cfg.extrainput[j_in]))
+            OutImage.format_axis(ax)
+
+            for j_out in range(n_out):
+                ax = axs[1+j_out]
+                im = ax.imshow(self.outimage[j_out, j_in], origin='lower',
+                               extent=[self.left-fk, self.right+fk, self.bottom-fk, self.top+fk])
+                plt.colorbar(im, ax=ax)
+
+                ax.set_xlabel('output grid $i$')
+                ax.set_ylabel('output grid $j$')
+                ax.set_title(f'output PSF: {j_out}')
+                OutImage.format_axis(ax, False)
+
             plt.show()
 
     def _study_individual_pixels(self) -> None:
@@ -1090,44 +1228,70 @@ class OutStamp:
         accrad = np.arange(15, 140, 5)  # acceptance radius in units of output pixels
         closest_inpix = []  # indices of input pixels closest to the corners and the center
 
-        fk2 = self.blk.cfg.fade_kernel * 2
+        fk = self.blk.cfg.fade_kernel
+        fk2 = fk * 2
         n2f = self.blk.cfg.n2f  # shortcuts
         for j_out, i_out in [(fk2, fk2), (fk2, n2f-1-fk2), (n2f-1-fk2, fk2),
                              (n2f-1-fk2, n2f-1-fk2), ((n2f-1)//2, (n2f-1)//2)]:
             out_idx = j_out * self.blk.cfg.n2f + i_out
             T_elems = self.T[0, out_idx, :]
 
-            plt.figure(figsize=(12.8, 4.8))
+            plt.figure(figsize=(10.8, 3.6))
             ax0 = plt.subplot(1, 2, 1)
             im = ax0.scatter(self.inx_val, self.iny_val, c=T_elems, cmap='viridis', s=5)
-            plt.colorbar(im)
+            plt.colorbar(im, ax=ax0)
 
-            dist = np.sqrt(np.square(j_out+(self.bottom-fk2//2) - self.iny_val) +\
-                           np.square(i_out+(self.left-fk2//2)   - self.inx_val))
+            ax0.axis('equal')
+            ax0.set_xlabel('output grid $i$')
+            ax0.set_ylabel('output grid $j$')
+            ax0.set_title(r'$T_{\alpha i}$')
+            OutImage.format_axis(ax0)
+
+            # print(j_out-fk + self.bottom, i_out-fk + self.left)
+            dist = np.sqrt(np.square(j_out-fk + self.bottom - self.iny_val) +\
+                           np.square(i_out-fk + self.left   - self.inx_val))
             closest_inpix.append(np.argmin(dist))
+
             ax1 = plt.subplot(2, 2, 2)
             ax1.scatter(dist, T_elems, c=T_elems, cmap='viridis', s=5)
             ax1.axhline(              0, c='b', ls='--')
             ax1.axvline(self.blk.cfg.n2, c='r', ls='--')
 
+            ax1.get_xaxis().set_visible(False)
+            ax1.set_ylabel(r'$T_{\alpha i}$')
+            OutImage.format_axis(ax1)
+
             signal = np.empty_like(accrad, dtype=np.float64)
             for i in range(accrad.shape[0]):
                 T_arr = np.where(dist <= accrad[i], T_elems, 0.0)
                 signal[i] = T_arr @ self.indata[0]
+
             ax2 = plt.subplot(2, 2, 4)
-            ax2.plot(accrad, signal, 'o-')
+            ax2.plot(accrad, signal, 'go-')
             ax2.axvline(self.blk.cfg.n2, c='r', ls='--')
             ax2.axhline(self.outimage[0, 0].ravel()[out_idx], c='b', ls='--')
+
             ax2.set_xlim(ax1.get_xlim())
+            ax2.set_xlabel('acceptance radius')
+            ax2.set_ylabel('signal')
+            OutImage.format_axis(ax2)
 
             plt.show()
 
         for in_idx in closest_inpix:
             print(f'{(self.inx_val[in_idx], self.iny_val[in_idx])=}')
-            plt.imshow(self.T[0, :, in_idx].reshape(n2f, n2f), origin='lower')
-            plt.colorbar()
-            plt.scatter(self.inx_val[in_idx]-(self.left-fk2//2),
-                        self.iny_val[in_idx]-(self.bottom-fk2//2), c='r', s=2)
+            fig, ax = plt.subplots(figsize=(4.2, 4.2))
+            im = ax.imshow(self.T[0, :, in_idx].reshape(n2f, n2f), origin='lower',
+                           extent=[self.left-fk, self.right+fk, self.bottom-fk, self.top+fk])
+            plt.colorbar(im, ax=ax)
+            ax.scatter(self.inx_val[in_idx] - self.left,
+                       self.iny_val[in_idx] - self.bottom, c='r', s=2)
+
+            ax.set_xlabel('output grid $i$')
+            ax.set_ylabel('output grid $j$')
+            ax.set_title(r'$T_{\alpha i}$')
+            OutImage.format_axis(ax, False)
+
             plt.show()
 
     def clear(self) -> None:
@@ -1200,7 +1364,7 @@ class Block:
         self.cfg = cfg
         if cfg is None: self.cfg = Config()  # use the default config
 
-        PSFGrp.setup(npixpsf=cfg.npixpsf, oversamp=cfg.inpsf_oversamp)
+        PSFGrp.setup(npixpsf=cfg.npixpsf, oversamp=cfg.inpsf_oversamp, dtheta=cfg.dtheta)
         PSFOvl.setup(flat_penalty=cfg.flat_penalty)
         self.this_sub = this_sub
         if run_coadd: self()
@@ -1444,7 +1608,7 @@ class Block:
         if self.cfg.stoptile: self.nrun = self.cfg.stoptile
         self._build_use_instamps()
 
-    def process_input_images(self) -> None:
+    def process_input_images(self, visualize: bool = False) -> None:
         '''
         Process input images.
 
@@ -1487,7 +1651,8 @@ class Block:
             if not inimage.exists_:
                 inimage.is_relevant = False
                 continue
-            inimage.partition_pixels()
+            inimage.partition_pixels(visualize=visualize)
+            # visualize = False  # For now, visualize at most one partitioning process.
             if not inimage.is_relevant: continue
             inimage.extract_layers()
             print()
