@@ -824,6 +824,11 @@ def get_all_data(inimage: 'coadd.InImage'):
             with lock.acquire(timeout=1):
                 if not exists(inlayer_filepath):
                     print('saving input layer >>', inlayer_filepath)
-                    fits.PrimaryHDU(inimage.indata).writeto(inlayer_filepath)
+                    pr = fits.PrimaryHDU(inimage.indata)
+                    # the sciwcs HDU is simply here to save a 2D image with the science WCS --- it doesn't have science data in it
+                    # need relax=True to write SIP coefficients
+                    sciwcs = fits.ImageHDU(np.zeros((Stn.sca_nside, Stn.sca_nside), dtype=np.uint8),
+                        header=inimage.inwcs.to_header(relax=True), name='SCIWCS')
+                    fits.HDUList([pr,sciwcs]).writeto(inlayer_filepath)
         except Timeout:
             pass
