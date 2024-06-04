@@ -33,7 +33,7 @@ import matplotlib.pyplot as plt
 from .config import Timer, Settings as Stn, Config
 from .layer import check_if_idsca_exists, get_all_data, Mask
 from .psfutil import PSFGrp, PSFOvl, SysMatA, SysMatB
-from .lakernel import EigenKernel, ChoKernel, IterKernel, EmpirKernel
+from .lakernel import EigenKernel, CholKernel, IterKernel, EmpirKernel
 from .analysis import OutImage
 
 
@@ -675,7 +675,7 @@ class OutStamp:
 
     LAKERNEL = {
         'Eigen'    : EigenKernel,
-        'Cholesky' : ChoKernel,
+        'Cholesky' : CholKernel,
         'Iterative': IterKernel,
         'Empirical': EmpirKernel,
     }
@@ -1942,7 +1942,7 @@ class Block:
                 my_header, 'EFFCOVER', ('20uB', '50000*log10(Neff)')))
 
         hdu_list = fits.HDUList(hdulist)
-        hdu_list.writeto(self.outstem+'_map.fits', overwrite=True)
+        hdu_list.writeto(self.outstem+'.fits', overwrite=True)
 
     def clear_all(self) -> None:
         '''

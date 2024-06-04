@@ -5,7 +5,7 @@ Classes
 -------
 _LAKernel : Abstract base class of linear algebra kernels.
 EigenKernel : LA kernel using eigendecomposition.
-ChoKernel : LA kernel using Cholesky decomposition.
+CholKernel : LA kernel using Cholesky decomposition.
 IterKernel : LA kernel using iterative method.
 EmpirKernel : Fake LA kernel using empirical relation.
 
@@ -190,7 +190,7 @@ class EigenKernel(_LAKernel):
             self.outst.T[k, :, :] = tt @ Q.T
 
 
-class ChoKernel(_LAKernel):
+class CholKernel(_LAKernel):
     '''
     LA kernel using Cholesky decomposition.
 
@@ -263,7 +263,7 @@ class ChoKernel(_LAKernel):
             my_kappa = self.kappaC_arr[0] * C[j_out]
 
             AA[di] += my_kappa
-            L = ChoKernel._cholesky_wrapper(AA, di, A)
+            L = CholKernel._cholesky_wrapper(AA, di, A)
             Ti = cho_solve((L, True), mBhalf[j_out, :, :].T, check_finite=False).T  # (m, n)
             del AA, di, L
 
@@ -308,7 +308,7 @@ class ChoKernel(_LAKernel):
 
             for j in range(nv):
                 AA[di] += kappa_arr[j] - (kappa_arr[j-1] if j > 0 else 0)
-                L = ChoKernel._cholesky_wrapper(AA, di, A)
+                L = CholKernel._cholesky_wrapper(AA, di, A)
                 Tpi[j, :, :] = cho_solve((L, True), mBhalf[j_out, :, :].T, check_finite=False).T
             del AA, di, L
 
