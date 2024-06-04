@@ -705,13 +705,19 @@ class OutStamp:
         # the final _s indicates plural
         self.ji_st_in_s = [(j_st+dj, i_st+di) for dj in range(-1, 2) for di in range(-1, 2)]
 
-        # count references to PSF overlaps and system submatrices
-        for ji_st_in in self.ji_st_in_s:
-            blk.sysmata.get_iisubmat(ji_st_in, ji_st_in, sim_mode=True)
-            blk.sysmatb.get_iosubmat(ji_st_in, (j_st, i_st), sim_mode=True)
+        # no-quality control option of the empirical kernel
+        self.no_qlt_ctrl = False
+        if blk.cfg.linear_algebra == 'Empirical':
+            self.no_qlt_ctrl = blk.cfg.no_qlt_ctrl
 
-        for ji_st_pair in combinations(self.ji_st_in_s, 2):
-            blk.sysmata.get_iisubmat(*ji_st_pair, sim_mode=True)
+        # count references to PSF overlaps and system submatrices
+        if not self.no_qlt_ctrl:
+            for ji_st_in in self.ji_st_in_s:
+                blk.sysmata.get_iisubmat(ji_st_in, ji_st_in, sim_mode=True)
+                blk.sysmatb.get_iosubmat(ji_st_in, (j_st, i_st), sim_mode=True)
+
+            for ji_st_pair in combinations(self.ji_st_in_s, 2):
+                blk.sysmata.get_iisubmat(*ji_st_pair, sim_mode=True)
 
         # limit y and x positions of this output postage stamp, all integers
         # not including the transition pixels (of which the number
@@ -851,6 +857,13 @@ class OutStamp:
         None.
 
         '''
+
+        # no-quality control option of the empirical kernel
+        if self.no_qlt_ctrl:
+            lakernel = OutStamp.LAKERNEL[self.blk.cfg.linear_algebra](self)
+            lakernel(); del lakernel
+            # this produces: self.T, (n_out, n_outpix, n_inpix)
+            return
 
         # the A-matrix first
         self.sysmata = np.zeros((self.inpix_cumsum[-1], self.inpix_cumsum[-1]))  # dtype=np.float64

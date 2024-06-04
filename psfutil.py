@@ -297,6 +297,7 @@ class PSFGrp:
             self._build_inpsfgrp(visualize)
             # this produces the following instance attributes:
             # use_inimage, idx_blk2grp, idx_grp2blk, n_psf, psf_arr
+            cfg = inst.blk.cfg
 
         else:  # output PSF group
             assert blk is not None, 'block must be specified for an output PSF group'
@@ -306,15 +307,30 @@ class PSFGrp:
             self._build_outpsfgrp(visualize)
             # this produces the following instance attributes:
             # n_psf, psf_arr
+            cfg = blk.cfg
 
-        if False:  # KC's experimental feature
+        if cfg.psf_circ:  # apply a circular cutout to PSFs
             ro = np.hypot(PSFGrp.yxo[0], PSFGrp.yxo[1])
             self.psf_arr *= (ro < PSFGrp.nc+0.5)  # circular cutout
+
+        if cfg.psf_norm:  # normalize PSFs after sampling
             psf_arr_ = np.moveaxis(self.psf_arr, 0, -1)  # create a view
             psf_arr_ /= self.psf_arr.sum(axis=(-2, -1))  # normalization
 
         self.psf_rft = PSFGrp.accel_pad_and_rfft2(self.psf_arr)
         del self.psf_arr  # remove the PSFs since they are only used for FFT purposes
+
+        if 0.0 not in cfg.amp_penalty:  # change the weighting of Fourier modes
+            nfft = PSFGrp.nfft  # shortcut
+            u = np.linspace(0, 1-1/nfft, nfft)
+            u = np.where(u > 0.5, u-1, u)
+            u2 = np.square(u)
+            ut2 = np.tile(u2[None, :nfft//2+1], (nfft, 1)) \
+                + np.tile(u2[:, None], (1, nfft//2+1))
+
+            self.psf_rft *= 1.0 + cfg.amp_penalty[0] \
+                * np.exp(-2.0*np.pi**2 * ut2 * (cfg.amp_penalty[1]*PSFGrp.oversamp)**2)
+            del u, u2, ut2
 
     @staticmethod
     def visualize_psf(psf_: np.array, yxco: np.array,
@@ -456,6 +472,7 @@ class PSFGrp:
         psf_compute_point = blk.outwcs.all_pix2world(np.array([self.inst.psf_compute_point_pix]), 0)[0]
         dWdp_out = wcs.utils.local_partial_pixel_derivatives(blk.outwcs, *self.inst.psf_compute_point_pix)
         print('INPUT/PSF computation at RA={:8.4f}, Dec={:8.4f}'.format(*psf_compute_point), end='; ')
+        print('using input exposures:', [self.idx_grp2blk[idx] for idx in range(self.n_psf)])
         # print(' --> partial derivatives, ', dWdp_out)
 
         self.psf_arr = np.zeros((self.n_psf, PSFGrp.nsamp, PSFGrp.nsamp))
@@ -469,7 +486,6 @@ class PSFGrp:
                 print(f'The PSF below is from InImage {(self.inst.blk.inimages[self.idx_grp2blk[idx]].idsca)}',
                       f'at the upper right corner of InStamp {(self.inst.j_st, self.inst.i_st)}')
             self._sample_psf(idx, this_psf, inimage.outpix2world2inpix, visualize=visualize)
-        print('using input exposures:', [self.idx_grp2blk[idx] for idx in range(self.n_psf)])
 
     @staticmethod
     def _get_outpsf(outpsf: str = 'AIRYOBSC', extrasmooth: float = 0.0,

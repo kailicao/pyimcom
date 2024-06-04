@@ -163,6 +163,20 @@ class Config:
 
     '''
 
+    __slots__ = (
+        'cfg_file', 'NsideP', 'n1P', 'n2f',  # __init__
+        'obsfile', 'inpath', 'informat', 'use_filter', 'inpsf_path', 'inpsf_format', 'inpsf_oversamp',
+        'psfsplit', 'psfsplit_r1', 'psfsplit_r2', 'psfsplit_epsilon',  # SECTION I
+        'permanent_mask', 'cr_mask_rate', 'extrainput', 'n_inframe', 'labnoisethreshold',  # SECTION II
+        'ra', 'dec', 'nblock', 'n1', 'n2', 'dtheta', 'Nside',  # SECTION III
+        'fade_kernel', 'postage_pad', 'pad_sides', 'stoptile',  # SECTION IV
+        'outmaps', 'outstem', 'tempfile', 'inlayercache',  # SECTION V
+        'n_out', 'outpsf', 'sigmatarget', 'outpsf_extra', 'sigmatarget_extra',  # SECTION VI
+        'npixpsf', 'psf_circ', 'psf_norm', 'amp_penalty', 'flat_penalty', 'instamp_pad',  # SECTION VII
+        'linear_algebra', 'iter_rtol', 'iter_max', 'no_qlt_ctrl',
+        'kappaC_arr', 'uctarget', 'sigmamax',  # SECTION VIII
+    )
+
     def __init__(self, cfg_file: str = '') -> None:
         '''
         Constructor.
@@ -298,6 +312,11 @@ class Config:
         ### SECTION VII: BUILDING LINEAR SYSTEMS ###
         # width of PSF sampling/overlap arrays in native pixels
         self.npixpsf = cfg_dict.get('NPIXPSF', 48)
+        # experimental feature to apply a circular cutout to PSFs
+        self.psf_circ = cfg_dict.get('PSFCIRC', False)
+        # experimental feature to normalize PSFs after sampling
+        self.psf_norm = cfg_dict.get('PSFNORM', False)
+
         # experimental feature to change the weighting of Fourier modes
         self.amp_penalty = cfg_dict.get('AMPPEN', (0.0, 0.0))
         # amount by which to penalize having different contributions
@@ -309,6 +328,17 @@ class Config:
         ### SECTION VIII: SOLVING LINEAR SYSTEMS ###
         # kernel to solve linear systems
         self.linear_algebra = cfg_dict.get('LAKERNEL', 'Cholesky')
+        if self.linear_algebra == 'Iterative':
+            # relative tolerance and maximum number of iterations
+            self.iter_rtol = cfg_dict.get('ITERRTOL', 1.5e-3)
+            self.iter_max = cfg_dict.get('ITERMAX', 30)
+        elif self.linear_algebra == 'Empirical':
+            # no-quality control option
+            self.no_qlt_ctrl = cfg_dict.get('EMPIRNQC', False)
+            if self.no_qlt_ctrl:
+                self.outmaps = self.outmaps.replace('U', '').replace('S', '')
+            elif 'U' not in self.outmaps and 'S' not in self.outmaps:
+                self.no_qlt_ctrl = True
 
         # Lagrange multiplier (kappa) information
         # list of kappa/C values, ascending order
@@ -545,6 +575,16 @@ class Config:
             "NPIXPSF = input('NPIXPSF (int) [default: 48]: ')" '\n'
             "self.npixpsf = (int(NPIXPSF) if NPIXPSF else 48)")
 
+        print('# whether to apply a circular cutout to PSFs', flush=True)
+        self._get_attrs_wrapper(
+            "PSFCIRC = input('PSFCIRC (bool) [default: False]: ')" '\n'
+            "self.psf_circ = (bool(eval(PSFCIRC)) if PSFCIRC else False)")
+
+        print('# whether to normalize PSFs after sampling', flush=True)
+        self._get_attrs_wrapper(
+            "PSFNORM = input('PSFNORM (bool) [default: False]: ')" '\n'
+            "self.psf_norm = (bool(eval(PSFNORM)) if PSFNORM else False)")
+
         print('# experimental feature to change the weighting of Fourier modes' '\n'
               '# format: (amp, sig), where amp is the amplitude,' '\n'
               '# sig is the width in units of input pixels', flush=True)
@@ -575,6 +615,29 @@ class Config:
             "LAKERNEL = input('LAKERNEL (str) [default: \"Cholesky\"]: ')" '\n'
             "self.linear_algebra = LAKERNEL if LAKERNEL else 'Cholesky'" '\n'
             "assert self.linear_algebra in ['Eigen', 'Cholesky', 'Iterative', 'Empirical'], 'unrecognized kernel'")
+
+        if self.linear_algebra == 'Iterative':
+            print('# Iterative kernel: relative tolerance', flush=True)
+            self._get_attrs_wrapper(
+                "ITERRTOL = input('ITERRTOL (float) [default: 1.5e-3]: ')" '\n'
+                "self.iter_rtol = (float(ITERRTOL) if ITERRTOL else 1.5e-3)")
+            print('# Iterative kernel: maximum number of iterations', flush=True)
+            self._get_attrs_wrapper(
+                "ITERMAX = input('ITERMAX (int) [default: 30]: ')" '\n'
+                "self.iter_max = (int(ITERMAX) if ITERMAX else 30)")
+
+        elif self.linear_algebra == 'Empirical':
+            print('# Empirical kernel: no-quality control option' '\n'
+                  '# coadd images without computing system matrices A and B' '\n'
+                  '# "U" and "S" will be automatically removed from OUTMAPS;' '\n'
+                  '# automatically set to true if neither "U" nor "S" is in OUTMAPS', flush=True)
+            self._get_attrs_wrapper(
+                "EMPIRNQC = input('EMPIRNQC (bool) [default: False]: ')" '\n'
+                "self.no_qlt_ctrl = (bool(eval(EMPIRNQC)) if EMPIRNQC else False)")
+            if self.no_qlt_ctrl:
+                self.outmaps = self.outmaps.replace('U', '').replace('S', '')
+            elif 'U' not in self.outmaps and 'S' not in self.outmaps:
+                self.no_qlt_ctrl = True
 
         print('# Lagrange multiplier (kappa) information' '\n'
               '# list of kappa/C values, ascending order' '\n'
@@ -664,12 +727,21 @@ class Config:
 
         ### SECTION VII: BUILDING LINEAR SYSTEMS ###
         cfg_dict['NPIXPSF'] = self.npixpsf
+        cfg_dict['PSFCIRC'] = self.psf_circ
+        cfg_dict['PSFNORM'] = self.psf_norm
+
         cfg_dict['AMPPEN'] = self.amp_penalty
         cfg_dict['FLATPEN'] = self.flat_penalty
         cfg_dict['INPAD'] = self.instamp_pad / Settings.arcsec
 
         ### SECTION VIII: SOLVING LINEAR SYSTEMS ###
         cfg_dict['LAKERNEL'] = self.linear_algebra
+        if self.linear_algebra == 'Iterative':
+            cfg_dict['ITERRTOL'] = self.iter_rtol
+            cfg_dict['ITERMAX'] = self.iter_max
+        elif self.linear_algebra == 'Empirical':
+            cfg_dict['EMPIRNQC'] = self.no_qlt_ctrl
+
         cfg_dict['KAPPAC'] = list(self.kappaC_arr)
         cfg_dict['UCMIN'] = self.uctarget
         cfg_dict['SMAX'] = self.sigmamax

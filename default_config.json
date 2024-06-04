@@ -42,10 +42,13 @@
     "OUTMAPS": "USTN",
     "OUT": "/users/PAS2055/kailicao/pyimcom_dev/test/test4C_Yband",
     "TEMPFILE": "/tmp/kailicao-tempy",
+    "INLAYERCACHE": "",
     "NOUT": 1,
     "OUTPSF": "AIRYOBSC",
     "EXTRASMOOTH": 0.9554870253240214,
     "NPIXPSF": 48,
+    "PSFCIRC": false,
+    "PSFNORM": false,
     "AMPPEN": [
         0.0,
         0.0
@@ -53,6 +56,8 @@
     "FLATPEN": 0.0,
     "INPAD": 0.625,
     "LAKERNEL": "Iterative",
+    "ITERRTOL": 0.0015,
+    "ITERMAX": 30,
     "KAPPAC": [
         1e-05
     ],

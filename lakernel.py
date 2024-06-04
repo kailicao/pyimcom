@@ -62,9 +62,8 @@ class _LAKernel:
         cfg = outst.blk.cfg  # shortcut
 
         # get parameters
-        self.n_out, self.m, self.n = np.shape(outst.mhalfb)
-        # self.n_out = cfg.n_out; self.m = cfg.n2f ** 2
-        # self.n = self.outst.inpix_cumsum[-1]  # number of input pixels
+        self.n_out = cfg.n_out; self.m = cfg.n2f ** 2
+        self.n = self.outst.inpix_cumsum[-1]  # number of input pixels
         self.n2f = cfg.n2f
 
         self.kappaC_arr = cfg.kappaC_arr  # eigenvalue nodes, vector, length nv, ascending order
@@ -352,8 +351,8 @@ def conjugate_gradient(A: np.array, b: np.array, rtol: float = 1.5e-3,
         System matrix A.
     b : np.array, shape : (n,)
         Column vector b.
-    atol : float, optional
-        Absolute tolerance. The default is 1e-5.
+    rtol : float, optional
+        Relative tolerance. The default is 1.5e-3.
     maxiter : int, optional
         Maximum number of iteration. The default is 30.
 
@@ -516,8 +515,8 @@ class IterKernel(_LAKernel):
 
     @staticmethod
     @njit
-    def _iterative_wrapper(AA: np.array, mBhalf: np.array,
-                           relevant_matrix: np.array) -> np.array:
+    def _iterative_wrapper(AA: np.array, mBhalf: np.array, relevant_matrix: np.array,
+                           rtol: float = 1.5e-3, maxiter: int = 30) -> np.array:
         '''
         Wrapper for conjugate gradient method.
 
@@ -529,6 +528,10 @@ class IterKernel(_LAKernel):
             System matrix -B/2 (for a single target PSF).
         relevant_matrix : np.array, shape : (m, n)
             Boolean array indicating whether to use an input pixel for an output pixel.
+        rtol : float, optional
+            Relative tolerance. The default is 1.5e-3.
+        maxiter : int, optional
+            Maximum number of iteration. The default is 30.
 
         Returns
         -------
@@ -544,7 +547,8 @@ class IterKernel(_LAKernel):
         for a in range(m):
             _assign_subvector(Ti[a], conjugate_gradient(
                 _extract_submatrix(AA, relevant_matrix[a]),
-                _extract_subvector(mBhalf[a], relevant_matrix[a])), relevant_matrix[a])
+                _extract_subvector(mBhalf[a], relevant_matrix[a]),
+                rtol, maxiter), relevant_matrix[a])
 
         return Ti
 
@@ -586,7 +590,8 @@ class IterKernel(_LAKernel):
             my_kappa = self.kappaC_arr[0] * C[j_out]
 
             AA[di] += my_kappa
-            Ti = IterKernel._iterative_wrapper(AA, mBhalf[j_out], relevant_matrix)
+            Ti = IterKernel._iterative_wrapper(AA, mBhalf[j_out], relevant_matrix,
+                                               cfg.iter_rtol, cfg.iter_max)
 
             # build values at node
             D = np.einsum('ai,ai->a', mBhalf[j_out, :, :], Ti)
@@ -648,7 +653,8 @@ class IterKernel(_LAKernel):
 
             for j in range(nv):
                 AA[di] += kappa_arr[j] - (kappa_arr[j-1] if j > 0 else 0)
-                Tpi[j] = IterKernel._iterative_wrapper(AA, mBhalf[j_out], relevant_matrix)
+                Tpi[j] = IterKernel._iterative_wrapper(AA, mBhalf[j_out], relevant_matrix,
+                                                       cfg.iter_rtol, cfg.iter_max)
             del AA, di
 
             # build values at nodes
@@ -707,11 +713,6 @@ class EmpirKernel(_LAKernel):
 
         '''
 
-        # get arrays
-        A = self.outst.sysmata  # in-in overlap matrix, shape (n, n)
-        mBhalf = self.outst.mhalfb  # in-out overlap matrix, shape (n_out, m, n)
-        C = self.outst.outovlc  # out-out overlap, vector, length n_out
-
         mddy = self.outst.yx_val[0].ravel()[:, None] - self.outst.iny_val[None, :]
         mddx = self.outst.yx_val[1].ravel()[:, None] - self.outst.inx_val[None, :]
         cfg = self.outst.blk.cfg  # shortcut
@@ -720,6 +721,17 @@ class EmpirKernel(_LAKernel):
         Ti = np.maximum(rho_acc - np.hypot(mddy, mddx), 0); del mddy, mddx
         Ti_view = np.moveaxis(Ti, -1, 0)
         Ti_view /= np.sum(Ti, axis=-1)[None]
+
+        # no-quality control option
+        if self.outst.no_qlt_ctrl:
+            self.outst.T[:, :, :] = Ti
+            del Ti
+            return
+
+        # get arrays
+        A = self.outst.sysmata  # in-in overlap matrix, shape (n, n)
+        mBhalf = self.outst.mhalfb  # in-out overlap matrix, shape (n_out, m, n)
+        C = self.outst.outovlc  # out-out overlap, vector, length n_out
 
         # loop over output PSFs
         for j_out in range(self.n_out):
@@ -735,7 +747,9 @@ class EmpirKernel(_LAKernel):
             self.Sigma_ [j_out, :] = N
             self.UC_    [j_out, :] = 1.0 + (E - 2*D)/C[j_out]
             self.outst.T[j_out, :, :] = Ti
-            del D, N, Ti
+            del D, N
+
+        del Ti
 
     def _call_multi_kappa(self) -> None:
         '''
