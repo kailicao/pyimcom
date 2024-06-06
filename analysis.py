@@ -4,6 +4,7 @@ Tools to analyze coadded images.
 Classes
 -------
 OutImage : Wrapper for coadded images (blocks).
+Mosaic : Wrapper for coadded mosaics (2D arrays of blocks).
 
 '''
 
@@ -12,8 +13,8 @@ from os.path import exists
 import numpy as np
 from astropy.io import fits
 
-from .config import Config
-from pyimcom.coadd import Block
+from .config import Timer, Config
+from .coadd import OutStamp, Block
 
 
 class OutImage:
@@ -26,6 +27,9 @@ class OutImage:
     get_coadded_layer : Extract a coadded layer from the primary HDU.
     get_output_map : Extract an output map from the additional HDUs.
 
+    _load_or_save_hdu_list : Load data from or save data to FITS file.
+    _update_hdu_data : Update data using data provided by a neighbor.
+
     '''
 
     def __init__(self, fpath: str, cfg: Config = None, hdu_names: [str] = None) -> None:
@@ -36,6 +40,14 @@ class OutImage:
         ----------
         fpath : str
             Path to the output FITS file.
+        cfg : Config, optional
+            Configuration used for this output image.
+            If provided, no consistency check is performed.
+            The default is None. If None, it will be extracted from FITS file.
+        hdu_names : [str], optional
+            List of HDU names of this FITS file.
+            If provided, no consistency check is performed.
+            The default is None. If None, it will be derived from cfg.
 
         Returns
         -------
@@ -141,15 +153,58 @@ class OutImage:
             self.hdu_list.close(); del self.hdu_list
         return data
 
-    def _load_or_save_hdu_list(self, load_mode: bool = True) -> None:
+    def _load_or_save_hdu_list(self, load_mode: bool = True, save_file: bool = False) -> None:
+        '''
+        Load data from or save data to FITS file.
+
+        Parameters
+        ----------
+        load_mode : bool, optional
+            If True, load data from FITS file (if not already loaded);
+            if False, remove current data from memory (if data exist).
+            The default is True.
+        save_file : bool, optional
+            Only used when load_mode == True. If (save_file ==) True,
+            save current data to FITS file (overwriting the existing file).
+            The default is False.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         if load_mode:
             if not hasattr(self, 'hdu_list'):
                 self.hdu_list = fits.open(self.fpath)
         else:
-            self.hdu_list.writeto(self.fpath, overwrite=True)
-            self.hdu_list.close(); del self.hdu_list
+            if save_file: self.hdu_list.writeto(self.fpath, overwrite=True)
+            if hasattr(self, 'hdu_list'):
+                self.hdu_list.close(); del self.hdu_list
 
     def _update_hdu_data(self, neighbor: 'OutImage', direction: str, add_mode: bool = True) -> None:
+        '''
+        Update data using data provided by a neighbor.
+
+        This method is developed for postprocessing, i.e.,
+        sharing padding postage stamps between adjacent blocks.
+
+        Parameters
+        ----------
+        neighbor : OutImage
+            Neighboring output image (block) who shares data with "me."
+        direction : str
+            Which side to update. Must be 'left', 'right', 'bottom', or 'top'.
+        add_mode : bool, optional
+            If True, update "my" data by adding neighbor's to "mine;"
+            if False, replace "my" data with neighbor's. The default is True.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         assert direction in ['left', 'right', 'bottom', 'top'],\
         f"Error: direction '{direction}' not supported by _update_hdu_data"
 
@@ -212,20 +267,37 @@ class OutImage:
                          axes=(0, 2, 1, 3)).reshape((n_out*n1P, n_inimage*n1P))
 
         # update output maps
+        fk = self.cfg.fade_kernel
+
         for outmap in self.hdu_names[5:]:
             my_maps =     self.get_output_map(outmap, None)
             ur_maps = neighbor.get_output_map(outmap, None)
 
             if direction == 'left':
+                if add_mode:
+                    OutStamp.trapezoid(my_maps, fk, False, (0, 0, width-fk, 0), 'L')
+                    OutStamp.trapezoid(ur_maps, fk, False, (0, 0, 0, width-fk), 'R')
                 my_slice = np.s_[:, :,      0        :       width+fk]
                 ur_slice = np.s_[:, :, NsideP-width*2:NsideP-width+fk]
+
             elif direction == 'right':
+                if add_mode:
+                    OutStamp.trapezoid(my_maps, fk, False, (0, 0, 0, width-fk), 'R')
+                    OutStamp.trapezoid(ur_maps, fk, False, (0, 0, width-fk, 0), 'L')
                 my_slice = np.s_[:, :, NsideP-width-fk:NsideP        ]
                 ur_slice = np.s_[:, :,        width-fk:       width*2]
+
             elif direction == 'bottom':
+                if add_mode:
+                    OutStamp.trapezoid(my_maps, fk, False, (width-fk, 0, 0, 0), 'B')
+                    OutStamp.trapezoid(ur_maps, fk, False, (0, width-fk, 0, 0), 'T')
                 my_slice = np.s_[:,      0        :       width+fk, :]
                 ur_slice = np.s_[:, NsideP-width*2:NsideP-width+fk, :]
+
             elif direction == 'top':
+                if add_mode:
+                    OutStamp.trapezoid(my_maps, fk, False, (0, width-fk, 0, 0), 'T')
+                    OutStamp.trapezoid(ur_maps, fk, False, (width-fk, 0, 0, 0), 'B')
                 my_slice = np.s_[:, NsideP-width-fk:NsideP        , :]
                 ur_slice = np.s_[:,        width-fk:       width*2, :]
 
@@ -238,8 +310,31 @@ class OutImage:
 
 
 class Mosaic:
+    '''
+    Wrapper for coadded mosaics (2D arrays of blocks).
+
+    Methods
+    -------
+    __init__ : Constructor.
+    share_padding_stamps : Share padding postage stamps between adjacent blocks.
+
+    '''
 
     def __init__(self, cfg: Config) -> None:
+        '''
+        Constructor.
+
+        Parameters
+        ----------
+        cfg : Config
+            Configuration used for this output mosaic.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         self.cfg = cfg
         self.hdu_names = OutImage.get_hdu_names(cfg.outmaps)
 
@@ -252,25 +347,41 @@ class Mosaic:
                 self.outimages[iby][ibx] = OutImage(fpath, cfg, self.hdu_names)
 
     def share_padding_stamps(self) -> None:
+        '''
+        Share padding postage stamps between adjacent blocks.
+
+        Returns
+        -------
+        None.
+
+        '''
+
         assert self.cfg.pad_sides == 'auto', "Error: this method only supports pad_sides == 'auto'"
         nblock = self.cfg.nblock  # shortcut
+        timer = Timer()
 
-        # horizontal sharing
+        print(' > horizontal sharing')
         for jbx in range(nblock):
+            print(' > row {:2d}  t= {:9.2f} s'.format(jbx, timer()))
             self.outimages[jbx][0]._load_or_save_hdu_list(True)
             for ibx in range(nblock-1):
                 self.outimages[jbx][ibx+1]._load_or_save_hdu_list(True)
                 self.outimages[jbx][ibx]._update_hdu_data(self.outimages[jbx][ibx+1], 'right', True)
                 self.outimages[jbx][ibx+1]._update_hdu_data(self.outimages[jbx][ibx], 'left', False)
-                self.outimages[jbx][ibx]._load_or_save_hdu_list(False)
-            self.outimages[jbx][nblock-1]._load_or_save_hdu_list(True)
+                self.outimages[jbx][ibx]._load_or_save_hdu_list(False, save_file=True)
+            self.outimages[jbx][nblock-1]._load_or_save_hdu_list(False, save_file=True)
+        print(flush=True)
 
-        # vertical sharing
+        print(' > vertical sharing')
         for ibx in range(nblock):
+            print(' > column {:2d}  t= {:9.2f} s'.format(ibx, timer()))
             self.outimages[0][ibx]._load_or_save_hdu_list(True)
             for jbx in range(nblock-1):
                 self.outimages[jbx+1][ibx]._load_or_save_hdu_list(True)
                 self.outimages[jbx][ibx]._update_hdu_data(self.outimages[jbx+1][ibx], 'top', True)
                 self.outimages[jbx+1][ibx]._update_hdu_data(self.outimages[jbx][ibx], 'bottom', False)
-                self.outimages[jbx][ibx]._load_or_save_hdu_list(False)
-            self.outimages[nblock-1][ibx]._load_or_save_hdu_list(False)
+                self.outimages[jbx][ibx]._load_or_save_hdu_list(False, save_file=True)
+            self.outimages[nblock-1][ibx]._load_or_save_hdu_list(False, save_file=True)
+        print(flush=True)
+
+        print(f'finished at t = {timer():.2f} s')

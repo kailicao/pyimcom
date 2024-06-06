@@ -55,3 +55,4 @@ for $i (0..$Nr-1) {
 # Wait for children
 my $k;
 for $k (1..$N) {wait();}
+print strftime "%Y-%m-%d %H:%M:%S\n", localtime time;

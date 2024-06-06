@@ -659,7 +659,6 @@ class OutStamp:
     -------
     __init__ : Constructor.
     _process_input_stamps : Fetch and process input postage stamps.
-
     __call__ : Build system matrices and perform coaddition.
     _build_system_matrices : Build system matrices and coaddition matrices.
     _visualize_system_matrices : Visualize system matrices.
@@ -1047,34 +1046,64 @@ class OutStamp:
             plt.show()
 
     @staticmethod
-    def trapezoid(arr, fade_kernel, use_trunc_sinc=True, recover_mode=False) -> None:
+    def trapezoid(arr: np.array, fade_kernel: int, recover_mode: bool = False,
+                  pad_widths: (int, int, int, int) = (0, 0, 0, 0),
+                  do_sides: str = 'BTLR', use_trunc_sinc: bool = True) -> None:
         '''
-        Apply a trapezoid filter of width n+2*fade_kernel on each side.
+        Apply a trapezoid filter of width 2*fade_kernel on each side.
+
+        Parameters
+        ----------
+        arr : np.array, shape : (..., ny, nx)
+            The array to apply the trapezoid filter.
+        fade_kernel : int
+            Half the width of the trapezoid filter.
+        recover_mode : bool, optional
+            Whether to recover faded boundaries. The default is False.
+        pad_widths : (int, int, int, int), optional
+            Padding width on each side (order: bottom, top, left, right).
+            The default is (0, 0, 0, 0).
+        do_sides : str, optional
+            Which sides to apply the trapezoid filter. The default is 'BTLR'.
+        use_trunc_sinc : bool, optional
+            Whether to use the truncated sinc function. The default is True.
+
+        Returns
+        -------
+        None.
 
         '''
 
-        assert arr.shape[-2] == arr.shape[-1], 'arr.shape[-2] != arr.shape[-1]'
-        n = arr.shape[-1]
         fk2 = fade_kernel * 2
-        assert n > fk2, 'Fatal error in OutStamp.trapezoid: ' \
-            f'insufficient patch size, {n= } {fade_kernel= }'
         if not fk2 > 0: return
+
+        ny, nx = arr.shape[-2:]
+        # assert ny > fk2 and nx > fk2, 'Fatal error in OutStamp.trapezoid: ' \
+        #     f'insufficient patch size, {ny= } {nx= } {fade_kernel= }'
+
+        pb, pt, pl, pr = pad_widths
+        # assert ny > pb and ny > pt, 'Fatal error in OutStamp.trapezoid: ' \
+        #     f'insufficient patch size, {ny= } {pb= } {pt= }'
+        # assert nx > pl and nx > pr, 'Fatal error in OutStamp.trapezoid: ' \
+        #     f'insufficient patch size, {nx= } {pl= } {pr= }'
+        it, ir = ny-pt-1, nx-pr-1  # starting indices on these two sides
 
         s = np.arange(1, fk2+1, dtype=np.float64) / (fk2+1)
         if use_trunc_sinc:
             s -= np.sin(2*np.pi*s)/(2*np.pi)
+        sT = s[None, :].T
 
         if not recover_mode:
-            arr[..., : fk2,      :] *= s[None, :].T
-            arr[..., :-fk2-1:-1, :] *= s[None, :].T
-            arr[..., :, : fk2     ] *= s
-            arr[..., :, :-fk2-1:-1] *= s
+            if 'B' in do_sides: arr[..., pb:pb+fk2   , :] *= sT
+            if 'T' in do_sides: arr[..., it:it-fk2:-1, :] *= sT
+            if 'L' in do_sides: arr[..., :, pl:pl+fk2   ] *= s
+            if 'R' in do_sides: arr[..., :, ir:ir-fk2:-1] *= s
 
         else:  # recover block boundaries
-            arr[..., : fk2,      :] /= s[None, :].T
-            arr[..., :-fk2-1:-1, :] /= s[None, :].T
-            arr[..., :, : fk2     ] /= s
-            arr[..., :, :-fk2-1:-1] /= s
+            if 'B' in do_sides: arr[..., pb:pb+fk2   , :] /= sT
+            if 'T' in do_sides: arr[..., it:it-fk2:-1, :] /= sT
+            if 'L' in do_sides: arr[..., :, pl:pl+fk2   ] /= s
+            if 'R' in do_sides: arr[..., :, ir:ir-fk2:-1] /= s
 
     def _perform_coaddition(self, visualize: bool = False,
                             save_t: bool = False, use_trunc_sinc: bool = True) -> None:
@@ -1596,26 +1625,27 @@ class Block:
         postage_pad = self.cfg.postage_pad  # shortcut
         self.j_st_min = self.i_st_min = postage_pad + 1  # 3 by default
         self.j_st_max = self.i_st_max = self.j_st_min + self.cfg.n1 - 1  # 50 by default
+        self.pad_sides = ''  # will also be used in build_output_file
 
         # adjust these based on which side(s) to pad on
         if self.cfg.pad_sides == 'all':  # pad on all sides
-            self.j_st_min -= postage_pad; self.i_st_min -= postage_pad
-            self.j_st_max += postage_pad; self.i_st_max += postage_pad
+            self.pad_sides = 'BTLR'
 
         elif self.cfg.pad_sides == 'auto':  # pad on mosaic boundaries only
             nblock = self.cfg.nblock  # shortcut
             ibx, iby = divmod(self.this_sub, self.cfg.nblock)
-            if iby == 0: self.j_st_min -= postage_pad
-            elif iby == nblock - 1: self.j_st_max += postage_pad
-            if ibx == 0: self.i_st_min -= postage_pad
-            elif ibx == nblock - 1: self.i_st_max += postage_pad
+            if iby == 0: self.pad_sides += 'B'
+            elif iby == nblock - 1: self.pad_sides += 'T'
+            if ibx == 0: self.pad_sides += 'L'
+            elif ibx == nblock - 1: self.pad_sides += 'R'
 
         elif self.cfg.pad_sides != 'none':  # pad on sides specified by the user
-            pad_sides = self.cfg.pad_sides  # shortcut
-            if 'B' in pad_sides: self.j_st_min -= postage_pad
-            if 'T' in pad_sides: self.j_st_max += postage_pad
-            if 'L' in pad_sides: self.i_st_min -= postage_pad
-            if 'R' in pad_sides: self.i_st_max += postage_pad
+            self.pad_sides = self.cfg.pad_sides
+
+        if 'B' in self.pad_sides: self.j_st_min -= postage_pad
+        if 'T' in self.pad_sides: self.j_st_max += postage_pad
+        if 'L' in self.pad_sides: self.i_st_min -= postage_pad
+        if 'R' in self.pad_sides: self.i_st_max += postage_pad
 
         self.nrun = (self.j_st_max - self.j_st_min + 1) \
                   * (self.i_st_max - self.i_st_min + 1)
@@ -1908,12 +1938,15 @@ class Block:
         outmaps = self.cfg.outmaps
 
         if is_final:  # recover block boundaries
-            OutStamp.trapezoid(self.out_map,   fk, recover_mode=True)
-            if 'U' in outmaps: OutStamp.trapezoid(self.UC_map,    fk, recover_mode=True)
-            if 'S' in outmaps: OutStamp.trapezoid(self.Sigma_map, fk, recover_mode=True)
-            if 'K' in outmaps: OutStamp.trapezoid(self.kappa_map, fk, recover_mode=True)
-            if 'T' in outmaps: OutStamp.trapezoid(self.Tsum_map,  fk, recover_mode=True)
-            if 'N' in outmaps: OutStamp.trapezoid(self.Neff_map,  fk, recover_mode=True)
+            OutStamp.trapezoid(self.out_map, fk, recover_mode=True)
+            width = self.cfg.postage_pad * self.cfg.n2  # width of padding region
+            pad_widths = (width * ('B' not in self.pad_sides), width * ('T' not in self.pad_sides),
+                          width * ('L' not in self.pad_sides), width * ('R' not in self.pad_sides))
+            if 'U' in outmaps: OutStamp.trapezoid(self.UC_map,    fk, True, pad_widths)
+            if 'S' in outmaps: OutStamp.trapezoid(self.Sigma_map, fk, True, pad_widths)
+            if 'K' in outmaps: OutStamp.trapezoid(self.kappa_map, fk, True, pad_widths)
+            if 'T' in outmaps: OutStamp.trapezoid(self.Tsum_map,  fk, True, pad_widths)
+            if 'N' in outmaps: OutStamp.trapezoid(self.Neff_map,  fk, True, pad_widths)
 
         my_header = self.outwcs.to_header()
         maphdu = fits.PrimaryHDU(self.out_map[:, :, fk:NsidePf-fk, fk:NsidePf-fk], header=my_header)
