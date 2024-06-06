@@ -30,11 +30,10 @@ from astropy import wcs
 import fitsio
 import matplotlib.pyplot as plt
 
-from .config import Timer, Settings as Stn, Config
+from .config import Timer, Settings as Stn, Config, format_axis
 from .layer import check_if_idsca_exists, get_all_data, Mask
 from .psfutil import PSFGrp, PSFOvl, SysMatA, SysMatB
 from .lakernel import EigenKernel, CholKernel, IterKernel, EmpirKernel
-from .analysis import OutImage
 
 
 class InImage:
@@ -210,7 +209,7 @@ class InImage:
                 ax.set_xlabel('sparse grid $i$')
                 ax.set_ylabel('sparse grid $j$')
                 ax.set_title(title)
-                OutImage.format_axis(ax, False)
+                format_axis(ax, False)
 
         del sp_outxys
 
@@ -307,7 +306,7 @@ class InImage:
             ax.set_xlabel('stamp index $i$')
             ax.set_ylabel('stamp index $j$')
             ax.set_title('pixel count')
-            OutImage.format_axis(ax, False)
+            format_axis(ax, False)
 
             plt.show()
 
@@ -665,6 +664,8 @@ class OutStamp:
     _build_system_matrices : Build system matrices and coaddition matrices.
     _visualize_system_matrices : Visualize system matrices.
     _visualize_coadd_matrices : Visualize coaddition matrices.
+
+    trapezoid (staticmethod) : Apply a trapezoid filter to transition pixels.
     _perform_coaddition : Perform the actual multiplication.
     _visualize_weight_computations : Display weight computations.
     _show_in_and_out_images : Display input and output images.
@@ -795,7 +796,7 @@ class OutStamp:
 
             ax.set_xlabel('output grid $i$')
             ax.set_ylabel('output grid $j$')
-            OutImage.format_axis(ax)
+            format_axis(ax)
             plt.show()
 
         # read input pixel positions and signals
@@ -972,7 +973,7 @@ class OutStamp:
         ax.set_xlabel('input pixel $i$')
         ax.set_ylabel('input pixel $j$')
         ax.set_title(r'$A$ matrix: $\log_{10} (A_{ij})$')
-        OutImage.format_axis(ax, False)
+        format_axis(ax, False)
         plt.show()
 
         # now the mBhalf matrix
@@ -991,7 +992,7 @@ class OutStamp:
             ax.set_xlabel(r'output pixel $\alpha$')
             ax.set_ylabel('input pixel $i$')
             ax.set_title(r'$B$ matrix: $\log_{10} (-B_{\alpha i}/2)$')
-            OutImage.format_axis(ax, False)
+            format_axis(ax, False)
             plt.show()
 
         # and C
@@ -1025,7 +1026,7 @@ class OutStamp:
                 ax.set_title(title)
                 ax.set_xlabel('output grid $i$')
                 ax.set_ylabel('output grid $j$')
-                OutImage.format_axis(ax, False)
+                format_axis(ax, False)
             plt.show()
 
             vmin, vmax = np.percentile(T_.ravel(), [1, 99])
@@ -1042,11 +1043,11 @@ class OutStamp:
             ax.set_xlabel(r'output pixel $\alpha$')
             ax.set_ylabel('input pixel $i$')
             ax.set_title(r'$T$ matrix: $T_{\alpha i}$')
-            OutImage.format_axis(ax, False)
+            format_axis(ax, False)
             plt.show()
 
     @staticmethod
-    def trapezoid(arr, fade_kernel, use_trunc_sinc=True, recover_mode=False):
+    def trapezoid(arr, fade_kernel, use_trunc_sinc=True, recover_mode=False) -> None:
         '''
         Apply a trapezoid filter of width n+2*fade_kernel on each side.
 
@@ -1169,7 +1170,7 @@ class OutStamp:
             ax.set_title('Total contribution')
             ax.set_xlabel(r'$\sum {}_\alpha \sum {}_{i \in \bar{i}} T_{\alpha i}$')
             ax.set_ylabel('input image')
-            OutImage.format_axis(ax, False)
+            format_axis(ax, False)
 
             for ax, map_, title in zip(axs[1:], [self.Tsum_inpix, self.Neff],
                                        [r'Total weight: $T_{\rm tot}$',
@@ -1181,7 +1182,7 @@ class OutStamp:
                 ax.set_title(title)
                 ax.set_xlabel('output grid $i$')
                 ax.set_ylabel('output grid $j$')
-                OutImage.format_axis(ax, False)
+                format_axis(ax, False)
             plt.show()
 
     def _show_in_and_out_images(self) -> None:
@@ -1211,7 +1212,7 @@ class OutStamp:
             ax.set_xlabel('output grid $i$')
             ax.set_ylabel('output grid $j$')
             ax.set_title('layer: ' + ('SCI' if j_in == 0 else self.blk.cfg.extrainput[j_in]))
-            OutImage.format_axis(ax)
+            format_axis(ax)
 
             for j_out in range(n_out):
                 ax = axs[1+j_out]
@@ -1222,7 +1223,7 @@ class OutStamp:
                 ax.set_xlabel('output grid $i$')
                 ax.set_ylabel('output grid $j$')
                 ax.set_title(f'output PSF: {j_out}')
-                OutImage.format_axis(ax, False)
+                format_axis(ax, False)
 
             plt.show()
 
@@ -1258,7 +1259,7 @@ class OutStamp:
             ax0.set_xlabel('output grid $i$')
             ax0.set_ylabel('output grid $j$')
             ax0.set_title(r'$T_{\alpha i}$')
-            OutImage.format_axis(ax0)
+            format_axis(ax0)
 
             # print(j_out-fk + self.bottom, i_out-fk + self.left)
             dist = np.sqrt(np.square(j_out-fk + self.bottom - self.iny_val) +\
@@ -1272,7 +1273,7 @@ class OutStamp:
 
             ax1.get_xaxis().set_visible(False)
             ax1.set_ylabel(r'$T_{\alpha i}$')
-            OutImage.format_axis(ax1)
+            format_axis(ax1)
 
             signal = np.empty_like(accrad, dtype=np.float64)
             for i in range(accrad.shape[0]):
@@ -1287,7 +1288,7 @@ class OutStamp:
             ax2.set_xlim(ax1.get_xlim())
             ax2.set_xlabel('acceptance radius')
             ax2.set_ylabel('signal')
-            OutImage.format_axis(ax2)
+            format_axis(ax2)
 
             plt.show()
 
@@ -1303,7 +1304,7 @@ class OutStamp:
             ax.set_xlabel('output grid $i$')
             ax.set_ylabel('output grid $j$')
             ax.set_title(r'$T_{\alpha i}$')
-            OutImage.format_axis(ax, False)
+            format_axis(ax, False)
 
             plt.show()
 
@@ -1686,16 +1687,31 @@ class Block:
 
         '''
 
-        # current version only works when acceptance radius <= postage stamp size
-        self.instamps = [[None for i_st in range(self.cfg.n1P+2)]
-                               for j_st in range(self.cfg.n1P+2)]  # st stands for stamp
+        n1P = self.cfg.n1P  # shortcuts
+        pad = self.cfg.postage_pad
 
-        for j_st in range(self.cfg.n1P+2):
-            for i_st in range(self.cfg.n1P+2):
+        # current version only works when acceptance radius <= postage stamp size
+        self.instamps = [[None for i_st in range(n1P+2)]
+                               for j_st in range(n1P+2)]  # st stands for stamp
+
+        n_inpix_out = 0  # number of input pixels in output region (not including padding)
+        n_inpix_pad = 0  # number of input pixels in padding region
+
+        for j_st in range(n1P+2):
+            for i_st in range(n1P+2):
                 if self.use_instamps[j_st, i_st]:
                     self.instamps[j_st][i_st] = InStamp(self, j_st, i_st)
-        del self.use_instamps
 
+                    if (pad < j_st <= n1P-pad) and (pad < i_st <= n1P-pad):
+                        n_inpix_out += self.instamps[j_st][i_st].pix_cumsum[-1]
+                    elif (0 < j_st <= n1P) and (0 < i_st <= n1P):
+                        n_inpix_pad += self.instamps[j_st][i_st].pix_cumsum[-1]
+
+        print(f'number of input pixels in output region: {n_inpix_out = }')
+        print(f'number of input pixels in padding region: {n_inpix_pad = }')
+        print()
+
+        del self.use_instamps
         for inimage in self.inimages:
             inimage.clear()
 
@@ -1823,8 +1839,8 @@ class Block:
                 self.build_output_file(is_final=False)
 
     @staticmethod
-    def compress_map(map_: np.array, coef: int, dtype: type,
-                     header: fits.Header, EXTNAME: str, UNIT: (str, str)) -> fits.ImageHDU:
+    def compress_map(map_: np.array, coef: int, dtype: type, header: fits.Header = None,
+                     EXTNAME: str = None, UNIT: (str, str) = None) -> fits.ImageHDU:
         '''
         Compress float32 map to (u)int16 to save storage.
 
@@ -1838,10 +1854,13 @@ class Block:
             Data type of the compressed map, np.(u)int16.
         header : fits.Header
             Template header of the HDU.
+            If None, return the compressed map instead of an HDU.
         EXTNAME : str
             EXTNAME keyword of the header.
+            If None, return the compressed map instead of an HDU.
         UNIT : (str, str)
             UNIT keyword of the header.
+            If None, return the compressed map instead of an HDU.
 
         Returns
         -------
@@ -1850,17 +1869,19 @@ class Block:
 
         '''
 
-        if dtype is np.uint16:
+        if dtype == np.uint16:
             a_min, a_max = 0, 65535
-        elif dtype is np.int16:
+        elif dtype == np.int16:
             a_min, a_max = -32768, 32767
 
         my_map = np.clip(np.floor(coef*np.log10(np.clip(
             map_, 1e-32, None)) + 0.5), a_min, a_max).astype(dtype)
+        if header is None or EXTNAME is None or UNIT is None:
+            return my_map
+
         my_hdu = fits.ImageHDU(my_map, header=header); del my_map
         my_hdu.header['EXTNAME'] = EXTNAME
         my_hdu.header['UNIT'] = UNIT
-
         return my_hdu
 
     def build_output_file(self, is_final: bool = False) -> None:

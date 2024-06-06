@@ -8,6 +8,10 @@ Settings : pyimcom background settings.
 fpaCoords : some basic data on the Roman FPA coordinates, needed for some of the tests.
 Config : pyimcom configuration, with JSON file interface.
 
+Function
+--------
+format_axis : Format a panel (an axis) of a figure.
+
 '''
 
 from time import perf_counter
@@ -16,6 +20,13 @@ import json
 
 from astropy import units as u
 import numpy as np
+
+import matplotlib as mpl
+from matplotlib import rcParams
+rcParams.update({'font.family': 'serif', 'mathtext.fontset': 'dejavuserif',
+                 'font.size': 12, 'text.latex.preamble': r"\usepackage{amsmath}",
+                 'xtick.major.pad': 2, 'ytick.major.pad': 2, 'xtick.major.size': 6, 'ytick.major.size': 6,
+                 'xtick.minor.size': 3, 'ytick.minor.size': 3, 'axes.linewidth': 2, 'axes.labelpad': 1})
 
 
 class Timer:
@@ -333,6 +344,7 @@ class Config:
             self.iter_rtol = cfg_dict.get('ITERRTOL', 1.5e-3)
             self.iter_max = cfg_dict.get('ITERMAX', 30)
         elif self.linear_algebra == 'Empirical':
+            self.outmaps = self.outmaps.replace('T', '')
             # no-quality control option
             self.no_qlt_ctrl = cfg_dict.get('EMPIRNQC', False)
             if self.no_qlt_ctrl:
@@ -627,6 +639,7 @@ class Config:
                 "self.iter_max = (int(ITERMAX) if ITERMAX else 30)")
 
         elif self.linear_algebra == 'Empirical':
+            self.outmaps = self.outmaps.replace('K', '')
             print('# Empirical kernel: no-quality control option' '\n'
                   '# coadd images without computing system matrices A and B' '\n'
                   '# "U" and "S" will be automatically removed from OUTMAPS;' '\n'
@@ -759,3 +772,28 @@ class Config:
             res = json.dumps(cfg_dict, indent=4)
             cfg_dict.clear(); del cfg_dict
             return res
+
+
+def format_axis(ax: 'mpl.axes._axes.Axes', grid_on: bool = True) -> None:
+    '''
+    Format a panel (an axis) of a figure.
+
+    Parameters
+    ----------
+    ax : mpl.axes._axes.Axes
+        Panel to be formatted.
+    grid_on : bool, optional
+        Whether to add grid to the panel. The default is True.
+
+    Returns
+    -------
+    None.
+
+    '''
+
+    ax.minorticks_on()
+    if grid_on: ax.grid(visible=True, which='major', linestyle=':')
+    ax.tick_params(axis='both', which='both', direction='out')
+    ax.xaxis.set_ticks_position('both')
+    ax.yaxis.set_ticks_position('both')
+    ax.patch.set_alpha(0.0)

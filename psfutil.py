@@ -21,12 +21,11 @@ try:
 except:
     import numpy.fft as numpy_fft
 
-from .config import Settings as Stn
+from .config import Settings as Stn, format_axis
 try:
     from pyimcom_croutines import iD5512C, iD5512C_sym, gridD5512C
 except:
     from .routine import iD5512C, iD5512C_sym, gridD5512C
-from .analysis import OutImage
 
 
 class OutPSF:
@@ -362,7 +361,7 @@ class PSFGrp:
         ax.scatter(yxco[1, ::10, ::10].ravel()+xctr,
                    yxco[0, ::10, ::10].ravel()+yctr, c='r', s=0.05)
 
-        OutImage.format_axis(ax, False)
+        format_axis(ax, False)
         plt.show()
 
     def _sample_psf(self, idx: int, psf: np.array, outpix2world2inpix: 'method' = None,
@@ -890,7 +889,7 @@ class PSFOvl:
                                    origin='lower', vmin=np.log10(vmin))
                     plt.colorbar(im, ax=ax)
 
-                    OutImage.format_axis(ax, False)
+                    format_axis(ax, False)
             plt.show()
             del fig, axs
 
@@ -906,7 +905,7 @@ class PSFOvl:
                                origin='lower', vmin=np.log10(vmin))
                 plt.colorbar(im, ax=ax)
 
-                OutImage.format_axis(ax, False)
+                format_axis(ax, False)
                 plt.show()
 
             else:
@@ -926,7 +925,7 @@ class PSFOvl:
                                        origin='lower', vmin=np.log10(vmin))
                         plt.colorbar(im, ax=ax)
 
-                        OutImage.format_axis(ax, False)
+                        format_axis(ax, False)
                 plt.show()
                 del fig, axs
 
@@ -1014,7 +1013,7 @@ class PSFOvl:
                     plt.colorbar(im, ax=ax)
                     ax.scatter(ddx[slice_][::2, ::2].ravel(),
                                ddy[slice_][::2, ::2].ravel(), c='r', s=0.005)
-                    OutImage.format_axis(ax, False)
+                    format_axis(ax, False)
 
                 out_arr = np.zeros((1, st1.pix_count[j_im] * st2.pix_count[i_im]))
                 iD5512C(np.pad(self.ovl_arr[self.grp1.idx_blk2grp[j_im], self.grp2.idx_blk2grp[i_im]], 6).
@@ -1106,7 +1105,7 @@ class PSFOvl:
                     ddy_ /= PSFGrp.dscale; ddy_ += PSFGrp.nc
                     ax.scatter(ddx_.ravel(), ddy_.ravel(), s=0.005, c='r')
                     del ddx_, ddy_
-                    OutImage.format_axis(ax, False)
+                    format_axis(ax, False)
 
                 out_arr = np.zeros((pix_count_[j_im], n_outpix))
                 gridD5512C(np.pad(self.ovl_arr[self.grp1.idx_blk2grp[j_im], i_psf], 6),
@@ -1190,7 +1189,7 @@ class PSFOvl:
                     plt.colorbar(im, ax=ax)
                     ax.scatter(ddx[slice_][::2, ::2].ravel(),
                                ddy[slice_][::2, ::2].ravel(), c='r', s=0.005)
-                    OutImage.format_axis(ax, False)
+                    format_axis(ax, False)
 
                 out_arr = np.zeros((1, st1.pix_count[j_im] * st2.pix_count[i_im]))
                 interpolator = iD5512C_sym if same_inst and j_im == i_im else iD5512C
