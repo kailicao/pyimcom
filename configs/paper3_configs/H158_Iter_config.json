@@ -1,0 +1,60 @@
+{
+    "OBSFILE": "/users/PCON0003/cond0007/imcom/coadd-test-fall2022/observing_sequence_hls_06_21.fits",
+    "INDATA": [
+        "/fs/scratch/PCON0003/cond0007/combo-in",
+        "dc2_imsim"
+    ],
+    "FILTER": 2,
+    "INPSF": [
+        "/fs/scratch/PCON0003/cond0007/combo-in/psf",
+        "dc2_imsim",
+        8
+    ],
+    "PMASK": "/users/PCON0003/cond0007/imcom/coadd-test-fall2022/permanent_mask_220730.fits",
+    "CMASK": 0.00077,
+    "EXTRAINPUT": [
+        "truth",
+        "gsstar14",
+        "whitenoise1",
+        "1fnoise2"
+    ],
+    "LABNOISETHRESHOLD": 3.0,
+    "CTR": [
+        53.0,
+        -40.0
+    ],
+    "BLOCK": 16,
+    "OUTSIZE": [
+        48,
+        50,
+        0.025
+    ],
+    "FADE": 0,
+    "PAD": 2,
+    "PADSIDES": "auto",
+    "STOP": 0,
+    "OUTMAPS": "USTN",
+    "OUT": "/fs/scratch/PAS2733/kailicao/paper3_production/H158_Iter/H158_Iter",
+    "TEMPFILE": "/tmp/kailicao-tempy",
+    "INLAYERCACHE": "",
+    "NOUT": 1,
+    "OUTPSF": "GAUSSIAN",
+    "EXTRASMOOTH": 0.8107162639112908,
+    "NPIXPSF": 48,
+    "PSFCIRC": false,
+    "PSFNORM": false,
+    "AMPPEN": [
+        0.0,
+        0.0
+    ],
+    "FLATPEN": 0.0,
+    "INPAD": 0.625,
+    "LAKERNEL": "Iterative",
+    "ITERRTOL": 0.0015,
+    "ITERMAX": 30,
+    "KAPPAC": [
+        0.0
+    ],
+    "UCMIN": 1e-06,
+    "SMAX": 0.5
+}

@@ -1,0 +1,46 @@
+{
+    "OBSFILE": "/users/PCON0003/cond0007/imcom/pyimcom/anlsim/Roman_WAS_obseq_11_1_23.fits",
+    "INDATA": [
+        "/fs/scratch/PCON0003/cond0007/anl-run-in-prod",
+        "anlsim"
+    ],
+    "CTR": [
+	9.55,
+	-44.1
+    ],
+    "OUTSIZE": [
+        80,
+	32,
+	0.0390625
+    ],
+    "BLOCK": 36,
+    "FILTER": 10,
+    "LAKERNEL": "Cholesky",
+    "KAPPAC": [
+        1e-3
+    ],
+    "INPSF": [
+	"/fs/scratch/PCON0003/cond0007/anl-run-in-prod/psf",
+        "anlsim",
+        8
+    ],
+    "EXTRAINPUT": [
+        "labnoise", "gsstar14", "nstar14,2e5,86,3", "gstrstar14", "gsfdstar14,0.05",
+        "gsext14,seed=100", "gsext14,seed=100,shear=.02:0", "gsext14,seed=100,shear=-.01:0.017320508075688773", "gsext14,seed=100,shear=-.01:-0.017320508075688773",
+        "1fnoise9",
+        "whitenoise10", "whitenoise11", "whitenoise12", "whitenoise13"
+    ],
+    "PADSIDES": "all",
+    "OUTMAPS": "USTN",
+    "OUT": "/fs/scratch/PCON0003/cond0007/anl-run-out/prod_K",
+    "INPAD": 1.240,
+    "NPIXPSF": 48,
+    "FADE": 3,
+    "PAD": 2,
+    "NOUT": 1,
+    "OUTPSF": "GAUSSIAN",
+    "EXTRASMOOTH": 1.019186160345623,
+    "PMASK": "/users/PCON0003/cond0007/imcom/pyimcom/anlsim/permanent_mask_ft_231228.fits",
+    "CMASK": 0.00077,
+    "TEMPFILE": "/tmp/pyimcomrun_2G"
+}

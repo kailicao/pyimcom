@@ -1,0 +1,61 @@
+{
+    "OBSFILE": "/users/PCON0003/cond0007/imcom/pyimcom/anlsim/Roman_WAS_obseq_11_1_23.fits",
+    "INDATA": [
+        "/fs/scratch/PCON0003/cond0007/anl-run-in-prod",
+        "anlsim"
+    ],
+    "FILTER": 10,
+    "INPSF": [
+        "/fs/scratch/PCON0003/cond0007/anl-run-in-prod/psf",
+        "anlsim",
+        8
+    ],
+    "PMASK": "/users/PCON0003/cond0007/imcom/pyimcom/anlsim/permanent_mask_ft_231228.fits",
+    "CMASK": 0.00077,
+    "EXTRAINPUT": [
+        "labnoise",
+        "gsstar14",
+        "gsext14,seed=100",
+        "1fnoise9",
+        "whitenoise10"
+    ],
+    "LABNOISETHRESHOLD": 3.0,
+    "CTR": [
+        9.55,
+        -44.1
+    ],
+    "BLOCK": 36,
+    "OUTSIZE": [
+        80,
+        32,
+        0.0390625
+    ],
+    "FADE": 0,
+    "PAD": 2,
+    "PADSIDES": "all",
+    "STOP": 0,
+    "OUTMAPS": "USTN",
+    "OUT": "/fs/scratch/PAS2733/kailicao/paper4_K213_Iter/K213_Iter_benchmark/K213_Iter_benchmark",
+    "TEMPFILE": "/tmp/pyimcomrun_KIb",
+    "INLAYERCACHE": "",
+    "NOUT": 1,
+    "OUTPSF": "GAUSSIAN",
+    "EXTRASMOOTH": 1.019186160345623,
+    "NPIXPSF": 48,
+    "PSFCIRC": false,
+    "PSFNORM": false,
+    "AMPPEN": [
+        0.0,
+        0.0
+    ],
+    "FLATPEN": 0.0,
+    "INPAD": 0.6,
+    "LAKERNEL": "Iterative",
+    "ITERRTOL": 0.0015,
+    "ITERMAX": 30,
+    "KAPPAC": [
+        0.0
+    ],
+    "UCMIN": 1e-06,
+    "SMAX": 0.5
+}
