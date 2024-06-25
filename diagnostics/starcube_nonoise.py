@@ -56,6 +56,7 @@ for iblock in range(nstart,nblockmax**2):
 
       blocksize = int(configStruct['OUTSIZE'][0]) * int(configStruct['OUTSIZE'][1]) * float(configStruct['OUTSIZE'][2]) / 3600. *numpy.pi/180 # radians
       rs = 1.5*blocksize/numpy.sqrt(2.) # search radius
+      n2 = int(configStruct['OUTSIZE'][1])  # will be used for coverage
 
       outscale = float(configStruct['OUTSIZE'][2]) # in arcsec
       force_scale = .40/outscale # in output pixels
@@ -155,7 +156,7 @@ for iblock in range(nstart,nblockmax**2):
     newpos[k,20] = numpy.mean(fmap[yi[k]+1-bd2:yi[k]+bd2,xi[k]+1-bd2:xi[k]+bd2])
 
     # coverage
-    newpos[k,21] = wt[yi[k]//bd,xi[k]//bd]
+    newpos[k,21] = wt[yi[k]//n2,xi[k]//n2]
 
     # flush
     sys.stdout.flush()
