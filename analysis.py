@@ -11,6 +11,7 @@ Mosaic : Wrapper for coadded mosaics (2D arrays of blocks).
 
 
 from os.path import exists
+import re
 from collections import namedtuple
 
 import numpy as np
@@ -30,13 +31,14 @@ class OutImage:
     -------
     get_hdu_names (staticmethod) : Get a list of HDU names.
     __init__ : Constructor.
-    _load_or_save_hdu_list : Load data from or save data to FITS file.
+    get_last_line (staticmethod) : Get last line of a text file.
+    get_time_consump : Parse terminal output to get time consumption.
 
+    _load_or_save_hdu_list : Load data from or save data to FITS file.
     get_coadded_layer : Extract a coadded layer from the primary HDU.
     get_T_weightmap : Extract T_weightmap from an additional HDU. 
     get_mean_coverage : Compute mean coverage based on T_weightmap.
     get_output_map : Extract an output map from the additional HDUs.
-
     _update_hdu_data : Update data using data provided by a neighbor.
 
     '''
@@ -99,6 +101,44 @@ class OutImage:
         self.hdu_names = hdu_names
         if hdu_names is None:
             self.hdu_names = OutImage.get_hdu_names(self.cfg.outmaps)
+
+    @staticmethod
+    def get_last_line(fname: str) -> str:
+        '''
+        Get last line of a text file.
+
+        Parameters
+        ----------
+        fname : str
+            Path to the text file.
+
+        Returns
+        -------
+        str
+            Last line of the text file.
+
+        '''
+
+        with open(fname, 'r') as f:
+            for line in f:
+                pass
+            last_line = line
+        return last_line
+
+    def get_time_consump(self) -> None:
+        '''
+        Parse terminal output to get time consumption.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        fname = self.fpath.replace('.fits', '.out')
+        last_line = OutImage.get_last_line(fname)
+        m = re.match('finished at t = ([0-9.]+) s', last_line)
+        return float(m.group(1))
 
     def _load_or_save_hdu_list(self, load_mode: bool = True, save_file: bool = False,
                                auto_to_all: bool = False) -> None:
@@ -435,6 +475,7 @@ class NoiseAnal:
     _get_wavenumbers (staticmethod) : Calculate wavenumbers for the input image.
     get_powerspectra (staticmethod) : Calculate the azimuthally-averaged 1D power spectrum of the image
     __call__ : Analyze specified noise frame of given output image.
+    clear : Free up memory space.
 
     '''
 
@@ -483,7 +524,7 @@ class NoiseAnal:
         if cfg is None:
             with fits.open(outim.fpath) as hdu_list:
                 self.cfg = Config(''.join(hdu_list['CONFIG'].data['text'].tolist()))
-        assert layer in ['SCI']+cfg.extrainput[1:], f"Error: layer '{layer}' not found"
+        assert layer in ['SCI']+self.cfg.extrainput[1:], f"Error: layer '{layer}' not found"
 
     @classmethod
     def get_norm(cls, layer: str, L: int, filtername: str, s_out: float) -> float:
@@ -537,9 +578,9 @@ class NoiseAnal:
         ps = ((np.abs(fft)) ** 2) / norm
 
         if bin_:
-            print('# 2D spectrum is 8x8 binned\n')
+            # print('# 2D spectrum is 8x8 binned\n')
             binned_ps = np.average(np.reshape(ps, (L//8, 8, L//8, 8)), axis = (1, 3))
-            print('# Binned PS has shape ', np.shape(binned_ps))
+            # print('# Binned PS has shape ', np.shape(binned_ps))
             return binned_ps
         else:
             return ps
@@ -645,7 +686,7 @@ class NoiseAnal:
 
         return results
 
-    def __call__(self, padding: bool) -> None:
+    def __call__(self, padding: bool = False) -> None:
         '''
         Analyze specified noise frame of given output image.
 
@@ -665,17 +706,19 @@ class NoiseAnal:
 
         # blocksize = self.cfg.n1 * self.cfg.n2 * self.cfg.dtheta * Stn.degree # block size in radians
         L = self.cfg.NsideP  # side length in px
+        if not padding: L = self.cfg.Nside
 
         s_out = self.cfg.dtheta * u.degree.to('arcsec')  # in arcsec
         # force_scale = 0.40 / s_out  # in output pixels
 
         # padding region around the edge
-        # bdpad = self.cfg.n2 * self.cfg.postage_pad
+        bdpad = self.cfg.n2 * self.cfg.postage_pad
 
         self.ps2d = np.zeros((L//8, L//8))
         self.ps1d = np.zeros((L//16, 4))
 
         indata = self.outim.get_coadded_layer(self.layer)
+        if not padding: indata = indata[bdpad:-bdpad, bdpad:-bdpad]
 
         nradbins = L//16  # Number of radial bins is side length div. into 8 from binning and then (floor) div. by 2.
 
@@ -690,6 +733,19 @@ class NoiseAnal:
         self.ps1d[:, 2] = powerspectrum.ps_image_err
         self.ps1d[:, 3] = powerspectrum.noiselayer
 
+    def clear(self) -> None:
+        '''
+        Free up memory space.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        if hasattr(self, 'ps2d'):
+            del self.ps2d, self.ps1d
+
 
 class Mosaic:
     '''
@@ -699,7 +755,11 @@ class Mosaic:
     -------
     __init__ : Constructor.
     share_padding_stamps : Share padding postage stamps between adjacent blocks.
+    get_consump_map : Get map of time consumption.
     get_coverage_map : Get map of mean coverages.
+
+    analyze_noise_ps : Analyze noise power spectra of this mosaic.
+    clear : Free up memory space.
 
     '''
 
@@ -744,30 +804,56 @@ class Mosaic:
         timer = Timer()
 
         print(' > horizontal sharing')
-        for jbx in range(nblock):
-            print(' > row {:2d}  t= {:9.2f} s'.format(jbx, timer()))
-            self.outimages[jbx][0]._load_or_save_hdu_list(True)
+        for iby in range(nblock):
+            print(' > row {:2d}  t= {:9.2f} s'.format(iby, timer()))
+            self.outimages[iby][0]._load_or_save_hdu_list(True)
             for ibx in range(nblock-1):
-                self.outimages[jbx][ibx+1]._load_or_save_hdu_list(True)
-                self.outimages[jbx][ibx]._update_hdu_data(self.outimages[jbx][ibx+1], 'right', True)
-                self.outimages[jbx][ibx+1]._update_hdu_data(self.outimages[jbx][ibx], 'left', False)
-                self.outimages[jbx][ibx]._load_or_save_hdu_list(False, save_file=True)
-            self.outimages[jbx][nblock-1]._load_or_save_hdu_list(False, save_file=True)
+                self.outimages[iby][ibx+1]._load_or_save_hdu_list(True)
+                self.outimages[iby][ibx]._update_hdu_data(self.outimages[iby][ibx+1], 'right', True)
+                self.outimages[iby][ibx+1]._update_hdu_data(self.outimages[iby][ibx], 'left', False)
+                self.outimages[iby][ibx]._load_or_save_hdu_list(False, save_file=True)
+            self.outimages[iby][nblock-1]._load_or_save_hdu_list(False, save_file=True)
         print(flush=True)
 
         print(' > vertical sharing')
         for ibx in range(nblock):
             print(' > column {:2d}  t= {:9.2f} s'.format(ibx, timer()))
             self.outimages[0][ibx]._load_or_save_hdu_list(True)
-            for jbx in range(nblock-1):
-                self.outimages[jbx+1][ibx]._load_or_save_hdu_list(True)
-                self.outimages[jbx][ibx]._update_hdu_data(self.outimages[jbx+1][ibx], 'top', True)
-                self.outimages[jbx+1][ibx]._update_hdu_data(self.outimages[jbx][ibx], 'bottom', False)
-                self.outimages[jbx][ibx]._load_or_save_hdu_list(False, save_file=True, auto_to_all=True)
+            for iby in range(nblock-1):
+                self.outimages[iby+1][ibx]._load_or_save_hdu_list(True)
+                self.outimages[iby][ibx]._update_hdu_data(self.outimages[iby+1][ibx], 'top', True)
+                self.outimages[iby+1][ibx]._update_hdu_data(self.outimages[iby][ibx], 'bottom', False)
+                self.outimages[iby][ibx]._load_or_save_hdu_list(False, save_file=True, auto_to_all=True)
             self.outimages[nblock-1][ibx]._load_or_save_hdu_list(False, save_file=True, auto_to_all=True)
         print(flush=True)
 
         print(f'finished at t = {timer():.2f} s')
+
+    def get_consump_map(self) -> None:
+        '''
+        Get map of time consumption.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        fname = self.cfg.outstem + '_Consump.npy'
+        if exists(fname):
+            with open(fname, 'rb') as f:
+                self.consump_map = np.load(f)
+            return
+
+        nblock = self.cfg.nblock  # shortcut
+        self.consump_map = np.zeros((nblock, nblock))
+
+        for iby in range(nblock):
+            for ibx in range(nblock):
+                self.consump_map[iby][ibx] = self.outimages[iby][ibx].get_time_consump()
+
+        with open(fname, 'wb') as f:
+            np.save(f, self.consump_map)
 
     def get_coverage_map(self) -> None:
         '''
@@ -782,6 +868,92 @@ class Mosaic:
         nblock = self.cfg.nblock  # shortcut
         self.coverage_map = np.zeros((nblock, nblock))
 
-        for jbx in range(nblock):
+        for iby in range(nblock):
             for ibx in range(nblock):
-                self.coverage_map[jbx][ibx] = self.outimages[jbx][ibx].get_mean_coverage()
+                self.coverage_map[iby][ibx] = self.outimages[iby][ibx].get_mean_coverage()
+
+    def analyze_noise_ps(self, bins: int = 5) -> None:
+        '''
+        Analyze noise power spectra of this mosaic.
+
+        Parameters
+        ----------
+        bins : int, optional
+            Number of bins for 1D power spectra. The default is 5.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        fname = self.cfg.outstem.rpartition('/')[-1] + '_NoisePS.npy'
+        if exists(fname):
+            with open(fname, 'rb') as f:
+                self.ps2d_all = np.load(f)
+                self.ps1d_all = np.load(f)
+            return
+
+        timer = Timer()
+
+        # identify noise layers
+        noiseinput = [layer for layer in self.cfg.extrainput[1:] if 'noise' in layer]
+        n_innoise = len(noiseinput)
+        print(noiseinput)
+
+        # mean coverage bins
+        if not hasattr(self, 'coverage_map'):
+            self.get_coverage_map()
+
+        mc_max = self.coverage_map.max() + 1e-12
+        mc_min = self.coverage_map.min() - 1e-12
+        coverage_idx = ((self.coverage_map - mc_min) /
+                        (mc_max-mc_min) * bins).astype(np.uint8)
+        _, counts = np.unique(coverage_idx, return_counts=True)
+
+        # create storage
+        L = self.cfg.Nside  # force padding == False
+        self.ps2d_all = np.zeros((n_innoise, L//8, L//8))
+        self.ps1d_all = np.zeros((n_innoise, bins, L//16, 3))
+
+        # loop over noise layers and output images
+        for iby in range(self.cfg.nblock):
+            print(' > row {:2d}  t= {:9.2f} s'.format(iby, timer()))
+
+            for inl, layer in enumerate(noiseinput):
+                for ibx in range(self.cfg.nblock):
+                    noise = NoiseAnal(self.outimages[iby][ibx], layer, self.cfg)
+                    noise(padding=False)
+                    self.ps2d_all[inl, :, :] += noise.ps2d
+                    self.ps1d_all[inl, coverage_idx[iby][ibx], :, :] += noise.ps1d[:, :3]
+                    noise.clear(); del noise
+
+        # postprocessing
+        self.ps2d_all /= self.cfg.nblock ** 2
+        for idx in range(bins):
+            self.ps1d_all[:, idx, :, :] /= counts[idx]
+        del coverage_idx, counts
+
+        with open(fname, 'wb') as f:
+            np.save(f, self.ps2d_all)
+            np.save(f, self.ps1d_all)
+
+        print(f'finished at t = {timer():.2f} s')
+
+    def clear(self) -> None:
+        '''
+        Free up memory space.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        for ibx in range(self.cfg.nblock):
+            for iby in range(self.cfg.nblock):
+                self.outimages[iby][ibx] = None
+
+        if hasattr(self, 'consump_map'): del self.consump_map
+        if hasattr(self, 'coverage_map'): del self.coverage_map
+        if hasattr(self, 'ps2d_all'): del self.ps2d_all, self.ps1d_all
