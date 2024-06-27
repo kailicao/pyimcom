@@ -11,11 +11,12 @@ Mosaic : Wrapper for coadded mosaics (2D arrays of blocks).
 
 
 from os.path import exists
+from pathlib import Path
 import re
-from collections import namedtuple
 
 import numpy as np
 from astropy.io import fits
+from astropy import constants as const
 from astropy import units as u
 from scipy import ndimage
 
@@ -29,7 +30,7 @@ class OutImage:
 
     Methods
     -------
-    get_hdu_names (staticmethod) : Get a list of HDU names.
+    get_hdu_names (staticmethod) : Parse outmaps to get a list of HDU names.
     __init__ : Constructor.
     get_last_line (staticmethod) : Get last line of a text file.
     get_time_consump : Parse terminal output to get time consumption.
@@ -46,7 +47,7 @@ class OutImage:
     @staticmethod
     def get_hdu_names(outmaps: str) -> [str]:
         '''
-        Get a list of HDU names.
+        Parse outmaps to get a list of HDU names.
 
         Parameters
         ----------
@@ -57,7 +58,7 @@ class OutImage:
         -------
         [str]
             A list of HDU names.
-    
+
         '''
 
         hdu_names = ['PRIMARY', 'CONFIG', 'INDATA', 'INWEIGHT', 'INWTFLAT']
@@ -91,7 +92,9 @@ class OutImage:
 
         '''
 
+        assert exists(fpath), f'{fpath} does not exist'
         self.fpath = fpath
+        self.ibx, self.iby = map(int, Path(fpath).stem.split('_')[-2:])
 
         self.cfg = cfg
         if cfg is None:
@@ -158,7 +161,7 @@ class OutImage:
         auto_to_all : bool, optional
             Only used when load_mode == False and save_file == True.
             If (auto_to_all ==) True, change 'PADSIDES' from 'auto' to 'all'
-            in the 'CONFIG' HDU. The default is False.
+            in the 'CONFIG' HDU of FITS file. The default is False.
 
         Returns
         -------
@@ -172,6 +175,8 @@ class OutImage:
 
         else:
             if save_file:
+                assert hasattr(self, 'hdu_list'), 'no hdu_list to save'
+
                 if auto_to_all:
                     my_cfg = Config(''.join(self.hdu_list['CONFIG'].data['text'].tolist()))
                     my_cfg.pad_sides = 'all'
@@ -179,7 +184,7 @@ class OutImage:
                         [fits.Column(name='text', array=my_cfg.to_file(None).splitlines(), format='A512', ascii=True)])
                     config_hdu.header['EXTNAME'] = 'CONFIG'
                     self.hdu_list['CONFIG'] = config_hdu
-    
+
                 self.hdu_list.writeto(self.fpath, overwrite=True)
 
             if hasattr(self, 'hdu_list'):
@@ -199,12 +204,13 @@ class OutImage:
 
         Returns
         -------
-        data : np.array, shape : (NsideP, NsideP)
+        data : np.array, shape : either (NsideP, NsideP)
+                                 or (n_out, NsideP, NsideP) (all output PSFs)
             Requested coadded layer.
 
         '''
 
-        assert layer in ['SCI']+self.cfg.extrainput[1:], f"Error: layer '{layer}' not found"
+        assert layer in ['SCI'] + self.cfg.extrainput[1:], f"Error: layer '{layer}' not found"
         idx = self.cfg.extrainput.index(layer if layer != 'SCI' else None)
 
         data_loaded = hasattr(self, 'hdu_list')
@@ -277,8 +283,8 @@ class OutImage:
         '''
 
         T_weightmap = self.get_T_weightmap(j_out=0)  # shape: (n_inimage, n1P, n1P)
-        pad = self.cfg.postage_pad
         if not padding:
+            pad = self.cfg.postage_pad  # shortcut
             T_weightmap = T_weightmap[:, pad:-pad, pad:-pad]
 
         mean_coverage = np.mean(np.sum(T_weightmap.astype(bool), axis=0))
@@ -299,7 +305,8 @@ class OutImage:
 
         Returns
         -------
-        data : np.array, shape : (NsideP, NsideP)
+        data : np.array, shape : either (NsideP, NsideP)
+                                 or (n_out, NsideP, NsideP) (all output PSFs)
             Requested output map.
 
         '''
@@ -334,6 +341,7 @@ class OutImage:
 
         This method is developed for postprocessing, i.e.,
         sharing padding postage stamps between adjacent blocks.
+        This method neither loads nor saves hdu_list.
 
         Parameters
         ----------
@@ -470,10 +478,8 @@ class NoiseAnal:
     -------
     __init__ : Constructor.
     get_norm (classmethod) : Get norm for 2D noise power spectrum.
-    measure_power_spectrum (staticmethod) : Measure the 2D power spectrum of image.
     azimuthal_average (staticmethod) : Compute radial profile of image.
     _get_wavenumbers (staticmethod) : Calculate wavenumbers for the input image.
-    get_powerspectra (staticmethod) : Calculate the azimuthally-averaged 1D power spectrum of the image
     __call__ : Analyze specified noise frame of given output image.
     clear : Free up memory space.
 
@@ -487,16 +493,11 @@ class NoiseAnal:
     tfr = 3.08  # sec
     gain = 1.458  # electrons/DN
     ABstd = 3.631e-20  # erg/cm^2
-    h = 6.626e-27  # erg/Hz
+    h = const.h.to('erg/Hz').value  # 6.62607015e-27
     m_ab = 23.9  # sample mag for PS
     s_in = 0.11  # arcsec
 
-    # Set up a named tuple for the results that will contain relevant information
-    PspecResults = namedtuple(
-        'PspecResults', 'ps_image ps_image_err npix k ps_2d noiselayer'
-    )
-
-    def __init__(self, outim: OutImage, layer: str, cfg: Config = None) -> None:
+    def __init__(self, outim: OutImage, layer: str) -> None:
         '''
         Constructor.
 
@@ -506,10 +507,6 @@ class NoiseAnal:
             Output image to analyze.
         layer : str
             Layer name of noise frame to analyze.
-        cfg : Config, optional
-            Configuration used for this output image.
-            If provided, no consistency check is performed.
-            The default is None. If None, it will be extracted from FITS file.
 
         Returns
         -------
@@ -520,11 +517,8 @@ class NoiseAnal:
         self.outim = outim
         self.layer = layer
 
-        self.cfg = cfg
-        if cfg is None:
-            with fits.open(outim.fpath) as hdu_list:
-                self.cfg = Config(''.join(hdu_list['CONFIG'].data['text'].tolist()))
-        assert layer in ['SCI']+self.cfg.extrainput[1:], f"Error: layer '{layer}' not found"
+        self.cfg = outim.cfg
+        assert layer in ['SCI'] + self.cfg.extrainput[1:], f"Error: layer '{layer}' not found"
 
     @classmethod
     def get_norm(cls, layer: str, L: int, filtername: str, s_out: float) -> float:
@@ -550,143 +544,93 @@ class NoiseAnal:
         '''
 
         if layer.startswith('white'):
-            return (L * (cls.s_in/s_out) )** 2
+            return (L * (cls.s_in/s_out)) ** 2
         elif layer.startswith('1f'):
             return (L * (cls.s_in/s_out)) ** 2
         elif layer.startswith('lab'):
             return cls.tfr/cls.gain * cls.ABstd/cls.h * cls.AREA[filtername] * 10**(-0.4*cls.m_ab) * s_out**2
 
     @staticmethod
-    def measure_power_spectrum(noiseframe, L: int, norm: float, bin_: bool = True) -> np.array:
-        """
-        Measure the 2D power spectrum of image.
+    def azimuthal_average(image: np.array, nradbins: int,
+                          rbin: np.array = None, ridx: np.array = None) -> (np.array):
 
-        :param noiseframe: 2D ndarray
-        the input image to measure the power spectrum of.
-        in this case, a noise frame from the simulations
-        :param bin: True/False
-        Whether to bin the 2D spectrum.
-        Default=True, bins spectrum into L/8 x L/8 image.
-               (Potential extra rows are cut off.)
-
-        :return: 2D ndarray, ps
-        the 2D power spectrum of the image.
-
-        """
-
-        fft = np.fft.fftshift(np.fft.fft2(noiseframe))
-        ps = ((np.abs(fft)) ** 2) / norm
-
-        if bin_:
-            # print('# 2D spectrum is 8x8 binned\n')
-            binned_ps = np.average(np.reshape(ps, (L//8, 8, L//8, 8)), axis = (1, 3))
-            # print('# Binned PS has shape ', np.shape(binned_ps))
-            return binned_ps
-        else:
-            return ps
-
-    @staticmethod
-    def azimuthal_average(image: np.array, num_radial_bins: int) -> (np.array):
         """
         Compute radial profile of image.
 
         Parameters
         ----------
-        image : 2D ndarray
+        image : np.array, shape : (L, L)
             Input image.
-        num_radial_bins : int
+        nradbins : int
             Number of radial bins in profile.
+        rbin: np.array, optional, shape : (L, L)
+            "labels" parameter for ndimage utilities.
+            The default is None. If not provided, derive from image.shape.
+        ridx: np.array, optional, shape : (nradbins,)
+            "index" parameter for ndimage utilities.
+            The default is None. If not provided, derive from rbin.
 
         Returns
         -------
-        r : ndarray
-            Value of radius at each point
-        radial_mean : ndarray
+        radial_mean : np.array, shape : (nradbins,)
             Mean intensity within each annulus. Main result
-        radial_err : ndarray
+        radial_err : np.array, shape : (nradbins,)
             Standard error on the mean: sigma / sqrt(N).
 
         """
 
-        ny, nx = image.shape
-        yy, xx = np.mgrid[:ny, :nx]
-        center = np.array(image.shape) / 2
+        if rbin is None:
+            ny, nx = image.shape
+            yy, xx = np.mgrid[:ny, :nx]
+            r = np.hypot(xx - nx/2, yy - ny/2)
+            rbin = (nradbins * r / r.max()).astype(int)
+        if ridx is None:
+            ridx = np.arange(1, rbin.max() + 1)
 
-        r = np.hypot(xx - center[1], yy - center[0])
-        rbin = (num_radial_bins * r / r.max()).astype(int)
-
-        radial_mean = ndimage.mean(
-            image, labels=rbin, index=np.arange(1, rbin.max() + 1))
-
-        radial_stddev = ndimage.standard_deviation(
-            image, labels=rbin, index=np.arange(1, rbin.max() + 1))
-
-        npix = ndimage.sum(np.ones_like(image), labels=rbin,
-                           index=np.arange(1, rbin.max() + 1))
-
-        radial_err = radial_stddev / np.sqrt(npix)
-        return r, radial_mean, radial_err
+        radial_mean = ndimage.mean(image, labels=rbin, index=ridx)
+        radial_stddev = ndimage.standard_deviation(image, labels=rbin, index=ridx)
+        npix = ndimage.sum(np.ones_like(image), labels=rbin, index=ridx)
+        radial_err = radial_stddev / np.sqrt(npix); del npix
+        return radial_mean, radial_err
 
     @staticmethod
-    def _get_wavenumbers(window_length: int, num_radial_bins: int) -> np.array:
+    def _get_wavenumbers(window_length: int, nradbins: int,
+                         rbin: np.array = None, ridx: np.array = None) -> np.array:
         """
         Calculate wavenumbers for the input image.
 
-        :param window_length: integer
-        the length of one axis of the image.
-        :param num_radial_bins: integer
-        number of radial bins the image should be averaged into
+        Parameters
+        ----------
+        window_length : int
+            the length of one axis of the image.
+        nradbins : int
+            number of radial bins the image should be averaged into
+        rbin: np.array, optional, shape : (L, L)
+            "labels" parameter for ndimage utilities.
+            The default is None. If not provided, derive from image.shape.
+        ridx: np.array, optional, shape : (nradbins,)
+            "index" parameter for ndimage utilities.
+            The default is None. If not provided, derive from rbin.
 
-        :return: 1D np array, kmean
-        the wavenumbers for the image
+        Returns
+        -------
+        kmean : np.array, shape : (nradbins,)
+            the wavenumbers for the image
 
         """
 
         k = np.fft.fftshift(np.fft.fftfreq(window_length))
         kx, ky = np.meshgrid(k, k)
-        k = np.sqrt(kx ** 2 + ky ** 2)
-        k, kmean, kerr = NoiseAnal.azimuthal_average(k, num_radial_bins)
+        k = np.sqrt(np.square(kx) + np.square(ky))
 
+        if rbin is None or ridx is None:
+            kmean, kerr = NoiseAnal.azimuthal_average(k, nradbins)
+        else:
+            kmean = ndimage.mean(k, labels=rbin, index=ridx)
         return kmean
 
-    @staticmethod
-    def get_powerspectra(noiseframe, L: int, norm: float, num_radial_bins: int) -> PspecResults:
-        """
-        Calculate the azimuthally-averaged 1D power spectrum of the image
-
-        :param noiseframe: 2D ndarray
-          the input image to be averaged over
-        :param num_radial_bins: number of bins, should match bin number in get_wavenumbers
-
-        :return: named tuple, results
-
-        """
-
-        noise = noiseframe.copy()
-
-        ps_2d = NoiseAnal.measure_power_spectrum(noise, L, norm, bin_=True)
-
-        ps_r, ps_1d, ps_image_err = NoiseAnal.azimuthal_average(ps_2d, num_radial_bins)
-
-        wavenumbers = NoiseAnal._get_wavenumbers(noise.shape[0], num_radial_bins)
-
-        npix = np.product(noiseframe.shape)
-
-        use_slice = 0  # to be removed
-        comment = [use_slice] * num_radial_bins
-
-        # consolidate results
-        results = NoiseAnal.PspecResults(ps_image=ps_1d,
-                                         ps_image_err=ps_image_err,
-                                         npix=npix,
-                                         k=wavenumbers,
-                                         ps_2d = ps_2d,
-                                         noiselayer=comment
-                                        )
-
-        return results
-
-    def __call__(self, padding: bool = False) -> None:
+    def __call__(self, padding: bool = False, bin_: bool = True,
+                 rbin: np.array = None, ridx: np.array = None) -> None:
         '''
         Analyze specified noise frame of given output image.
 
@@ -694,6 +638,10 @@ class NoiseAnal:
         ----------
         padding : bool, optional (to be implemented)
             Whether to include padding postage stamps. The default is False.
+        bin_ : bool, optional
+            Whether to bin the 2D spectrum.
+            The default is True, binning 2D spectrum into L/8 x L/8 image.
+            Currently this is ignored, as only bin_ == True is supported.
 
         Returns
         -------
@@ -701,37 +649,35 @@ class NoiseAnal:
 
         '''
 
-        # n = self.cfg.NsideP  # size of output images
-        # mean_coverage = self.outim.get_mean_coverage(padding)
-
-        # blocksize = self.cfg.n1 * self.cfg.n2 * self.cfg.dtheta * Stn.degree # block size in radians
         L = self.cfg.NsideP  # side length in px
-        if not padding: L = self.cfg.Nside
+        indata = self.outim.get_coadded_layer(self.layer)
+        if not padding:
+            L = self.cfg.Nside
+            # padding region around the edge
+            bdpad = self.cfg.n2 * self.cfg.postage_pad
+            indata = indata[bdpad:-bdpad, bdpad:-bdpad]
 
         s_out = self.cfg.dtheta * u.degree.to('arcsec')  # in arcsec
-        # force_scale = 0.40 / s_out  # in output pixels
-
-        # padding region around the edge
-        bdpad = self.cfg.n2 * self.cfg.postage_pad
-
-        self.ps2d = np.zeros((L//8, L//8))
-        self.ps1d = np.zeros((L//16, 4))
-
-        indata = self.outim.get_coadded_layer(self.layer)
-        if not padding: indata = indata[bdpad:-bdpad, bdpad:-bdpad]
-
-        nradbins = L//16  # Number of radial bins is side length div. into 8 from binning and then (floor) div. by 2.
-
         norm = NoiseAnal.get_norm(self.layer, L, Stn.RomanFilters[self.cfg.use_filter], s_out)
 
-        powerspectrum = NoiseAnal.get_powerspectra(indata, L, norm, nradbins)
+        # Measure the 2D power spectrum of image.
+        ps = np.empty((L, L), dtype=np.float64)
+        rps = np.square(np.abs(np.fft.fftshift(np.fft.rfft2(indata), 0))) / norm
+        ps[ :, L//2:] = rps[   :    ,     :-1  ]
+        ps[1:, :L//2] = rps[L-1:0:-1, L//2:0:-1]
+        ps[0 , :L//2] = rps[  0     , L//2:0:-1]
+        self.ps2d = np.average(np.reshape(ps, (L//8, 8, L//8, 8)), axis=(1, 3))
+        del rps, ps
 
-        self.ps2d[:, :] = powerspectrum.ps_2d
+        # Calculate the azimuthally-averaged 1D power spectrum of the image.
+        nradbins = L//16  # Number of radial bins is side length div. into 8 from binning and then (floor) div. by 2.
+        ps_1d, ps_image_err = NoiseAnal.azimuthal_average(self.ps2d, nradbins, rbin, ridx)
+        # wavenumbers = NoiseAnal._get_wavenumbers(L, nradbins)
 
-        self.ps1d[:, 0] = powerspectrum.k
-        self.ps1d[:, 1] = powerspectrum.ps_image
-        self.ps1d[:, 2] = powerspectrum.ps_image_err
-        self.ps1d[:, 3] = powerspectrum.noiselayer
+        self.ps1d = np.zeros((L//16, 2))
+        # self.ps1d[:, 0] = wavenumbers   # powerspectrum.k
+        self.ps1d[:, 0] = ps_1d         # powerspectrum.ps_image
+        self.ps1d[:, 1] = ps_image_err  # powerspectrum.ps_image_err
 
     def clear(self) -> None:
         '''
@@ -758,7 +704,7 @@ class Mosaic:
     get_consump_map : Get map of time consumption.
     get_coverage_map : Get map of mean coverages.
 
-    analyze_noise_ps : Analyze noise power spectra of this mosaic.
+    get_noise_power_spectra : Analyze noise power spectra of this mosaic.
     clear : Free up memory space.
 
     '''
@@ -872,7 +818,7 @@ class Mosaic:
             for ibx in range(nblock):
                 self.coverage_map[iby][ibx] = self.outimages[iby][ibx].get_mean_coverage()
 
-    def analyze_noise_ps(self, bins: int = 5) -> None:
+    def get_noise_power_spectra(self, bins: int = 5) -> None:
         '''
         Analyze noise power spectra of this mosaic.
 
@@ -916,22 +862,34 @@ class Mosaic:
         self.ps2d_all = np.zeros((n_innoise, L//8, L//8))
         self.ps1d_all = np.zeros((n_innoise, bins, L//16, 3))
 
+        # derive rbin and ridx for NoiseAnal.azimuthal_average
+        nradbins = L//16  # Number of radial bins is side length div. into 8 from binning and then (floor) div. by 2.
+        yy, xx = np.mgrid[:L//8, :L//8]
+        r = np.hypot(xx - L//8/2, yy - L//8/2)
+        rbin = (nradbins * r / r.max()).astype(int)
+        ridx = np.arange(1, rbin.max() + 1)
+        del yy, xx, r
+
+        self.ps1d_all[:, :, :, 0] = NoiseAnal._get_wavenumbers(L, nradbins)
+
         # loop over noise layers and output images
         for iby in range(self.cfg.nblock):
             print(' > row {:2d}  t= {:9.2f} s'.format(iby, timer()))
 
             for inl, layer in enumerate(noiseinput):
                 for ibx in range(self.cfg.nblock):
-                    noise = NoiseAnal(self.outimages[iby][ibx], layer, self.cfg)
-                    noise(padding=False)
+                    noise = NoiseAnal(self.outimages[iby][ibx], layer)
+                    noise(padding=False, rbin=rbin, ridx=ridx)
                     self.ps2d_all[inl, :, :] += noise.ps2d
-                    self.ps1d_all[inl, coverage_idx[iby][ibx], :, :] += noise.ps1d[:, :3]
+                    self.ps1d_all[inl, coverage_idx[iby][ibx], :, 1:] += noise.ps1d[:, :]
                     noise.clear(); del noise
+
+        del rbin, ridx
 
         # postprocessing
         self.ps2d_all /= self.cfg.nblock ** 2
         for idx in range(bins):
-            self.ps1d_all[:, idx, :, :] /= counts[idx]
+            self.ps1d_all[:, idx, :, 1:] /= counts[idx]
         del coverage_idx, counts
 
         with open(fname, 'wb') as f:
@@ -954,6 +912,6 @@ class Mosaic:
             for iby in range(self.cfg.nblock):
                 self.outimages[iby][ibx] = None
 
-        if hasattr(self, 'consump_map'): del self.consump_map
+        if hasattr(self, 'consump_map'):  del self.consump_map
         if hasattr(self, 'coverage_map'): del self.coverage_map
-        if hasattr(self, 'ps2d_all'): del self.ps2d_all, self.ps1d_all
+        if hasattr(self, 'ps2d_all'):     del self.ps2d_all, self.ps1d_all
