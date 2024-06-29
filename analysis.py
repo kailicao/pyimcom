@@ -5,6 +5,7 @@ Classes
 -------
 OutImage : Wrapper for coadded images (blocks).
 NoiseAnal : Analysis of noise frames.
+StarsAnal : Analysis of point sources.
 Mosaic : Wrapper for coadded mosaics (2D arrays of blocks).
 
 '''
@@ -13,15 +14,18 @@ Mosaic : Wrapper for coadded mosaics (2D arrays of blocks).
 from os.path import exists
 from pathlib import Path
 import re
+from enum import Enum
 
 import numpy as np
 from astropy.io import fits
-from astropy import constants as const
-from astropy import units as u
+from astropy import constants as const, units as u, wcs
 from scipy import ndimage
 
+import healpy
+import galsim
 from .config import Timer, Settings as Stn, Config
 from .coadd import OutStamp, Block
+from .diagnostics.outimage_utils.helper import HDU_to_bels
 
 
 class OutImage:
@@ -693,6 +697,227 @@ class NoiseAnal:
             del self.ps2d, self.ps1d
 
 
+# diagnostics/starcube_nonoise_coldescr.txt
+
+ColDescr = Enum('ColDescr', [
+    'RA',            #  0: right ascension
+    'DEC',           #  1: declination
+    'BLOCK_IX',      #  2: block ix
+    'BLOCK_IY',      #  3: block iy
+    'X_POS',         #  4: x position in block image (float)
+    'Y_POS',         #  5: y position in block image (float)
+    'X_INT',         #  6: int part of x
+    'Y_INT',         #  7: int part of y
+    'X_FRAC',        #  8: frac part of x
+    'Y_FRAC',        #  9: frac part of y
+    'AMPLITUDE',     # 10: star fit -> amplitude
+    'OFFSET_X',      # 11: star fit -> centroid offset (in output pixels), x
+    'OFFSET_Y',      # 12: star fit -> centroid offset (in output pixels), y
+    'WIDTH',         # 13: star fit -> sigma (in output pixels)
+    'SHAPE_G1',      # 14: star fit -> g1 shape
+    'SHAPE_G2',      # 15: star fit -> g2 shape
+    'M42_REAL',      # 16: star 4th moment Re M42 (Zhang et al. 2023 MNRAS 525, 2441 convention)
+    'M42_IMAG',      # 17: star 4th moment Im M42
+    'FORCED_PLUS',   # 18: star moment with forced sigma=0.40 arcsec scale length [+ component] (in units of forced sigma**2)
+    'FORCED_CROSS',  # 19: star moment with forced sigma=0.40 arcsec scale length [x component]
+    'FIDELITY',      # 20: fidelity (mean in 0.5 arcsec box)
+    'COVERAGE',      # 21: coverage at star center
+    ], start=0)
+
+
+class StarsAnal:
+    '''
+    Analysis of point sources.
+
+    Largely based on diagnostics/starcube_nonoise.py.py.
+
+    Methods
+    -------
+    __init__ : Constructor.
+    __call__ : Analyze given point source frame of given output image.
+    clear : Free up memory space.
+
+    '''
+
+    bd = 40  # padding size
+    bd2 = 8
+    ncol = len(ColDescr)
+
+    def __init__(self, outim: OutImage, layer: str = 'gsstar14') -> None:
+        '''
+        Constructor.
+
+        Parameters
+        ----------
+        outim : OutImage
+            Output image to analyze.
+        layer : str, optional
+            Layer name of injected stars to analyze. The default is 'gsstar14'.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        self.outim = outim
+        self.layer = layer
+        assert layer == 'gsstar14', "Error: currently only 'gsstar14' is supported"
+
+        self.cfg = outim.cfg
+        assert layer in ['SCI'] + self.cfg.extrainput[1:], f"Error: layer '{layer}' not found"
+
+    def __call__(self, n: int = None, search_radius: float = None,
+                 forced_scale: float = None, bdpad: int = None, res: int = None) -> None:
+        '''
+        Analyze given point source frame of given output image.
+
+        Parameters
+        ----------
+        n : int, optional
+            Size of output images. The default is None.
+            If not provided, derive from self.cfg. Same for other parameters.
+        search_radius : float, optional
+            Search radius for injected point sources.
+        forced_scale : float, optional
+            Forced scale length for star moments.
+        bdpad : int, optional
+            Padding region around the edge.
+        res : int, optional
+            Resolution of HEALPix grid.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        if None in [n, search_radius, forced_scale, bdpad, res]:
+            n = self.cfg.NsideP  # size of output images
+            blocksize = self.cfg.n1 * self.cfg.n2 * self.cfg.dtheta * Stn.degree  # radians
+            search_radius = 1.5 * blocksize / np.sqrt(2.0)  # search radius
+            forced_scale = 0.40 * u.arcsec.to('degree') / self.cfg.dtheta  # in output pixels
+            bdpad = self.cfg.n2 * self.cfg.postage_pad  # padding region around the edge
+            res = int(re.match(r'^gsstar(\d+)$', self.layer).group(1))
+            # print(n, search_radius, forced_scale, bdpad, res)
+
+        data_loaded = hasattr(self.outim, 'hdu_list')
+        if not data_loaded:
+            self.outim._load_or_save_hdu_list(True)
+
+        f = self.outim.hdu_list  # alias
+        use_slice = (['SCI'] + self.cfg.extrainput[1:]).index(self.layer)
+
+        mywcs = wcs.WCS(f[0].header)
+        map_ = f[0].data[0, use_slice, :, :]
+        wt = np.sum(np.where(f['INWEIGHT'].data[0, :, :, :] > 0.01, 1, 0), axis=0)
+        fmap = f['FIDELITY'].data[0, :, :].astype(np.float32) \
+            * HDU_to_bels(f['FIDELITY'])/.1  # convert to dB
+        fmap = np.floor(fmap).astype(np.int16)  # and round to integer
+        del f
+
+        if not data_loaded:
+            self.outim._load_or_save_hdu_list(False)
+
+        ra_cent, dec_cent = mywcs.all_pix2world([(n-1)/2], [(n-1)/2], [0.], [0.], 0, ra_dec_order=True)
+        ra_cent = ra_cent[0]; dec_cent = dec_cent[0]
+        vec = healpy.ang2vec(ra_cent, dec_cent, lonlat=True)
+        qp = healpy.query_disc(2**res, vec, search_radius, nest=False)
+        ra_hpix, dec_hpix = healpy.pix2ang(2**res, qp, nest=False, lonlat=True)
+        npix = len(ra_hpix)
+        x, y, z1, z2 = mywcs.all_world2pix(ra_hpix, dec_hpix, np.zeros((npix,)), np.zeros((npix,)), 0)
+        xi = np.rint(x).astype(np.int16); yi = np.rint(y).astype(np.int16)
+        grp = np.where(np.logical_and(np.logical_and(xi >= bdpad, xi < n-bdpad),
+                                      np.logical_and(yi >= bdpad, yi < n-bdpad)))
+        ra_hpix = ra_hpix[grp]
+        dec_hpix = dec_hpix[grp]
+        x = x[grp]
+        y = y[grp]
+        npix = len(x)
+        del vec, qp, z1, z2, grp
+
+        self.sub_cat = np.zeros((npix, StarsAnal.ncol))
+        xi = np.rint(x).astype(np.int16)
+        yi = np.rint(y).astype(np.int16)
+        # position information
+        self.sub_cat[:, ColDescr.RA      .value] = ra_hpix
+        self.sub_cat[:, ColDescr.DEC     .value] = dec_hpix
+        self.sub_cat[:, ColDescr.BLOCK_IX.value] = self.outim.ibx
+        self.sub_cat[:, ColDescr.BLOCK_IY.value] = self.outim.iby
+        self.sub_cat[:, ColDescr.X_POS   .value] = x
+        self.sub_cat[:, ColDescr.Y_POS   .value] = y
+        self.sub_cat[:, ColDescr.X_INT   .value] = xi
+        self.sub_cat[:, ColDescr.Y_INT   .value] = yi
+        self.sub_cat[:, ColDescr.X_FRAC  .value] = dx = x-xi
+        self.sub_cat[:, ColDescr.Y_FRAC  .value] = dy = y-yi
+        del ra_hpix, dec_hpix
+
+        bd = StarsAnal.bd  # shortcut
+        newimage = np.zeros((npix, bd*2-1, bd*2-1))
+        # print(self.outim.ibx, self.outim.iby, self.outim.fpath, npix)
+        print(npix, end=' ')
+        for k in range(npix):
+            newimage[k, :, :] = map_[yi[k]+1-bd:yi[k]+bd, xi[k]+1-bd:xi[k]+bd]
+
+            # PSF shape
+            try:
+                moms = galsim.Image(newimage[k, :, :]).FindAdaptiveMom()
+            except:
+                continue
+
+            self.sub_cat[k, ColDescr.AMPLITUDE.value] = moms.moments_amp
+            self.sub_cat[k, ColDescr.OFFSET_X .value] = moms.moments_centroid.x-bd-dx[k]
+            self.sub_cat[k, ColDescr.OFFSET_Y .value] = moms.moments_centroid.y-bd-dy[k]
+            self.sub_cat[k, ColDescr.WIDTH    .value] = moms.moments_sigma
+            self.sub_cat[k, ColDescr.SHAPE_G1 .value] = moms.observed_shape.g1
+            self.sub_cat[k, ColDescr.SHAPE_G2 .value] = moms.observed_shape.g2
+
+            # higher moments
+            x_, y_ = np.meshgrid(np.arange(1, bd*2) - moms.moments_centroid.x,
+                                 np.arange(1, bd*2) - moms.moments_centroid.y)
+            e1 = moms.observed_shape.e1
+            e2 = moms.observed_shape.e2
+            Mxx = moms.moments_sigma**2 * (1+e1) / np.sqrt(1-e1**2-e2**2)
+            Myy = moms.moments_sigma**2 * (1-e1) / np.sqrt(1-e1**2-e2**2)
+            Mxy = moms.moments_sigma**2 * e2 / np.sqrt(1-e1**2-e2**2)
+            D = Mxx*Myy-Mxy**2
+            zeta = D*(Mxx+Myy+2*np.sqrt(D))
+            u_ = ((Myy+np.sqrt(D))*x_ - Mxy*y_) / zeta**0.5
+            v_ = ((Mxx+np.sqrt(D))*y_ - Mxy*x_) / zeta**0.5
+            wti = newimage[k, :, :] * np.exp(-0.5*(u_**2+v_**2))
+            self.sub_cat[k, ColDescr.M42_REAL.value] = np.sum(wti*(u_**4-v_**4))/np.sum(wti)
+            self.sub_cat[k, ColDescr.M42_IMAG.value] = 2*np.sum(wti*(u_**3*v_+u_*v_**3))/np.sum(wti)
+
+            # moments with forced scale length
+            wti2 = newimage[k, :, :] * np.exp(-0.5*(x_**2+y_**2)/forced_scale**2)
+            self.sub_cat[k, ColDescr.FORCED_PLUS .value] = np.sum(wti2*(x_**2-y_**2))/np.sum(wti2)/forced_scale**2
+            self.sub_cat[k, ColDescr.FORCED_CROSS.value] = np.sum(wti2*(2*x_*y_))/np.sum(wti2)/forced_scale**2
+
+            # fidelity and coverage
+            self.sub_cat[k, ColDescr.FIDELITY.value] = np.mean(fmap[yi[k]+1-StarsAnal.bd2:yi[k]+StarsAnal.bd2,
+                                                                    xi[k]+1-StarsAnal.bd2:xi[k]+StarsAnal.bd2])
+            self.sub_cat[k, ColDescr.COVERAGE.value] = wt[yi[k]//self.cfg.n2, xi[k]//self.cfg.n2]
+
+            del x_, y_, u_, v_, wti, wti2
+
+        del map_, wt, fmap
+        del x, y, xi, yi
+        del newimage
+
+    def clear(self) -> None:
+        '''
+        Free up memory space.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        if hasattr(self, 'sub_cat'):
+            del self.sub_cat
+
+
 class Mosaic:
     '''
     Wrapper for coadded mosaics (2D arrays of blocks).
@@ -705,6 +930,7 @@ class Mosaic:
     get_coverage_map : Get map of mean coverages.
 
     get_noise_power_spectra : Analyze noise power spectra of this mosaic.
+    get_star_catalog : 
     clear : Free up memory space.
 
     '''
@@ -898,6 +1124,55 @@ class Mosaic:
 
         print(f'finished at t = {timer():.2f} s')
 
+    def get_star_catalog(self, layer: str = 'gsstar14') -> None:
+        '''
+        Analyze injected point sources of this mosaic.
+
+        Parameters
+        ----------
+        layer : str, optional
+            Layer name of injected stars to analyze. The default is 'gsstar14'.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        fname = self.cfg.outstem.rpartition('/')[-1] + '_StarCat.npy'
+        if exists(fname):
+            with open(fname, 'rb') as f:
+                self.star_cat = np.load(f)
+            return
+
+        timer = Timer()
+        self.star_cat = np.zeros((0, StarsAnal.ncol))
+
+        n = self.cfg.NsideP  # size of output images
+        blocksize = self.cfg.n1 * self.cfg.n2 * self.cfg.dtheta * Stn.degree  # radians
+        search_radius = 1.5 * blocksize / np.sqrt(2.0)  # search radius
+        forced_scale = 0.40 * u.arcsec.to('degree') / self.cfg.dtheta  # in output pixels
+        bdpad = self.cfg.n2 * self.cfg.postage_pad  # padding region around the edge
+        res = int(re.match(r'^gsstar(\d+)$', layer).group(1))
+        # print(n, search_radius, forced_scale, bdpad, res)
+
+        # loop over output images
+        for iby in range(self.cfg.nblock):
+            print(' > row {:2d}  t= {:9.2f} s'.format(iby, timer()))
+
+            print('star counts:', end=' ')
+            for ibx in range(self.cfg.nblock):
+                stars = StarsAnal(self.outimages[iby][ibx], layer)
+                stars(n, search_radius, forced_scale, bdpad, res)
+                self.star_cat = np.concatenate((self.star_cat, stars.sub_cat), axis=0)
+                stars.clear(); del stars
+            print()
+
+        with open(fname, 'wb') as f:
+            np.save(f, self.star_cat)
+
+        print(f'finished at t = {timer():.2f} s')
+
     def clear(self) -> None:
         '''
         Free up memory space.
@@ -915,3 +1190,4 @@ class Mosaic:
         if hasattr(self, 'consump_map'):  del self.consump_map
         if hasattr(self, 'coverage_map'): del self.coverage_map
         if hasattr(self, 'ps2d_all'):     del self.ps2d_all, self.ps1d_all
+        if hasattr(self, 'star_cat'):     del self.star_cat
