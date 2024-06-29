@@ -988,8 +988,8 @@ class OutStamp:
             for x in self.inpix_cumsum[1:-1]:
                 ax.axvline(x, c='r', ls='--', lw=1.5)
 
-            ax.set_xlabel(r'output pixel $\alpha$')
-            ax.set_ylabel('input pixel $i$')
+            ax.set_xlabel('input pixel $i$')
+            ax.set_ylabel(r'output pixel $\alpha$')
             ax.set_title(r'$B$ matrix: $\log_{10} (-B_{\alpha i}/2)$')
             format_axis(ax, False)
             plt.show()
@@ -1039,8 +1039,8 @@ class OutStamp:
             for x in self.inpix_cumsum[1:-1]:
                 ax.axvline(x, c='r', ls='--', lw=1.5)
 
-            ax.set_xlabel(r'output pixel $\alpha$')
-            ax.set_ylabel('input pixel $i$')
+            ax.set_xlabel('input pixel $i$')
+            ax.set_ylabel(r'output pixel $\alpha$')
             ax.set_title(r'$T$ matrix: $T_{\alpha i}$')
             format_axis(ax, False)
             plt.show()
