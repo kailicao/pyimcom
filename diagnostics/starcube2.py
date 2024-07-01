@@ -12,6 +12,7 @@ import galsim
 import json
 import re
 from outimage_utils.helper import HDU_to_bels
+from layer import GalSimInject
 
 # Padding size
 bd2 = 8
@@ -29,7 +30,7 @@ s_in = 0.11 # input pixel scale
 B0 = 0.38 #e/px/s, bakground estimate
 
 nblockmax = nblock**2
-ncol = 36
+ncol = 40
 nstart = 0
 
 filter = sys.argv[1]
@@ -124,13 +125,13 @@ for iblock in range(nstart, nstart + nblockmax ** 2):
                 m = re.match(r'^whitenoise10', layers[i])
                 if m:
                     WN_slice = i
-                m = re.match(r'^gsext(\d+)', layers[i])
+                m = re.match(r'^gsext(\d+),seed=(\d+)', layers[i])
                 if m:
                     # match the ext obj grid w/o shear
                     if 'shear=' not in layers[i]:
                         ext_slice = i
-                        
-            print('# star layer', star_slice, 'extobj layer', ext_slice, 'resolution', res)
+                        rseed = int(m.group(2))
+            print('# star layer', star_slice, 'extobj layer', ext_slice, 'resolution', res, 'extobj seed', rseed)
             print('# rs=', rs, 'output pix =', s_out, 'arcsec   n=', n, ' thermal bkgnd: ', include_thermal_background)
             image = numpy.zeros((1, bd * 2 - 1, bd * 2 - 1))
             imageB = numpy.zeros((1, bd * 2 - 1, bd * 2 - 1))
@@ -163,6 +164,7 @@ for iblock in range(nstart, nstart + nblockmax ** 2):
         numpy.logical_and(numpy.logical_and(xi >= bd, xi < n - bd), numpy.logical_and(yi >= bd, yi < n - bd)))
     ra_hpix = ra_hpix[grp]
     dec_hpix = dec_hpix[grp]
+    ipix = qp[grp]
     x = x[grp]
     y = y[grp]
     npix = len(x)
@@ -193,7 +195,7 @@ for iblock in range(nstart, nstart + nblockmax ** 2):
                 LN_map[yi[k] + 1 - bd : yi[k] + bd, xi[k] + 1 - bd : xi[k] + bd] /
                 ((t_fr * area * s_in**2) / (gain * h)) +
                 WN_map[yi[k] + 1 - bd : yi[k] + bd, xi[k] + 1 - bd : xi[k] + bd] *
-                np.sqrt((B1 - B0) / t_exp)
+                numpy.sqrt((B1 - B0) / t_exp)
             )  # units microJy/arcsec^2
         else:
             thisnoiseimage = (
@@ -346,6 +348,12 @@ for iblock in range(nstart, nstart + nblockmax ** 2):
                     except:
                         print('ERROR {:d},{:d}  coverage={:2d}'.format(iblock, k, int(newpos[k, 31])))
                         pass
+            # KL: Make the truth catalog??
+            truthcat = GalSimInject.galsim_extobj_grid(res, mywcs, inpsf, n, rseed, tc=True)
+            newpos[k, 36] = truthcat['sersic']['r'][k]
+            newpos[k, 37] = truthcat['g'][0,k]
+            newpos[k, 38] = truthcat['g'][1, k]
+
         except Exception as e:
             print('exception:', e, ', object number: ', k)
             continue
