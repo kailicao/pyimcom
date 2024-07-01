@@ -212,7 +212,7 @@ class GalSimInject:
         return mydict
 
     @staticmethod
-    def galsim_extobj_grid(res, mywcs, inpsf, idsca, obsdata, sca_nside, inpsf_oversamp, extraargs=[]):
+    def galsim_extobj_grid(res, mywcs, inpsf, idsca, obsdata, sca_nside, inpsf_oversamp, extraargs=[], tc=False):
         '''
         Example of a function used here that we can call from coadd_utils.get_all_data:
 
@@ -221,7 +221,8 @@ class GalSimInject:
           mywcs = WCS object (astropy.wcs format)
           OUTDATED --> inpsf, idsca, obsdata = PSF information to pass to get_psf_pos
           sca_nside = side length of the SCA (4088 for Roman)
-          extraargs = for future compatibility
+          extraargs = for future compatibility;
+          tc = if tc, return galtype instead of going through the whole function; this is for use in starcube2
 
           Output: [when complete]
           nside x nside SCA with a grid of stars with unit flux
@@ -270,6 +271,8 @@ class GalSimInject:
         # generate object parameters
         galstring = 'exp1'
         galtype = GalSimInject.genobj(12*4**res, ipix, galstring, seed)
+        if tc:
+            return galtype
         # print(galtype)
 
         n_in_stamp = 280
