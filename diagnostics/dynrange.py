@@ -16,7 +16,7 @@ from astropy import wcs
 from os.path import exists
 import json
 import re
-from outimage_utils.helper import HDU_to_bels
+from .outimage_utils.helper import HDU_to_bels
 
 # Inputs
 pathstem = sys.argv[1]
