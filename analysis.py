@@ -7,7 +7,7 @@ OutImage : Wrapper for coadded images (blocks).
 NoiseAnal : Analysis of noise frames.
 StarsAnal : Analysis of point sources.
 
-BlkGrp : Abstract base class for groups of blocks (mosiacs or suites).
+_BlkGrp : Abstract base class for groups of blocks (mosiacs or suites).
 Mosaic : Wrapper for coadded mosaics (2D arrays of blocks).
 Suite : Wrapper for coadded suites (hashed arrays of blocks).
 
@@ -103,7 +103,7 @@ class OutImage:
         self.fpath = fpath
         self.ibx, self.iby = map(int, Path(fpath).stem.split('_')[-2:])
 
-        self.cfg = cfg
+        cfg(); self.cfg = cfg
         if cfg is None:
             with fits.open(fpath) as hdu_list:
                 self.cfg = Config(''.join(hdu_list['CONFIG'].data['text'].tolist()))
@@ -949,7 +949,7 @@ class StarsAnal:
             del self.sub_cat
 
 
-class BlkGrp:
+class _BlkGrp:
     '''
     Abstract base class for groups of blocks (mosiacs or suites).
 
@@ -1248,7 +1248,7 @@ class BlkGrp:
         if hasattr(self, 'star_cat'):     del self.star_cat
 
 
-class Mosaic(BlkGrp):
+class Mosaic(_BlkGrp):
     '''
     Wrapper for coadded mosaics (2D arrays of blocks).
 
@@ -1277,7 +1277,7 @@ class Mosaic(BlkGrp):
 
         '''
 
-        self.cfg = cfg
+        cfg(); self.cfg = cfg
         self.hdu_names = OutImage.get_hdu_names(cfg.outmaps)
 
         self.outimages = [[None for ibx in range(cfg.nblock)]
@@ -1328,7 +1328,7 @@ class Mosaic(BlkGrp):
         print(f'finished at t = {timer():.2f} s')
 
 
-class Suite(BlkGrp):
+class Suite(_BlkGrp):
     '''
     Wrapper for coadded suites (hashed arrays of blocks).
 
@@ -1360,7 +1360,7 @@ class Suite(BlkGrp):
 
         '''
 
-        self.cfg = cfg
+        cfg(); self.cfg = cfg
         self.hdu_names = OutImage.get_hdu_names(cfg.outmaps)
 
         self.prime = prime

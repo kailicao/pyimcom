@@ -208,7 +208,7 @@ class OutPSF:
         '''
         No-Numba version of routine.iD5512C_getw.
 
-        For some unknown reason, Numba does not work here.
+        The Numba version may not work in a Jupyter environment.
 
         Parameters
         ----------
@@ -602,7 +602,7 @@ class PSFGrp:
 
         blk = self.inst.blk  # shortcut
         psf_compute_point = blk.outwcs.all_pix2world(np.array([self.inst.psf_compute_point_pix]), 0)[0]
-        dWdp_out = wcs.utils.local_partial_pixel_derivatives(blk.outwcs, *self.inst.psf_compute_point_pix)
+        # dWdp_out = wcs.utils.local_partial_pixel_derivatives(blk.outwcs, *self.inst.psf_compute_point_pix)
         print('INPUT/PSF computation at RA={:8.4f}, Dec={:8.4f}'.format(*psf_compute_point), end='; ')
         print('using input exposures:', [self.idx_grp2blk[idx] for idx in range(self.n_psf)])
         # print(' --> partial derivatives, ', dWdp_out)
@@ -611,8 +611,9 @@ class PSFGrp:
         for idx in range(self.n_psf):
             # print('PSF info -->', self.idx_grp2blk[idx], end=' ')
             inimage = self.inst.blk.inimages[self.idx_grp2blk[idx]]
-            this_psf, distort_matrice = inimage.get_psf_and_distort_mat(
-                psf_compute_point, dWdp_out, use_shortrange=True)
+            # this_psf, distort_matrice = inimage.get_psf_and_distort_mat(
+            #     psf_compute_point, dWdp_out, use_shortrange=True)
+            this_psf = inimage.get_psf_pos(psf_compute_point, use_shortrange=True)
             # Note: use_shortrange=True does not take effect when PSFSPLIT is not set.
             if visualize:
                 print(f'The PSF below is from InImage {(self.inst.blk.inimages[self.idx_grp2blk[idx]].idsca)}',

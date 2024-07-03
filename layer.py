@@ -55,8 +55,9 @@ class GalSimInject:
         Inputs:
           res = HEALPix resolution (nside = 2**res)
           mywcs = WCS object (astropy.wcs format)
-          idsca = observation ID and SCA numbers
-          OUTDATED --> inpsf, obsdata = PSF information to pass to get_psf_pos
+          inpsf = alias for an ‎InImage.get_psf_pos method
+          idsca = tuple (obsid, sca) (sca in 1..18)
+          obsdata = observation table (needed for some data format)
           sca_nside = side length of the SCA (4088 for Roman)
           extraargs = either None (default) or a dictionary
               if a dictionary, can search for the following parameters:
@@ -117,7 +118,7 @@ class GalSimInject:
             if angleTransient:
                 if (qp[n]+s)%2==1: continue
 
-            psf = inpsf((my_ra[n], my_dec[n]), dWdp_out=None)  # now with PSF variation
+            psf = inpsf((my_ra[n], my_dec[n]))  # now with PSF variation
             psf_image = galsim.Image(psf, scale=0.11/inpsf_oversamp)
             interp_psf = galsim.InterpolatedImage(psf_image, x_interpolant='lanczos50')
 
@@ -219,7 +220,9 @@ class GalSimInject:
         Inputs:
           res = HEALPix resolution (nside = 2**res)
           mywcs = WCS object (astropy.wcs format)
-          OUTDATED --> inpsf, idsca, obsdata = PSF information to pass to get_psf_pos
+          inpsf = alias for an ‎InImage.get_psf_pos method
+          idsca = tuple (obsid, sca) (sca in 1..18)
+          obsdata = observation table (needed for some data format)
           sca_nside = side length of the SCA (4088 for Roman)
           extraargs = for future compatibility
 
@@ -276,7 +279,7 @@ class GalSimInject:
         pad = n_in_stamp+2*(d+1)
         sca_image = galsim.ImageF(sca_nside+pad, sca_nside+pad, scale=refscale)
         for n in range(num_obj):
-            psf = inpsf((my_ra[n], my_dec[n]), dWdp_out=None)  # now with PSF variation
+            psf = inpsf((my_ra[n], my_dec[n]))  # now with PSF variation
             psf_image = galsim.Image(psf, scale=0.11/inpsf_oversamp)
             interp_psf = galsim.InterpolatedImage(
                 psf_image, x_interpolant='lanczos50')
@@ -431,7 +434,7 @@ class GridInject:
 
         Inputs:
           res = HEALPix resolution
-          OUTDATED --> inpsf = PSF dictionary
+          inpsf = alias for an ‎InImage.get_psf_pos method
           idsca = tuple (obsid, sca) (sca in 1..18)
           obsdata = observation table (needed for some data format)
           mywcs = the WCS solution for this SCA
@@ -445,7 +448,7 @@ class GridInject:
         d = 64  # region to draw
 
         for istar in range(len(ipix)):
-            thispsf = inpsf((rapix[istar], decpix[istar]), dWdp_out=None)  # now with PSF variation
+            thispsf = inpsf((rapix[istar], decpix[istar]))  # now with PSF variation
             this_xmax = min(nside_sca, int(xsca[istar])+d)
             this_xmin = max(0, int(xsca[istar])-d)
             this_ymax = min(nside_sca, int(ysca[istar])+d)
@@ -666,7 +669,7 @@ def get_all_data(inimage: 'coadd.InImage'):
     path = inimage.blk.cfg.inpath  # directory for the files
     format_ = inimage.blk.cfg.informat  # string describing type of file name
     inwcs = inimage.inwcs  # input WCS of *this* observation
-    inpsf = inimage.get_psf_and_distort_mat  # now this is a **function**
+    inpsf = inimage.get_psf_pos  # now this is a **function**
     # input PSF information (to be passed to GalSimInject or GridInject routines if we draw objects)
     inpsf_oversamp = inimage.blk.cfg.inpsf_oversamp
     extrainput = inimage.blk.cfg.extrainput  # make multiple maps (list of types, first should be None, rest strings)
