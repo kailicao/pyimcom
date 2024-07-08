@@ -13,6 +13,7 @@ import json
 import re
 from outimage_utils.helper import HDU_to_bels
 from layer import GalSimInject
+from coadd import InImage
 
 # Padding size
 bd2 = 8
@@ -145,6 +146,7 @@ for iblock in range(nstart, nstart + nblockmax ** 2):
         star_map = f[0].data[0, star_slice, :, :]
         gal_map = f[0].data[0, ext_slice, :, :]
         WN_map = f[0].data[0, WN_slice, :, :]
+
         wt = numpy.sum(numpy.where(f['INWEIGHT'].data[0, :, :, :] > 0.01, 1, 0), axis=0)
         fmap = f['FIDELITY'].data[0, :, :].astype(numpy.float32) * HDU_to_bels(f['FIDELITY']) / .1  # convert to dB
         fmap = numpy.floor(fmap).astype(numpy.int16)  # and round to integer
@@ -283,19 +285,23 @@ for iblock in range(nstart, nstart + nblockmax ** 2):
                 moms_noise_zero = galsim.Image(newimage_star[k, :, :]).FindAdaptiveMom()
                 moms_noise_positive = galsim.Image(newimage_star[k, :, :] + thisnoiseimage).FindAdaptiveMom()
                 moms_noise_negative = galsim.Image(newimage_star[k, :, :] - thisnoiseimage).FindAdaptiveMom()
-                newpos[k, 32] = (
-                                            moms_noise_positive.observed_shape.g1 + moms_noise_negative.observed_shape.g1) / 2. - moms_noise_zero.observed_shape.g1
-                newpos[k, 33] = (
-                                            moms_noise_positive.observed_shape.g2 + moms_noise_negative.observed_shape.g2) / 2. - moms_noise_zero.observed_shape.g2
+                newpos[k, 32] = (moms_noise_positive.observed_shape.g1
+                                 + moms_noise_negative.observed_shape.g1) / 2. \
+                                - moms_noise_zero.observed_shape.g1
+                newpos[k, 33] = (moms_noise_positive.observed_shape.g2
+                                 + moms_noise_negative.observed_shape.g2) / 2. \
+                                - moms_noise_zero.observed_shape.g2
                
                 # Galaxy
                 moms_noise_zero = galsim.Image(newimage_gal[k, :, :]).FindAdaptiveMom()
                 moms_noise_positive = galsim.Image(newimage_gal[k, :, :] + thisnoiseimage).FindAdaptiveMom()
                 moms_noise_negative = galsim.Image(newimage_gal[k, :, :] - thisnoiseimage).FindAdaptiveMom()
-                newpos[k, 34] = (
-                                            moms_noise_positive.observed_shape.g1 + moms_noise_negative.observed_shape.g1) / 2. - moms_noise_zero.observed_shape.g1
-                newpos[k, 35] = (
-                                            moms_noise_positive.observed_shape.g2 + moms_noise_negative.observed_shape.g2) / 2. - moms_noise_zero.observed_shape.g2
+                newpos[k, 34] = (moms_noise_positive.observed_shape.g1
+                                 + moms_noise_negative.observed_shape.g1) / 2. \
+                                - moms_noise_zero.observed_shape.g1
+                newpos[k, 35] = (moms_noise_positive.observed_shape.g2
+                                 + moms_noise_negative.observed_shape.g2) / 2. \
+                                - moms_noise_zero.observed_shape.g2
                 
             except:
                 try:
@@ -305,20 +311,24 @@ for iblock in range(nstart, nstart + nblockmax ** 2):
                     moms_noise_zero = galsim.Image(newimage_star[k, :, :]).FindAdaptiveMom()
                     moms_noise_positive = galsim.Image(newimage_star[k, :, :] + thisnoiseimage / sc).FindAdaptiveMom()
                     moms_noise_negative = galsim.Image(newimage_star[k, :, :] - thisnoiseimage / sc).FindAdaptiveMom()
-                    newpos[k, 32] = (
-                                                moms_noise_positive.observed_shape.g1 + moms_noise_negative.observed_shape.g1) / 2. - moms_noise_zero.observed_shape.g1
-                    newpos[k, 33] = (
-                                                moms_noise_positive.observed_shape.g2 + moms_noise_negative.observed_shape.g2) / 2. - moms_noise_zero.observed_shape.g2
+                    newpos[k, 32] = (moms_noise_positive.observed_shape.g1
+                                     + moms_noise_negative.observed_shape.g1) / 2. \
+                                    - moms_noise_zero.observed_shape.g1
+                    newpos[k, 33] = (moms_noise_positive.observed_shape.g2
+                                     + moms_noise_negative.observed_shape.g2) / 2. \
+                                    - moms_noise_zero.observed_shape.g2
                     newpos[k, 32:34] *= sc ** 2
                     
                     # Galaxy
                     moms_noise_zero = galsim.Image(newimage_gal[k, :, :]).FindAdaptiveMom()
                     moms_noise_positive = galsim.Image(newimage_gal[k, :, :] + thisnoiseimage / sc).FindAdaptiveMom()
                     moms_noise_negative = galsim.Image(newimage_gal[k, :, :] - thisnoiseimage / sc).FindAdaptiveMom()
-                    newpos[k, 34] = (
-                                                moms_noise_positive.observed_shape.g1 + moms_noise_negative.observed_shape.g1) / 2. - moms_noise_zero.observed_shape.g1
-                    newpos[k, 35] = (
-                                                moms_noise_positive.observed_shape.g2 + moms_noise_negative.observed_shape.g2) / 2. - moms_noise_zero.observed_shape.g2
+                    newpos[k, 34] = (moms_noise_positive.observed_shape.g1
+                                     + moms_noise_negative.observed_shape.g1) / 2. \
+                                    - moms_noise_zero.observed_shape.g1
+                    newpos[k, 35] = (moms_noise_positive.observed_shape.g2
+                                     + moms_noise_negative.observed_shape.g2) / 2. \
+                                    - moms_noise_zero.observed_shape.g2
                     newpos[k, 34:36] *= sc ** 2
                     
                     
@@ -327,29 +337,37 @@ for iblock in range(nstart, nstart + nblockmax ** 2):
                         print('BACKUP-1.0    {:d},{:d}  coverage={:2d}'.format(iblock, k, int(newpos[k, 23])))
                         sc = 10.
                         moms_noise_zero = galsim.Image(newimage_star[k, :, :]).FindAdaptiveMom()
-                        moms_noise_positive = galsim.Image(newimage_star[k, :, :] + thisnoiseimage / sc).FindAdaptiveMom()
-                        moms_noise_negative = galsim.Image(newimage_star[k, :, :] - thisnoiseimage / sc).FindAdaptiveMom()
-                        newpos[k, 32] = (
-                                                    moms_noise_positive.observed_shape.g1 + moms_noise_negative.observed_shape.g1) / 2. - moms_noise_zero.observed_shape.g1
-                        newpos[k, 33] = (
-                                                    moms_noise_positive.observed_shape.g2 + moms_noise_negative.observed_shape.g2) / 2. - moms_noise_zero.observed_shape.g2
+                        moms_noise_positive = galsim.Image(newimage_star[k, :, :]
+                                                           + thisnoiseimage / sc).FindAdaptiveMom()
+                        moms_noise_negative = galsim.Image(newimage_star[k, :, :]
+                                                           - thisnoiseimage / sc).FindAdaptiveMom()
+                        newpos[k, 32] = (moms_noise_positive.observed_shape.g1
+                                         + moms_noise_negative.observed_shape.g1) / 2. \
+                                        - moms_noise_zero.observed_shape.g1
+                        newpos[k, 33] = (moms_noise_positive.observed_shape.g2
+                                         + moms_noise_negative.observed_shape.g2) / 2. \
+                                        - moms_noise_zero.observed_shape.g2
                         newpos[k, 32:34] *= sc ** 2
                         
                         # Galaxy
                         moms_noise_zero = galsim.Image(newimage_gal[k, :, :]).FindAdaptiveMom()
-                        moms_noise_positive = galsim.Image(newimage_gal[k, :, :] + thisnoiseimage / sc).FindAdaptiveMom()
-                        moms_noise_negative = galsim.Image(newimage_gal[k, :, :] - thisnoiseimage / sc).FindAdaptiveMom()
-                        newpos[k, 34] = (
-                                                    moms_noise_positive.observed_shape.g1 + moms_noise_negative.observed_shape.g1) / 2. - moms_noise_zero.observed_shape.g1
-                        newpos[k, 35] = (
-                                                    moms_noise_positive.observed_shape.g2 + moms_noise_negative.observed_shape.g2) / 2. - moms_noise_zero.observed_shape.g2
+                        moms_noise_positive = galsim.Image(newimage_gal[k, :, :]
+                                                           + thisnoiseimage / sc).FindAdaptiveMom()
+                        moms_noise_negative = galsim.Image(newimage_gal[k, :, :]
+                                                           - thisnoiseimage / sc).FindAdaptiveMom()
+                        newpos[k, 34] = (moms_noise_positive.observed_shape.g1
+                                         + moms_noise_negative.observed_shape.g1) / 2. \
+                                        - moms_noise_zero.observed_shape.g1
+                        newpos[k, 35] = (moms_noise_positive.observed_shape.g2
+                                         + moms_noise_negative.observed_shape.g2) / 2. \
+                                        - moms_noise_zero.observed_shape.g2
                         newpos[k, 34:36] *= sc ** 2
                         
                     except:
                         print('ERROR {:d},{:d}  coverage={:2d}'.format(iblock, k, int(newpos[k, 31])))
                         pass
-            # KL: Make the truth catalog??
-            truthcat = GalSimInject.galsim_extobj_grid(res, mywcs, inpsf, n, rseed, tc=True)
+            # KL: Make the truth catalog...
+            truthcat = GalSimInject.genobj(12*4**res, ipix, 'exp1', rseed)
             newpos[k, 36] = truthcat['sersic']['r'][k]
             newpos[k, 37] = truthcat['g'][0,k]
             newpos[k, 38] = truthcat['g'][1, k]
