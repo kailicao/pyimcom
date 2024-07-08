@@ -212,7 +212,7 @@ class GalSimInject:
         return mydict
 
     @staticmethod
-    def galsim_extobj_grid(res, mywcs, inpsf, sca_nside, inpsf_oversamp, extraargs=[], tc=False):
+    def galsim_extobj_grid(res, mywcs, inpsf, sca_nside, inpsf_oversamp, extraargs=[]):
         '''
         Example of a function used here that we can call from coadd_utils.get_all_data:
 
@@ -271,9 +271,6 @@ class GalSimInject:
         # generate object parameters
         galstring = 'exp1'
         galtype = GalSimInject.genobj(12*4**res, ipix, galstring, seed)
-        if tc:
-            return galtype
-        # print(galtype)
 
         n_in_stamp = 280
         pad = n_in_stamp+2*(d+1)
