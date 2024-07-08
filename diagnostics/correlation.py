@@ -17,10 +17,12 @@ else:
     d_type = [('ra', 'f8'), ('dec', 'f8'), ('bind_x', 'f8'), ('bind_y', 'f8'), ('x_out', 'f8'), ('y_out', 'f8'),
               ('xI_out', 'f8'), ('yI_out', 'f8'), ('dx', 'f8'), ('dy', 'f8'),
               ('amp_hsm_S', 'f8'), ('dx_hsm_S', 'f8'), ('dy_hsm_S', 'f8'), ('sig_hsm_S', 'f8'), ('g1_hsm_S', 'f8'),
-              ('g2_hsm_S', 'f8'), ('M40-M04_S', 'f8'), ('M31+M13_S', 'f8'), ('Mxx-Myy_fs_S', 'f8'), ('Mxy+Myx_fs_S', 'f8'),
-              ('amp_hsm_G', 'f8'), ('dx_hsm_G', 'f8'), ('dy_hsm_G', 'f8'), ('sig_hsm_G', 'f8'), ('g1_hsm_G', 'f8'),
-              ('g2_hsm_G', 'f8'), ('M40-M04_G', 'f8'), ('M31+M13_G', 'f8'), ('Mxx-Myy_fs_G', 'f8'), ('Mxy+Myx_fs_G', 'f8'),
-              ('mean_fid', 'f8'), ('coverage', 'f8'), ('g1_noise_S', 'f8'), ('g2_noise_S', 'f8'), ('g1_noise_G', 'f8'), ('g2_noise_G', 'f8')]
+              ('g2_hsm_S', 'f8'), ('M40-M04_S', 'f8'), ('M31+M13_S', 'f8'), ('Mxx-Myy_fs_S', 'f8'),
+              ('Mxy+Myx_fs_S', 'f8'), ('amp_hsm_G', 'f8'), ('dx_hsm_G', 'f8'), ('dy_hsm_G', 'f8'), ('sig_hsm_G', 'f8'),
+              ('g1_hsm_G', 'f8'), ('g2_hsm_G', 'f8'), ('M40-M04_G', 'f8'), ('M31+M13_G', 'f8'), ('Mxx-Myy_fs_G', 'f8'),
+              ('Mxy+Myx_fs_G', 'f8'), ('mean_fid', 'f8'), ('coverage', 'f8'), ('g1_noise_S', 'f8'),
+              ('g2_noise_S', 'f8'), ('g1_noise_G', 'f8'), ('g2_noise_G', 'f8'), ('truth_r', 'f8'), ('truth_g1', 'f8'),
+              ('truth_g2', 'f8')]
     d = np.loadtxt(in1 + 'LNAllCat_' + band + '.txt', dtype=d_type,
                    usecols=np.arange(0, 36))
     fio.write(in1 + 'LNCat' + band + '_sample.fits', d)
@@ -217,6 +219,8 @@ print('# Lab noise bias g2: ', '{:.7f}'.format(mean_noise_g2), '+/-', '{:.7f}'.f
 
 _compute_GG_corr(d['ra'], d['dec'], d['g1_noise_G'], d['g2_noise_G'],
                  outstem+'gal_' + band + '_noise-noise_sample_labnoise.fits')
+_compute_GG_corr(d['ra'], d['dec'], d['g1_noise_G']-['truth_g1'], d['g2_noise_G']-d['truth_g2'],
+                 outstem+'gal_' + band + '_noise-noise_difference_labnoise.fits')
 _compute_NK_corr(d['ra'], d['dec'], d['g1_noise_G'],
                  outstem+'gal_' + band + '_sky-noise_sample_g1_labnoise.fits')
 _compute_NK_corr(d['ra'], d['dec'], d['g2_noise_G'],
