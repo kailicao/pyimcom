@@ -13,7 +13,6 @@ import json
 import re
 from outimage_utils.helper import HDU_to_bels
 from layer import GalSimInject
-from coadd import InImage
 
 # Padding size
 bd2 = 8
