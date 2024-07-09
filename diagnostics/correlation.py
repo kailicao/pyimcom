@@ -24,7 +24,7 @@ else:
               ('g2_noise_S', 'f8'), ('g1_noise_G', 'f8'), ('g2_noise_G', 'f8'), ('truth_r', 'f8'), ('truth_g1', 'f8'),
               ('truth_g2', 'f8')]
     d = np.loadtxt(in1 + 'LNAllCat_' + band + '.txt', dtype=d_type,
-                   usecols=np.arange(0, 36))
+                   usecols=np.arange(0, 39))
     fio.write(in1 + 'LNCat' + band + '_sample.fits', d)
 print('# number of objects', len(d))
 
