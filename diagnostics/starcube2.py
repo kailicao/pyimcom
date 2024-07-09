@@ -367,9 +367,9 @@ for iblock in range(nstart, nstart + nblockmax ** 2):
                         pass
             # KL: Make the truth catalog...
             truthcat = GalSimInject.genobj(12*4**res, ipix, 'exp1', rseed)
-            newpos[k, 36] = truthcat['sersic']['r'][k]
-            newpos[k, 37] = truthcat['g'][0,k]
-            newpos[k, 38] = truthcat['g'][1, k]
+            newpos[k, 36] = truthcat['sersic']['r'][k].astype(numpy.float64)
+            newpos[k, 37] = truthcat['g'][0,k].astype(numpy.float64)
+            newpos[k, 38] = truthcat['g'][1, k].astype(numpy.float64)
 
         except Exception as e:
             print('exception:', e, ', object number: ', k)
