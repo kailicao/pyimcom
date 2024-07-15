@@ -219,7 +219,7 @@ print('# Lab noise bias g2: ', '{:.7f}'.format(mean_noise_g2), '+/-', '{:.7f}'.f
 
 _compute_GG_corr(d['ra'], d['dec'], d['g1_noise_G'], d['g2_noise_G'],
                  outstem+'gal_' + band + '_noise-noise_sample_labnoise.fits')
-_compute_GG_corr(d['ra'], d['dec'], d['g1_noise_G']-d['truth_g1'], d['g2_noise_G']-d['truth_g2'],
+# _compute_GG_corr(d['ra'], d['dec'], d['g1_noise_G']-d['truth_g1'], d['g2_noise_G']-d['truth_g2'],
                  outstem+'gal_' + band + '_noise-noise_difference_labnoise.fits')
 _compute_NK_corr(d['ra'], d['dec'], d['g1_noise_G'],
                  outstem+'gal_' + band + '_sky-noise_sample_g1_labnoise.fits')
