@@ -156,7 +156,7 @@ for iblock in range(nstart, nstart + nblockmax ** 2):
     dec_cent = dec_cent[0]
     vec = healpy.ang2vec(ra_cent, dec_cent, lonlat=True)
     qp = healpy.query_disc(2 ** res, vec, rs, nest=True)
-    ra_hpix, dec_hpix = healpy.pix2ang(2 ** res, qp, nest=False, lonlat=True)
+    ra_hpix, dec_hpix = healpy.pix2ang(2 ** res, qp, nest=True, lonlat=True)
     npix = len(ra_hpix)
     x, y, z1, z2 = mywcs.all_world2pix(ra_hpix, dec_hpix, numpy.zeros((npix,)), numpy.zeros((npix,)), 0)
     xi = numpy.rint(x).astype(numpy.int16);
