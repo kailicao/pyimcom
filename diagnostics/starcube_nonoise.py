@@ -10,7 +10,7 @@ from os.path import exists
 import galsim
 import json
 import re
-from outimage_utils.helper import HDU_to_bels
+from .outimage_utils.helper import HDU_to_bels
 
 bd = 40 # padding size
 bd2 = 8
