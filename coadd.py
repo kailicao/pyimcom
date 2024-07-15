@@ -53,7 +53,7 @@ class InImage:
 
     smooth_and_pad (staticmethod) : Utility to smear a PSF with a tophat and a Gaussian.
     LPolyArr (staticmethod) : Utility to generate an array of Legendre polynomials.
-    get_psf_and_distort_mat : Get input PSF array and the corresponding distortion matrix.
+    get_psf_pos : Get input PSF array at given position.
 
     '''
 
@@ -430,25 +430,24 @@ class InImage:
         arr = np.outer(va,ua).flatten()
         return arr
 
-    def get_psf_and_distort_mat(self, psf_compute_point, dWdp_out, use_shortrange=False) -> tuple:
+    def get_psf_pos(self, psf_compute_point: np.array, use_shortrange: bool = False) -> np.array:
         '''
-        Get input PSF array and the corresponding distortion matrix.
-
-        If use_shortrange is True and PSFSPLIT is set, then pulls only the short-range PSF G^(S).
+        Get input PSF array at given position.
 
         This is an interface for layer.get_all_data and psfutil.PSFGrp._build_inpsfgrp.
 
         Parameters
         ----------
-        j_st, i_st : int, int
-            InStamp index.
+        psf_compute_point : np.array, shape : (2,)
+            Point to compute PSF in RA and Dec.
+        use_shortrange : bool, optional
+            If True and PSFSPLIT is set, then pulls only the short-range PSF G^(S).
+            The default is False.
 
         Returns
         -------
-        tuple : (this_psf, distort_matrice)
-            Smeared input PSF array : np.array, see smooth_and_pad
-            and distortion matrix : np.array, shape : (2, 2)
-        or simply this_psf, if dWdp_out is None.
+        tuple : np.array, shape : see smooth_and_pad
+            Input PSF array at given position. 
 
         '''
 
@@ -490,19 +489,21 @@ class InImage:
         else:
             raise RuntimeError('Error: input psf does not exist')
 
+        return this_psf
+
         # when distort_matrice is not required
-        if dWdp_out is None: return this_psf
+        # if dWdp_out is None: return this_psf
 
         # get the distortion matrices d[(X,Y)perfect]/d[(X,Y)native]
         # Note that rotations and magnifications are included in the distortion matrix, as well as shear
         # Also the distortion is relative to the output grid, not to the tangent plane to the celestial sphere
         # (although we really don't want the difference to be large ...)
-        distort_matrice = np.linalg.inv(dWdp_out) \
-            @ wcs.utils.local_partial_pixel_derivatives(self.inwcs, pixloc[0], pixloc[1]) \
-            * self.blk.cfg.dtheta*Stn.degree/Stn.pixscale_native
+        # distort_matrice = np.linalg.inv(dWdp_out) \
+        #     @ wcs.utils.local_partial_pixel_derivatives(self.inwcs, pixloc[0], pixloc[1]) \
+        #     * self.blk.cfg.dtheta*Stn.degree/Stn.pixscale_native
 
         # print(pixloc, self.blk.cfg.inpsf_oversamp, np.shape(this_psf), np.sum(this_psf))
-        return this_psf, distort_matrice
+        # return this_psf, distort_matrice
 
 
 class InStamp:
@@ -988,8 +989,8 @@ class OutStamp:
             for x in self.inpix_cumsum[1:-1]:
                 ax.axvline(x, c='r', ls='--', lw=1.5)
 
-            ax.set_xlabel(r'output pixel $\alpha$')
-            ax.set_ylabel('input pixel $i$')
+            ax.set_xlabel('input pixel $i$')
+            ax.set_ylabel(r'output pixel $\alpha$')
             ax.set_title(r'$B$ matrix: $\log_{10} (-B_{\alpha i}/2)$')
             format_axis(ax, False)
             plt.show()
@@ -1039,8 +1040,8 @@ class OutStamp:
             for x in self.inpix_cumsum[1:-1]:
                 ax.axvline(x, c='r', ls='--', lw=1.5)
 
-            ax.set_xlabel(r'output pixel $\alpha$')
-            ax.set_ylabel('input pixel $i$')
+            ax.set_xlabel('input pixel $i$')
+            ax.set_ylabel(r'output pixel $\alpha$')
             ax.set_title(r'$T$ matrix: $T_{\alpha i}$')
             format_axis(ax, False)
             plt.show()
@@ -1300,7 +1301,7 @@ class OutStamp:
             ax1.axhline(              0, c='b', ls='--')
             ax1.axvline(self.blk.cfg.n2, c='r', ls='--')
 
-            ax1.get_xaxis().set_visible(False)
+            ax1.xaxis.set_ticklabels([])
             ax1.set_ylabel(r'$T_{\alpha i}$')
             format_axis(ax1)
 
@@ -1404,7 +1405,7 @@ class Block:
         '''
 
         self.timer = Timer()
-        self.cfg = cfg
+        cfg(); self.cfg = cfg
         if cfg is None: self.cfg = Config()  # use the default config
 
         PSFGrp.setup(npixpsf=cfg.npixpsf, oversamp=cfg.inpsf_oversamp, dtheta=cfg.dtheta)
