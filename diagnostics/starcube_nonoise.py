@@ -1,5 +1,5 @@
 # usage: python starcube_nonoise.py <filter> <input prefix> <outstem>
-# input file name is <input prefix><filter>_DD_DD_map.fits
+# input file name is <input prefix><filter>_DD_DD.fits
 
 import sys
 import numpy
@@ -42,7 +42,7 @@ for iblock in range(nstart,nblockmax**2):
   j = iblock
   ibx = j%nblockmax; iby = j//nblockmax
 
-  infile = in1 + '{:s}_{:02d}_{:02d}_map.fits'.format(filter,ibx,iby)
+  infile = in1 + '{:s}_{:02d}_{:02d}.fits'.format(filter,ibx,iby)
 
   # extract information from the header of the first file
   if iblock==nstart:

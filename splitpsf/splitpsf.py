@@ -10,7 +10,7 @@ import copy
 import json
 import os
 
-from .config import Settings
+from ..config import Settings
 
 class SplitPSF:
 
