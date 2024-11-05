@@ -4,7 +4,7 @@
         "/fs/scratch/PCON0003/cond0007/anl-run-in-prod",
         "anlsim"
     ],
-    "FILTER": 1,
+    "FILTER": 4,
     "INPSF": [
         "/fs/scratch/PCON0003/cond0007/anl-run-in-prod/psf",
         "anlsim",
@@ -30,17 +30,17 @@
         32,
         0.0390625
     ],
-    "FADE": 3,
+    "FADE": 0,
     "PAD": 2,
     "PADSIDES": "all",
     "STOP": 0,
     "OUTMAPS": "USTN",
-    "OUT": "/fs/scratch/PAS2733/kailicao/paper4_F184_Chol/F184_Chol_gauss_1.2x/F184_Chol_gauss_1.2x",
-    "TEMPFILE": "/tmp/pyimcomrun_FCg",
+    "OUT": "/users/PAS2055/kailicao/pyimcom_dev/test/Y106_Iter_benchmark",
+    "TEMPFILE": "/tmp/pyimcomrun_YIb",
     "INLAYERCACHE": "",
     "NOUT": 1,
     "OUTPSF": "GAUSSIAN",
-    "EXTRASMOOTH": 1.1720640843974661,
+    "EXTRASMOOTH": 0.8493218002880191,
     "NPIXPSF": 48,
     "PSFCIRC": false,
     "PSFNORM": false,
@@ -49,10 +49,12 @@
         0.0
     ],
     "FLATPEN": 0.0,
-    "INPAD": 1.24,
-    "LAKERNEL": "Cholesky",
+    "INPAD": 0.6,
+    "LAKERNEL": "Iterative",
+    "ITERRTOL": 0.0015,
+    "ITERMAX": 30,
     "KAPPAC": [
-        0.0008
+        0.0
     ],
     "UCMIN": 1e-06,
     "SMAX": 0.5

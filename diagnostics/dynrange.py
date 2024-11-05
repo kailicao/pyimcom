@@ -16,7 +16,7 @@ from astropy import wcs
 from os.path import exists
 import json
 import re
-from outimage_utils.helper import HDU_to_bels
+from .outimage_utils.helper import HDU_to_bels
 
 # Inputs
 pathstem = sys.argv[1]
@@ -50,7 +50,7 @@ tneff_gt = 0.
 # now loop over the blocks
 for iby in range(nblockmax):
   for ibx in range(nblockmax):
-    infile = pathstem + '_{:02d}_{:02d}_map.fits'.format(ibx,iby)
+    infile = pathstem + '_{:02d}_{:02d}.fits'.format(ibx,iby)
     if not exists(infile): continue
 
     # if this is the first block we find, get the configuration file

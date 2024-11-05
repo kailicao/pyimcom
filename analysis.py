@@ -5,7 +5,11 @@ Classes
 -------
 OutImage : Wrapper for coadded images (blocks).
 NoiseAnal : Analysis of noise frames.
+StarsAnal : Analysis of point sources.
+
+_BlkGrp : Abstract base class for groups of blocks (mosiacs or suites).
 Mosaic : Wrapper for coadded mosaics (2D arrays of blocks).
+Suite : Wrapper for coadded suites (hashed arrays of blocks).
 
 '''
 
@@ -13,15 +17,18 @@ Mosaic : Wrapper for coadded mosaics (2D arrays of blocks).
 from os.path import exists
 from pathlib import Path
 import re
+from enum import Enum
 
 import numpy as np
 from astropy.io import fits
-from astropy import constants as const
-from astropy import units as u
+from astropy import constants as const, units as u, wcs
 from scipy import ndimage
 
+import healpy
+import galsim
 from .config import Timer, Settings as Stn, Config
 from .coadd import OutStamp, Block
+from .diagnostics.outimage_utils.helper import HDU_to_bels
 
 
 class OutImage:
@@ -96,7 +103,7 @@ class OutImage:
         self.fpath = fpath
         self.ibx, self.iby = map(int, Path(fpath).stem.split('_')[-2:])
 
-        self.cfg = cfg
+        cfg(); self.cfg = cfg
         if cfg is None:
             with fits.open(fpath) as hdu_list:
                 self.cfg = Config(''.join(hdu_list['CONFIG'].data['text'].tolist()))
@@ -497,6 +504,10 @@ class NoiseAnal:
     m_ab = 23.9  # sample mag for PS
     s_in = 0.11  # arcsec
 
+    # following make_plot_ln.py
+    PS1D_COLORS = ['orange', 'darksalmon', 'palevioletred', 'mediumvioletred', 'darkviolet']
+    PS1D_STYLES = ['solid', 'dotted', 'dashed', 'solid', 'dashdot']
+
     def __init__(self, outim: OutImage, layer: str) -> None:
         '''
         Constructor.
@@ -525,6 +536,9 @@ class NoiseAnal:
         '''
         Get norm for 2D noise power spectrum.
 
+        IMPORTANT: For simulated noise frames, dividing by s_in**2
+        converts from units of S_in^2 to arcsec^2.
+
         Parameters
         ----------
         layer : str
@@ -544,9 +558,9 @@ class NoiseAnal:
         '''
 
         if layer.startswith('white'):
-            return (L * (cls.s_in/s_out)) ** 2
+            return (L / s_out) ** 2  # (L * (cls.s_in/s_out)) ** 2
         elif layer.startswith('1f'):
-            return (L * (cls.s_in/s_out)) ** 2
+            return (L / s_out) ** 2  # (L * (cls.s_in/s_out)) ** 2
         elif layer.startswith('lab'):
             return cls.tfr/cls.gain * cls.ABstd/cls.h * cls.AREA[filtername] * 10**(-0.4*cls.m_ab) * s_out**2
 
@@ -693,7 +707,548 @@ class NoiseAnal:
             del self.ps2d, self.ps1d
 
 
-class Mosaic:
+# diagnostics/starcube_nonoise_coldescr.txt
+
+ColDescr = Enum('ColDescr', [
+    'RA',            #  0: right ascension
+    'DEC',           #  1: declination
+    # 'BLOCK_IX',      #  2: block ix
+    # 'BLOCK_IY',      #  3: block iy
+    'X_POS',         #  4: x position in block image (float)
+    'Y_POS',         #  5: y position in block image (float)
+    # 'X_INT',         #  6: int part of x
+    # 'Y_INT',         #  7: int part of y
+    # 'X_FRAC',        #  8: frac part of x
+    # 'Y_FRAC',        #  9: frac part of y
+    'AMPLITUDE',     # 10: star fit -> amplitude
+    'OFFSET_X',      # 11: star fit -> centroid offset (in output pixels), x
+    'OFFSET_Y',      # 12: star fit -> centroid offset (in output pixels), y
+    'WIDTH',         # 13: star fit -> sigma (in output pixels)
+    'SHAPE_G1',      # 14: star fit -> g1 shape
+    'SHAPE_G2',      # 15: star fit -> g2 shape
+    'M42_REAL',      # 16: star 4th moment Re M42 (Zhang et al. 2023 MNRAS 525, 2441 convention)
+    'M42_IMAG',      # 17: star 4th moment Im M42
+    'FORCED_PLUS',   # 18: star moment with forced sigma=0.40 arcsec scale length [+ component] (in units of forced sigma**2)
+    'FORCED_CROSS',  # 19: star moment with forced sigma=0.40 arcsec scale length [x component]
+    'FIDELITY',      # 20: fidelity (mean in 0.5 arcsec box)
+    'COVERAGE',      # 21: coverage at star center
+    'MEAN_UC',       # new: mean PSF leakage U/C (in linear space)
+    'MEAN_SIGMA',    # new: mean noise amplification Sigma
+    'STD_TSUM',      # new: standard deviation of total weight
+    'MEAN_NEFF',     # new: mean effective coverage
+    ], start=0)
+
+
+class StarsAnal:
+    '''
+    Analysis of point sources.
+
+    Largely based on diagnostics/starcube_nonoise.py.py.
+
+    Methods
+    -------
+    __init__ : Constructor.
+    __call__ : Analyze given point source frame of given output image.
+    clear : Free up memory space.
+
+    '''
+
+    bd = 40  # padding size
+    bd2 = 8
+    ncol = len(ColDescr)
+
+    def __init__(self, outim: OutImage, layer: str = 'gsstar14') -> None:
+        '''
+        Constructor.
+
+        Parameters
+        ----------
+        outim : OutImage
+            Output image to analyze.
+        layer : str, optional
+            Layer name of injected stars to analyze. The default is 'gsstar14'.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        self.outim = outim
+        self.layer = layer
+        assert layer == 'gsstar14', "Error: currently only 'gsstar14' is supported"
+
+        self.cfg = outim.cfg
+        assert layer in ['SCI'] + self.cfg.extrainput[1:], f"Error: layer '{layer}' not found"
+
+    def __call__(self, n: int = None, search_radius: float = None,
+                 forced_scale: float = None, bdpad: int = None, res: int = None) -> None:
+        '''
+        Analyze given point source frame of given output image.
+
+        Parameters
+        ----------
+        n : int, optional
+            Size of output images. The default is None.
+            If not provided, derive from self.cfg. Same for other parameters.
+        search_radius : float, optional
+            Search radius for injected point sources.
+        forced_scale : float, optional
+            Forced scale length for star moments.
+        bdpad : int, optional
+            Padding region around the edge.
+        res : int, optional
+            Resolution of HEALPix grid.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        if None in [n, search_radius, forced_scale, bdpad, res]:
+            n = self.cfg.NsideP  # size of output images
+            blocksize = self.cfg.n1 * self.cfg.n2 * self.cfg.dtheta * Stn.degree  # radians
+            search_radius = 1.5 * blocksize / np.sqrt(2.0)  # search radius
+            forced_scale = 0.40 * u.arcsec.to('degree') / self.cfg.dtheta  # in output pixels
+            bdpad = self.cfg.n2 * self.cfg.postage_pad  # padding region around the edge
+            res = int(re.match(r'^gsstar(\d+)$', self.layer).group(1))
+            # print(n, search_radius, forced_scale, bdpad, res)
+
+        data_loaded = hasattr(self.outim, 'hdu_list')
+        if not data_loaded:
+            self.outim._load_or_save_hdu_list(True)
+
+        f = self.outim.hdu_list  # alias
+        use_slice = (['SCI'] + self.cfg.extrainput[1:]).index(self.layer)
+
+        mywcs = wcs.WCS(f[0].header)
+        map_ = f[0].data[0, use_slice, :, :]
+        wt = np.sum(np.where(f['INWEIGHT'].data[0, :, :, :] > 0.01, 1, 0), axis=0)
+        fmap = f['FIDELITY'].data[0, :, :].astype(np.float32) \
+            * HDU_to_bels(f['FIDELITY'])/.1  # convert to dB
+        fmap = np.floor(fmap).astype(np.int16)  # and round to integer
+        del f
+
+        outmaps = self.cfg.outmaps  # shortcut
+        if 'U' in outmaps: UC_map    = self.outim.get_output_map('FIDELITY')
+        if 'S' in outmaps: Sigma_map = self.outim.get_output_map('SIGMA'   )
+        if 'T' in outmaps: Tsum_map  = self.outim.get_output_map('INWTSUM' )
+        if 'N' in outmaps: Neff_map  = self.outim.get_output_map('EFFCOVER')
+
+        if not data_loaded:
+            self.outim._load_or_save_hdu_list(False)
+
+        ra_cent, dec_cent = mywcs.all_pix2world([(n-1)/2], [(n-1)/2], [0.], [0.], 0, ra_dec_order=True)
+        ra_cent = ra_cent[0]; dec_cent = dec_cent[0]
+        vec = healpy.ang2vec(ra_cent, dec_cent, lonlat=True)
+        qp = healpy.query_disc(2**res, vec, search_radius, nest=False)
+        ra_hpix, dec_hpix = healpy.pix2ang(2**res, qp, nest=False, lonlat=True)
+        npix = len(ra_hpix)
+        x, y, z1, z2 = mywcs.all_world2pix(ra_hpix, dec_hpix, np.zeros((npix,)), np.zeros((npix,)), 0)
+        xi = np.rint(x).astype(np.int16); yi = np.rint(y).astype(np.int16)
+        grp = np.where(np.logical_and(np.logical_and(xi >= bdpad, xi < n-bdpad),
+                                      np.logical_and(yi >= bdpad, yi < n-bdpad)))
+        ra_hpix = ra_hpix[grp]
+        dec_hpix = dec_hpix[grp]
+        x = x[grp]
+        y = y[grp]
+        npix = len(x)
+        del vec, qp, z1, z2, grp
+
+        self.sub_cat = np.zeros((npix, StarsAnal.ncol))
+        xi = np.rint(x).astype(np.int16)
+        yi = np.rint(y).astype(np.int16)
+        # position information
+        self.sub_cat[:, ColDescr.RA      .value] = ra_hpix
+        self.sub_cat[:, ColDescr.DEC     .value] = dec_hpix
+        # self.sub_cat[:, ColDescr.BLOCK_IX.value] = self.outim.ibx
+        # self.sub_cat[:, ColDescr.BLOCK_IY.value] = self.outim.iby
+        self.sub_cat[:, ColDescr.X_POS   .value] = x
+        self.sub_cat[:, ColDescr.Y_POS   .value] = y
+        # self.sub_cat[:, ColDescr.X_INT   .value] = xi
+        # self.sub_cat[:, ColDescr.Y_INT   .value] = yi
+        dx = x-xi  # self.sub_cat[:, ColDescr.X_FRAC  .value] = dx = x-xi
+        dy = y-yi  # self.sub_cat[:, ColDescr.Y_FRAC  .value] = dy = y-yi
+        del ra_hpix, dec_hpix
+
+        bd = StarsAnal.bd  # shortcut
+        # print(self.outim.ibx, self.outim.iby, self.outim.fpath, npix)
+        print(npix, end=' ')
+        for k in range(npix):
+            newimage = map_[yi[k]+1-bd:yi[k]+bd, xi[k]+1-bd:xi[k]+bd]
+
+            # PSF shape
+            try:
+                moms = galsim.Image(newimage).FindAdaptiveMom()
+            except:
+                continue
+
+            self.sub_cat[k, ColDescr.AMPLITUDE.value] = moms.moments_amp
+            self.sub_cat[k, ColDescr.OFFSET_X .value] = moms.moments_centroid.x-bd-dx[k]
+            self.sub_cat[k, ColDescr.OFFSET_Y .value] = moms.moments_centroid.y-bd-dy[k]
+            self.sub_cat[k, ColDescr.WIDTH    .value] = moms.moments_sigma
+            self.sub_cat[k, ColDescr.SHAPE_G1 .value] = moms.observed_shape.g1
+            self.sub_cat[k, ColDescr.SHAPE_G2 .value] = moms.observed_shape.g2
+
+            # higher moments
+            x_, y_ = np.meshgrid(np.arange(1, bd*2) - moms.moments_centroid.x,
+                                 np.arange(1, bd*2) - moms.moments_centroid.y)
+            e1 = moms.observed_shape.e1
+            e2 = moms.observed_shape.e2
+            Mxx = moms.moments_sigma**2 * (1+e1) / np.sqrt(1-e1**2-e2**2)
+            Myy = moms.moments_sigma**2 * (1-e1) / np.sqrt(1-e1**2-e2**2)
+            Mxy = moms.moments_sigma**2 * e2 / np.sqrt(1-e1**2-e2**2)
+            D = Mxx*Myy-Mxy**2
+            zeta = D*(Mxx+Myy+2*np.sqrt(D))
+            u_ = ((Myy+np.sqrt(D))*x_ - Mxy*y_) / zeta**0.5
+            v_ = ((Mxx+np.sqrt(D))*y_ - Mxy*x_) / zeta**0.5
+            wti = newimage * np.exp(-0.5*(u_**2+v_**2))
+            self.sub_cat[k, ColDescr.M42_REAL.value] = np.sum(wti*(u_**4-v_**4))/np.sum(wti)
+            self.sub_cat[k, ColDescr.M42_IMAG.value] = 2*np.sum(wti*(u_**3*v_+u_*v_**3))/np.sum(wti)
+
+            # moments with forced scale length
+            wti2 = newimage * np.exp(-0.5*(x_**2+y_**2)/forced_scale**2)
+            self.sub_cat[k, ColDescr.FORCED_PLUS .value] = np.sum(wti2*(x_**2-y_**2))/np.sum(wti2)/forced_scale**2
+            self.sub_cat[k, ColDescr.FORCED_CROSS.value] = np.sum(wti2*(2*x_*y_))/np.sum(wti2)/forced_scale**2
+
+            # fidelity and coverage
+            central = np.s_[yi[k]+1-StarsAnal.bd2:yi[k]+StarsAnal.bd2,
+                            xi[k]+1-StarsAnal.bd2:xi[k]+StarsAnal.bd2]  # central region of the star
+            self.sub_cat[k, ColDescr.FIDELITY.value] = np.mean(fmap[central])
+            self.sub_cat[k, ColDescr.COVERAGE.value] = wt[yi[k]//self.cfg.n2, xi[k]//self.cfg.n2]
+
+            # new columns based on output maps
+            self.sub_cat[k, ColDescr.MEAN_UC   .value] = np.mean(UC_map   [central]) if 'U' in outmaps else -1
+            self.sub_cat[k, ColDescr.MEAN_SIGMA.value] = np.mean(Sigma_map[central]) if 'S' in outmaps else -1
+            self.sub_cat[k, ColDescr.STD_TSUM  .value] = np.std (Tsum_map [central]) if 'T' in outmaps else -1
+            if self.cfg.linear_algebra == 'Empirical': self.sub_cat[k, ColDescr.STD_TSUM  .value] = 0
+            self.sub_cat[k, ColDescr.MEAN_NEFF .value] = np.mean(Neff_map [central]) if 'N' in outmaps else -1
+
+            del newimage, x_, y_, u_, v_, wti, wti2
+
+        del map_, wt, fmap
+        del x, y, xi, yi, dx, dy
+
+        if 'U' in outmaps: del UC_map
+        if 'S' in outmaps: del Sigma_map
+        if 'T' in outmaps: del Tsum_map
+        if 'N' in outmaps: del Neff_map
+
+    def clear(self) -> None:
+        '''
+        Free up memory space.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        if hasattr(self, 'sub_cat'):
+            del self.sub_cat
+
+
+class _BlkGrp:
+    '''
+    Abstract base class for groups of blocks (mosiacs or suites).
+
+    Methods
+    -------
+    __call__ : Run all the analyses below.
+    get_consump_map : Get map of time consumption.
+    get_coverage_map : Get map of mean coverages.
+    get_noise_power_spectra : Analyze noise power spectra of this mosaic.
+    get_star_catalog : Analyze injected point sources of this mosaic.
+    clear : Free up memory space.
+
+    '''
+
+    def __call__(self, overwrite: bool = False) -> None:
+        '''
+        Run all the analyses below.
+
+        Parameters
+        ----------
+        overwrite : bool, optional
+            Whether to overwrite existing results. The default is False.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        self.get_consump_map(overwrite=overwrite)  # Get map of time consumption.
+        self.get_coverage_map(overwrite=overwrite)  # Get map of mean coverages.
+        self.get_noise_power_spectra(overwrite=overwrite)  # Analyze noise power spectra of this mosaic.
+        self.get_star_catalog(overwrite=overwrite)  # Analyze injected point sources of this mosaic.
+
+    def get_consump_map(self, overwrite: bool = False) -> None:
+        '''
+        Get map of time consumption.
+
+        Parameters
+        ----------
+        overwrite : bool, optional
+            Whether to overwrite existing results. The default is False.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        fname = self.cfg.outstem + '_Consump.npy'
+        if not overwrite and exists(fname):
+            with open(fname, 'rb') as f:
+                self.consump_map = np.load(f)
+            return
+
+        if self.ndim == 2:  # Mosaic
+            nblock = self.cfg.nblock  # shortcut
+            self.consump_map = np.zeros((nblock, nblock))
+            for iby in range(nblock):
+                for ibx in range(nblock):
+                    self.consump_map[iby][ibx] = self.outimages[iby][ibx].get_time_consump()
+
+        elif self.ndim == 1:  # Suite
+            nrun = self.nrun
+            self.consump_map = np.zeros((nrun,))
+            for ib in range(nrun):
+                self.consump_map[ib] = self.outimages[ib].get_time_consump()
+
+        with open(fname, 'wb') as f:
+            np.save(f, self.consump_map)
+
+    def get_coverage_map(self, overwrite: bool = False) -> None:
+        '''
+        Get map of mean coverages.
+
+        Parameters
+        ----------
+        overwrite : bool, optional
+            Whether to overwrite existing results. The default is False.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        fname = self.cfg.outstem + '_Coverage.npy'
+        if not overwrite and exists(fname):
+            with open(fname, 'rb') as f:
+                self.coverage_map = np.load(f)
+            return
+
+        if self.ndim == 2:  # Mosaic
+            nblock = self.cfg.nblock  # shortcut
+            self.coverage_map = np.zeros((nblock, nblock))
+            for iby in range(nblock):
+                for ibx in range(nblock):
+                    self.coverage_map[iby][ibx] = self.outimages[iby][ibx].get_mean_coverage()
+
+        elif self.ndim == 1:  # Suite
+            nrun = self.nrun
+            self.coverage_map = np.zeros((nrun,))
+            for ib in range(nrun):
+                self.coverage_map[ib] = self.outimages[ib].get_mean_coverage()
+
+        with open(fname, 'wb') as f:
+            np.save(f, self.coverage_map)
+
+    def get_noise_power_spectra(self, bins: int = 5, overwrite: bool = False) -> None:
+        '''
+        Analyze noise power spectra of this mosaic.
+
+        Parameters
+        ----------
+        bins : int, optional
+            Number of bins for 1D power spectra. The default is 5.
+        overwrite : bool, optional
+            Whether to overwrite existing results. The default is False.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        fname = self.cfg.outstem + '_NoisePS.npy'
+        if not overwrite and exists(fname):
+            with open(fname, 'rb') as f:
+                self.ps2d_all = np.load(f)
+                self.ps1d_all = np.load(f)
+                self.wavenumbers = np.load(f)
+            return
+
+        timer = Timer()
+
+        # identify noise layers
+        noiseinput = [layer for layer in self.cfg.extrainput[1:] if 'noise' in layer]
+        n_innoise = len(noiseinput)
+        print(noiseinput)
+
+        # mean coverage bins
+        if not hasattr(self, 'coverage_map'):
+            self.get_coverage_map()
+
+        mc_max = self.coverage_map.max() + 1e-12
+        mc_min = self.coverage_map.min() - 1e-12
+        coverage_idx = ((self.coverage_map - mc_min) /
+                        (mc_max-mc_min) * bins).astype(np.uint8)
+        unique, counts = np.unique(coverage_idx, return_counts=True)
+
+        # create storage
+        if self.padding == False:  # Mosaic
+            L = self.cfg.Nside
+        else:  # Suite
+            L = self.cfg.NsideP
+        self.ps2d_all = np.zeros((n_innoise, L//8, L//8))
+        self.ps1d_all = np.zeros((n_innoise, bins, L//16, 2))
+
+        # derive rbin and ridx for NoiseAnal.azimuthal_average
+        nradbins = L//16  # Number of radial bins is side length div. into 8 from binning and then (floor) div. by 2.
+        yy, xx = np.mgrid[:L//8, :L//8]
+        r = np.hypot(xx - L//8/2, yy - L//8/2)
+        rbin = (nradbins * r / r.max()).astype(int)
+        ridx = np.arange(1, rbin.max() + 1)
+        del yy, xx, r
+
+        self.wavenumbers = NoiseAnal._get_wavenumbers(L, nradbins)
+        # dividing by s_out converts from units of cyc/s_out to cyc/arcsec
+        self.wavenumbers /= self.cfg.dtheta * u.degree.to('arcsec')
+
+        # loop over noise layers and output images
+        if self.ndim == 2:  # Mosaic
+            for iby in range(self.cfg.nblock):
+                print(' > row {:2d}  t= {:9.2f} s'.format(iby, timer()))
+                for inl, layer in enumerate(noiseinput):
+                    for ibx in range(self.cfg.nblock):
+                        noise = NoiseAnal(self.outimages[iby][ibx], layer)
+                        noise(padding=self.padding, rbin=rbin, ridx=ridx)
+                        self.ps2d_all[inl, :, :] += noise.ps2d
+                        self.ps1d_all[inl, coverage_idx[iby][ibx], :, :] += noise.ps1d[:, :]
+                        noise.clear(); del noise
+
+        elif self.ndim == 1:  # Suite
+            nrun = self.nrun
+            for inl, layer in enumerate(noiseinput):
+                for ib in range(nrun):
+                    noise = NoiseAnal(self.outimages[ib], layer)
+                    noise(padding=self.padding, rbin=rbin, ridx=ridx)
+                    self.ps2d_all[inl, :, :] += noise.ps2d
+                    self.ps1d_all[inl, coverage_idx[ib], :, :] += noise.ps1d[:, :]
+                    noise.clear(); del noise
+
+        del rbin, ridx
+
+        # postprocessing
+        if self.ndim == 2:  # Mosaic
+            self.ps2d_all /= self.cfg.nblock ** 2
+        elif self.ndim == 1:  # Suite
+            self.ps2d_all /= self.nrun
+
+        for idx, count in zip(unique, counts):
+            self.ps1d_all[:, idx, :, :] /= count
+        del coverage_idx, counts
+
+        with open(fname, 'wb') as f:
+            np.save(f, self.ps2d_all)
+            np.save(f, self.ps1d_all)
+            np.save(f, self.wavenumbers)
+
+        print(f'finished at t = {timer():.2f} s')
+
+    def get_star_catalog(self, layer: str = 'gsstar14', overwrite: bool = False) -> None:
+        '''
+        Analyze injected point sources of this mosaic.
+
+        Parameters
+        ----------
+        layer : str, optional
+            Layer name of injected stars to analyze. The default is 'gsstar14'.
+        overwrite : bool, optional
+            Whether to overwrite existing results. The default is False.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        fname = self.cfg.outstem + '_StarCat.npy'
+        if not overwrite and exists(fname):
+            with open(fname, 'rb') as f:
+                self.star_cat = np.load(f)
+            return
+
+        timer = Timer()
+        self.star_cat = np.zeros((0, StarsAnal.ncol))
+
+        n = self.cfg.NsideP  # size of output images
+        blocksize = self.cfg.n1 * self.cfg.n2 * self.cfg.dtheta * Stn.degree  # radians
+        search_radius = 1.5 * blocksize / np.sqrt(2.0)  # search radius
+        forced_scale = 0.40 * u.arcsec.to('degree') / self.cfg.dtheta  # in output pixels
+        bdpad = self.cfg.n2 * self.cfg.postage_pad  # padding region around the edge
+        res = int(re.match(r'^gsstar(\d+)$', layer).group(1))
+        # print(n, search_radius, forced_scale, bdpad, res)
+
+        # loop over output images
+        if self.ndim == 2:  # Mosaic
+            for iby in range(self.cfg.nblock):
+                print(' > row {:2d}  t= {:9.2f} s'.format(iby, timer()))
+
+                print('star counts:', end=' ')
+                for ibx in range(self.cfg.nblock):
+                    stars = StarsAnal(self.outimages[iby][ibx], layer)
+                    stars(n, search_radius, forced_scale, bdpad, res)
+                    self.star_cat = np.concatenate((self.star_cat, stars.sub_cat), axis=0)
+                    stars.clear(); del stars
+                print()
+
+        elif self.ndim == 1:  # Suite
+            nrun = self.nrun
+            print('star counts:', end=' ')
+            for ib in range(nrun):
+                stars = StarsAnal(self.outimages[ib], layer)
+                stars(n, search_radius, forced_scale, bdpad, res)
+                self.star_cat = np.concatenate((self.star_cat, stars.sub_cat), axis=0)
+                stars.clear(); del stars
+            print()
+
+        with open(fname, 'wb') as f:
+            np.save(f, self.star_cat)
+
+        print(f'finished at t = {timer():.2f} s')
+
+    def clear(self) -> None:
+        '''
+        Free up memory space.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        if self.ndim == 2:  # Mosaic
+            for ibx in range(self.cfg.nblock):
+                for iby in range(self.cfg.nblock):
+                    self.outimages[iby][ibx] = None
+
+        elif self.ndim == 1:  # Suite
+            for ib in range(self.nrun):
+                self.outimages[ib] = None
+
+        if hasattr(self, 'consump_map'):  del self.consump_map
+        if hasattr(self, 'coverage_map'): del self.coverage_map
+        if hasattr(self, 'ps2d_all'):     del self.ps2d_all, self.ps1d_all
+        if hasattr(self, 'star_cat'):     del self.star_cat
+
+
+class Mosaic(_BlkGrp):
     '''
     Wrapper for coadded mosaics (2D arrays of blocks).
 
@@ -701,13 +1256,11 @@ class Mosaic:
     -------
     __init__ : Constructor.
     share_padding_stamps : Share padding postage stamps between adjacent blocks.
-    get_consump_map : Get map of time consumption.
-    get_coverage_map : Get map of mean coverages.
-
-    get_noise_power_spectra : Analyze noise power spectra of this mosaic.
-    clear : Free up memory space.
 
     '''
+
+    ndim = 2
+    padding = False  # for get_noise_power_spectra
 
     def __init__(self, cfg: Config) -> None:
         '''
@@ -724,7 +1277,7 @@ class Mosaic:
 
         '''
 
-        self.cfg = cfg
+        cfg(); self.cfg = cfg
         self.hdu_names = OutImage.get_hdu_names(cfg.outmaps)
 
         self.outimages = [[None for ibx in range(cfg.nblock)]
@@ -732,7 +1285,6 @@ class Mosaic:
         for ibx in range(cfg.nblock):
             for iby in range(cfg.nblock):
                 fpath = cfg.outstem + f'_{ibx:02d}_{iby:02d}.fits'
-                assert exists(fpath), f'{fpath} does not exist'
                 self.outimages[iby][ibx] = OutImage(fpath, cfg, self.hdu_names)
 
     def share_padding_stamps(self) -> None:
@@ -775,57 +1327,32 @@ class Mosaic:
 
         print(f'finished at t = {timer():.2f} s')
 
-    def get_consump_map(self) -> None:
+
+class Suite(_BlkGrp):
+    '''
+    Wrapper for coadded suites (hashed arrays of blocks).
+
+    Methods
+    -------
+    __init__ : Constructor.
+
+    '''
+
+    ndim = 1
+    padding = True  # for get_noise_power_spectra
+
+    def __init__(self, cfg: Config, prime: int = 691, nrun: int = 16) -> None:
         '''
-        Get map of time consumption.
-
-        Returns
-        -------
-        None.
-
-        '''
-
-        fname = self.cfg.outstem + '_Consump.npy'
-        if exists(fname):
-            with open(fname, 'rb') as f:
-                self.consump_map = np.load(f)
-            return
-
-        nblock = self.cfg.nblock  # shortcut
-        self.consump_map = np.zeros((nblock, nblock))
-
-        for iby in range(nblock):
-            for ibx in range(nblock):
-                self.consump_map[iby][ibx] = self.outimages[iby][ibx].get_time_consump()
-
-        with open(fname, 'wb') as f:
-            np.save(f, self.consump_map)
-
-    def get_coverage_map(self) -> None:
-        '''
-        Get map of mean coverages.
-
-        Returns
-        -------
-        None.
-
-        '''
-
-        nblock = self.cfg.nblock  # shortcut
-        self.coverage_map = np.zeros((nblock, nblock))
-
-        for iby in range(nblock):
-            for ibx in range(nblock):
-                self.coverage_map[iby][ibx] = self.outimages[iby][ibx].get_mean_coverage()
-
-    def get_noise_power_spectra(self, bins: int = 5) -> None:
-        '''
-        Analyze noise power spectra of this mosaic.
+        Constructor.
 
         Parameters
         ----------
-        bins : int, optional
-            Number of bins for 1D power spectra. The default is 5.
+        cfg : Config
+            Configuration used for this output mosaic.
+        prime : int, optional
+            Prime number for hashing. The default is 691 (Paper IV).
+        nrun : int, optional
+            Number of coadded blocks. The default is 16 (Paper IV).
 
         Returns
         -------
@@ -833,85 +1360,13 @@ class Mosaic:
 
         '''
 
-        fname = self.cfg.outstem.rpartition('/')[-1] + '_NoisePS.npy'
-        if exists(fname):
-            with open(fname, 'rb') as f:
-                self.ps2d_all = np.load(f)
-                self.ps1d_all = np.load(f)
-            return
+        cfg(); self.cfg = cfg
+        self.hdu_names = OutImage.get_hdu_names(cfg.outmaps)
 
-        timer = Timer()
-
-        # identify noise layers
-        noiseinput = [layer for layer in self.cfg.extrainput[1:] if 'noise' in layer]
-        n_innoise = len(noiseinput)
-        print(noiseinput)
-
-        # mean coverage bins
-        if not hasattr(self, 'coverage_map'):
-            self.get_coverage_map()
-
-        mc_max = self.coverage_map.max() + 1e-12
-        mc_min = self.coverage_map.min() - 1e-12
-        coverage_idx = ((self.coverage_map - mc_min) /
-                        (mc_max-mc_min) * bins).astype(np.uint8)
-        _, counts = np.unique(coverage_idx, return_counts=True)
-
-        # create storage
-        L = self.cfg.Nside  # force padding == False
-        self.ps2d_all = np.zeros((n_innoise, L//8, L//8))
-        self.ps1d_all = np.zeros((n_innoise, bins, L//16, 3))
-
-        # derive rbin and ridx for NoiseAnal.azimuthal_average
-        nradbins = L//16  # Number of radial bins is side length div. into 8 from binning and then (floor) div. by 2.
-        yy, xx = np.mgrid[:L//8, :L//8]
-        r = np.hypot(xx - L//8/2, yy - L//8/2)
-        rbin = (nradbins * r / r.max()).astype(int)
-        ridx = np.arange(1, rbin.max() + 1)
-        del yy, xx, r
-
-        self.ps1d_all[:, :, :, 0] = NoiseAnal._get_wavenumbers(L, nradbins)
-
-        # loop over noise layers and output images
-        for iby in range(self.cfg.nblock):
-            print(' > row {:2d}  t= {:9.2f} s'.format(iby, timer()))
-
-            for inl, layer in enumerate(noiseinput):
-                for ibx in range(self.cfg.nblock):
-                    noise = NoiseAnal(self.outimages[iby][ibx], layer)
-                    noise(padding=False, rbin=rbin, ridx=ridx)
-                    self.ps2d_all[inl, :, :] += noise.ps2d
-                    self.ps1d_all[inl, coverage_idx[iby][ibx], :, 1:] += noise.ps1d[:, :]
-                    noise.clear(); del noise
-
-        del rbin, ridx
-
-        # postprocessing
-        self.ps2d_all /= self.cfg.nblock ** 2
-        for idx in range(bins):
-            self.ps1d_all[:, idx, :, 1:] /= counts[idx]
-        del coverage_idx, counts
-
-        with open(fname, 'wb') as f:
-            np.save(f, self.ps2d_all)
-            np.save(f, self.ps1d_all)
-
-        print(f'finished at t = {timer():.2f} s')
-
-    def clear(self) -> None:
-        '''
-        Free up memory space.
-
-        Returns
-        -------
-        None.
-
-        '''
-
-        for ibx in range(self.cfg.nblock):
-            for iby in range(self.cfg.nblock):
-                self.outimages[iby][ibx] = None
-
-        if hasattr(self, 'consump_map'):  del self.consump_map
-        if hasattr(self, 'coverage_map'): del self.coverage_map
-        if hasattr(self, 'ps2d_all'):     del self.ps2d_all, self.ps1d_all
+        self.prime = prime
+        self.nrun = nrun
+        self.outimages = [None for ib in range(nrun)]
+        for ib in range(nrun):
+            ibx, iby = divmod(ib*691 % cfg.nblock**2, cfg.nblock)
+            fpath = cfg.outstem + f'_{ibx:02d}_{iby:02d}.fits'
+            self.outimages[ib] = OutImage(fpath, cfg, self.hdu_names)

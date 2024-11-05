@@ -13,6 +13,7 @@ SysMatB : System matrix B attached to a coadd.Block instance.
 
 import numpy as np
 from scipy.special import jv
+from scipy.optimize import fsolve
 from astropy import wcs
 import matplotlib.pyplot as plt
 
@@ -21,6 +22,7 @@ try:
 except:
     import numpy.fft as numpy_fft
 
+import galsim
 from .config import Settings as Stn, format_axis
 try:
     from pyimcom_croutines import iD5512C, iD5512C_sym, gridD5512C
@@ -37,6 +39,10 @@ class OutPSF:
     psf_gaussian (staticmethod) : Gaussian spot.
     psf_simple_airy (staticmethod) : Airy spot.
     psf_cplx_airy (staticmethod) : somewhat messier Airy function.
+
+    iD5512C_getw (staticmethod) : No-Numba version of routine.iD5512C_getw.
+    psf_get_fwhm (staticmethod) : Compute FWHM of a PSF.
+    psf_get_inv_width (staticmethod) : Compute shear-invariant width of a PSF.
 
     '''
 
@@ -196,6 +202,133 @@ class OutPSF:
         del It, uxa, ux, uy
 
         return I[kp:-kp, kp:-kp]
+
+    @staticmethod
+    def iD5512C_getw(w: np.array, fh: float) -> None:
+        '''
+        No-Numba version of routine.iD5512C_getw.
+
+        The Numba version may not work in a Jupyter environment.
+
+        Parameters
+        ----------
+        w : np.array, shape : (10,)
+            Interpolation weights in one direction.
+        fh : float
+            'xfh' and 'yfh' with 1/2 subtracted.
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        fh2 = fh * fh
+        e_ =  (((+1.651881673372979740E-05*fh2 - 3.145538007199505447E-04)*fh2 +
+              1.793518183780194427E-03)*fh2 - 2.904014557029917318E-03)*fh2 + 6.187591260980151433E-04
+        o_ = ((((-3.486978652054735998E-06*fh2 + 6.753750285320532433E-05)*fh2 -
+              3.871378836550175566E-04)*fh2 + 6.279918076641771273E-04)*fh2 - 1.338434614116611838E-04)*fh
+        w[0] = e_ + o_
+        w[9] = e_ - o_
+        e_ =  (((-1.146756217210629335E-04*fh2 + 2.883845374976550142E-03)*fh2 -
+              1.857047531896089884E-02)*fh2 + 3.147734488597204311E-02)*fh2 - 6.753293626461192439E-03
+        o_ = ((((+3.121412120355294799E-05*fh2 - 8.040343683015897672E-04)*fh2 +
+              5.209574765466357636E-03)*fh2 - 8.847326408846412429E-03)*fh2 + 1.898674086370833597E-03)*fh
+        w[1] = e_ + o_
+        w[8] = e_ - o_
+        e_ =  (((+3.256838096371517067E-04*fh2 - 9.702063770653997568E-03)*fh2 +
+              8.678848026470635524E-02)*fh2 - 1.659182651092198924E-01)*fh2 + 3.620560878249733799E-02
+        o_ = ((((-1.243658986204533102E-04*fh2 + 3.804930695189636097E-03)*fh2 -
+              3.434861846914529643E-02)*fh2 + 6.581033749134083954E-02)*fh2 - 1.436476114189205733E-02)*fh
+        w[2] = e_ + o_
+        w[7] = e_ - o_
+        e_ =  (((-4.541830837949564726E-04*fh2 + 1.494862093737218955E-02)*fh2 -
+              1.668775957435094937E-01)*fh2 + 5.879306056792649171E-01)*fh2 - 1.367845996704077915E-01
+        o_ = ((((+2.894406669584551734E-04*fh2 - 9.794291009695265532E-03)*fh2 +
+              1.104231510875857830E-01)*fh2 - 3.906954914039130755E-01)*fh2 + 9.092432925988773451E-02)*fh
+        w[3] = e_ + o_
+        w[6] = e_ - o_
+        e_ =  (((+2.266560930061513573E-04*fh2 - 7.815848920941316502E-03)*fh2 +
+              9.686607348538181506E-02)*fh2 - 4.505856722239036105E-01)*fh2 + 6.067135256905490381E-01
+        o_ = ((((-4.336085507644610966E-04*fh2 + 1.537862263741893339E-02)*fh2 -
+              1.925091434770601628E-01)*fh2 + 8.993141455798455697E-01)*fh2 - 1.213035309579723942E+00)*fh
+        w[4] = e_ + o_
+        w[5] = e_ - o_
+
+    @staticmethod
+    def get_psf_fwhm(psf: np.array, visualize: bool = False) -> float:
+        '''
+        Compute FWHM of a PSF.
+
+        This function assumes that the given PSF is azimuthally symmetric.
+
+        Parameters
+        ----------
+        psf : np.array, shape : (ny, nx)
+            PSF of which the FWHM is to be computed.
+            Typically something returned by PSFGrp._get_outpsf.
+        visualize : bool, optional
+            Whether to visualize PSF and FWHM. The default is False.
+
+        Returns
+        -------
+        float
+            FWHM of given PSF in units of pixels.
+
+        '''
+
+        # from PSFGrp._sample_psf
+        ny, nx = np.shape(psf)[-2:]
+        xctr = (nx-1) / 2.0
+        yctr = (ny-1) / 2.0
+
+        # extract PSF on the x-axis
+        out_arr = np.zeros((1, PSFGrp.nsamp))
+        gridD5512C(np.pad(psf, 6), PSFGrp.yxo[None, 1, 0, :]+xctr+6,
+                   PSFGrp.yxo[None, 0, PSFGrp.nc:PSFGrp.nc+1, 0]+yctr+6, out_arr)
+        hm = out_arr[0, PSFGrp.nc]/2  # half maximum
+
+        if visualize:
+            fig, ax = plt.subplots()
+
+            ax.plot(out_arr[0, PSFGrp.nc:PSFGrp.nc+25], 'rx')
+            ax.axhline(hm, c='b', ls='--')
+
+            format_axis(ax)
+            plt.show()
+
+        idx = np.searchsorted(-out_arr[0, PSFGrp.nc:], -hm)
+        idx += PSFGrp.nc
+
+        w = np.empty((10,))
+        def func(fh):
+            OutPSF.iD5512C_getw(w, fh)
+            return w @ out_arr[0, idx-5:idx+5] - hm
+
+        fh = fsolve(func, 0)[0]
+        idx -= PSFGrp.nc
+        return (idx-.5+fh)*2
+
+    @staticmethod
+    def get_psf_inv_width(psf: np.array) -> float:
+        '''
+        Compute shear-invariant width of a PSF.
+
+        Parameters
+        ----------
+        psf : np.array, shape : (ny, nx)
+            PSF of which the shear-invariant width is to be computed.
+            Typically something returned by PSFGrp._get_outpsf.
+
+        Returns
+        -------
+        float
+            Shear-invariant width of given PSF in units of pixels.
+
+        '''
+
+        moms = galsim.Image(psf).FindAdaptiveMom()
+        return moms.moments_sigma
 
 
 class PSFGrp:
@@ -469,7 +602,7 @@ class PSFGrp:
 
         blk = self.inst.blk  # shortcut
         psf_compute_point = blk.outwcs.all_pix2world(np.array([self.inst.psf_compute_point_pix]), 0)[0]
-        dWdp_out = wcs.utils.local_partial_pixel_derivatives(blk.outwcs, *self.inst.psf_compute_point_pix)
+        # dWdp_out = wcs.utils.local_partial_pixel_derivatives(blk.outwcs, *self.inst.psf_compute_point_pix)
         print('INPUT/PSF computation at RA={:8.4f}, Dec={:8.4f}'.format(*psf_compute_point), end='; ')
         print('using input exposures:', [self.idx_grp2blk[idx] for idx in range(self.n_psf)])
         # print(' --> partial derivatives, ', dWdp_out)
@@ -478,8 +611,9 @@ class PSFGrp:
         for idx in range(self.n_psf):
             # print('PSF info -->', self.idx_grp2blk[idx], end=' ')
             inimage = self.inst.blk.inimages[self.idx_grp2blk[idx]]
-            this_psf, distort_matrice = inimage.get_psf_and_distort_mat(
-                psf_compute_point, dWdp_out, use_shortrange=True)
+            # this_psf, distort_matrice = inimage.get_psf_and_distort_mat(
+            #     psf_compute_point, dWdp_out, use_shortrange=True)
+            this_psf = inimage.get_psf_pos(psf_compute_point, use_shortrange=True)
             # Note: use_shortrange=True does not take effect when PSFSPLIT is not set.
             if visualize:
                 print(f'The PSF below is from InImage {(self.inst.blk.inimages[self.idx_grp2blk[idx]].idsca)}',
@@ -524,7 +658,6 @@ class PSFGrp:
 
         else:
             raise RuntimeError('Error: unsupported target output PSF type')
-
 
     def _build_outpsfgrp(self, visualize: bool = False) -> None:
         '''

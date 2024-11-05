@@ -1,5 +1,5 @@
 {
-    "OBSFILE": "/users/PCON0003/cond0007/imcom/pyimcom/anlsim/Roman_WAS_obseq_11_1_23.fits",
+    "OBSFILE": "/users/PCON0003/cond0007/imcom/pyimcom/anlsim2/Roman_WAS_obseq_11_1_23.fits",
     "INDATA": [
         "/fs/scratch/PCON0003/cond0007/anl-run-in-prod",
         "anlsim"

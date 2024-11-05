@@ -262,7 +262,7 @@ class CholKernel(_LAKernel):
             AA = np.copy(A); di = np.diag_indices(n)
             my_kappa = self.kappaC_arr[0] * C[j_out]
 
-            AA[di] += my_kappa
+            if my_kappa: AA[di] += my_kappa
             L = CholKernel._cholesky_wrapper(AA, di, A)
             Ti = cho_solve((L, True), mBhalf[j_out, :, :].T, check_finite=False).T  # (m, n)
             del AA, di, L
@@ -399,7 +399,7 @@ def _extract_submatrix(mat_orig: np.array, selection: np.array) -> np.array:
     mat_orig : np.array, shape : (n, n)
         Symmetric matrix to be extracted.
     selection : np.array, shape : (n,)
-        Boolean array indicating whether to extract a row or column.
+        Integer array of indices of rows and columns to extract.
 
     Returns
     -------
@@ -408,24 +408,13 @@ def _extract_submatrix(mat_orig: np.array, selection: np.array) -> np.array:
 
     '''
 
-    n = selection.size
-    n_ = selection.sum()
+    n_ = selection.size
     mat_copy = np.empty((n_, n_))
 
-    j_ = 0
-    for j in range(n):
-        if not selection[j]: continue
-
-        i_ = 0
-        for i in range(n):
-            if not selection[i]: continue
-
+    for j_, j in enumerate(selection):
+        for i_, i in enumerate(selection):
             mat_copy[j_, i_] = mat_orig[j, i]
-            i_ += 1
             if i_ > j_: break
-
-        j_ += 1
-        if j_ == n_: break
 
     for j_ in range(n_):
         for i_ in range(j_+1, n_):
@@ -444,7 +433,7 @@ def _extract_subvector(vec_orig: np.array, selection: np.array) -> np.array:
     vec_orig : np.array, shape : (n,)
         Vector to be extracted.
     selection : np.array, shape : (n,)
-        Boolean array indicating whether to extract an element.
+        Integer array of indices of elements to extract.
 
     Returns
     -------
@@ -453,17 +442,11 @@ def _extract_subvector(vec_orig: np.array, selection: np.array) -> np.array:
 
     '''
 
-    n = selection.size
-    n_ = selection.sum()
+    n_ = selection.size
     vec_copy = np.empty((n_,))
 
-    i_ = 0
-    for i in range(n):
-        if not selection[i]: continue
-
+    for i_, i in enumerate(selection):
         vec_copy[i_] = vec_orig[i]
-        i_ += 1
-        if i_ == n_: break
 
     return vec_copy
 
@@ -481,7 +464,7 @@ def _assign_subvector(vec_left: np.array, vec_right: np.array,
     vec_right : np.array, shape : (n_,)
         Subvector of values to assign.
     selection : np.array, shape : (n,)
-        Boolean array indicating whether to assign to an element.
+        Integer array of indices of elements to assign to.
 
     Returns
     -------
@@ -489,16 +472,8 @@ def _assign_subvector(vec_left: np.array, vec_right: np.array,
 
     '''
 
-    n = selection.size
-    n_ = selection.sum()
-
-    i_ = 0
-    for i in range(n):
-        if not selection[i]: continue
-
+    for i_, i in enumerate(selection):
         vec_left[i] = vec_right[i_]
-        i_ += 1
-        if i_ == n_: break
 
 
 class IterKernel(_LAKernel):
@@ -545,10 +520,11 @@ class IterKernel(_LAKernel):
 
         # loop over output pixels
         for a in range(m):
+            selection = np.nonzero(relevant_matrix[a])[0]
             _assign_subvector(Ti[a], conjugate_gradient(
-                _extract_submatrix(AA, relevant_matrix[a]),
-                _extract_subvector(mBhalf[a], relevant_matrix[a]),
-                rtol, maxiter), relevant_matrix[a])
+                _extract_submatrix(AA, selection),
+                _extract_subvector(mBhalf[a], selection),
+                rtol, maxiter), selection)
 
         return Ti
 
@@ -589,7 +565,7 @@ class IterKernel(_LAKernel):
             AA = np.copy(A); di = np.diag_indices(n)
             my_kappa = self.kappaC_arr[0] * C[j_out]
 
-            AA[di] += my_kappa
+            if my_kappa: AA[di] += my_kappa
             Ti = IterKernel._iterative_wrapper(AA, mBhalf[j_out], relevant_matrix,
                                                cfg.iter_rtol, cfg.iter_max)
 

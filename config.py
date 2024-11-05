@@ -167,6 +167,8 @@ class Config:
     Methods
     -------
     __init__ : Constructor.
+    __call__ : Calculate or update derived quantities.
+
     _from_dict : Build a configuration from a dictionary.
     _get_attrs_wrapper: Wrapper for getting an attribute or a set of attributes.
     _build_config : Terminal interface to build a configuration from scratch.
@@ -175,7 +177,7 @@ class Config:
     '''
 
     __slots__ = (
-        'cfg_file', 'NsideP', 'n1P', 'n2f',  # __init__
+        'cfg_file', 'NsideP', 'n1P', 'n2f',  # __init__, __call__
         'obsfile', 'inpath', 'informat', 'use_filter', 'inpsf_path', 'inpsf_format', 'inpsf_oversamp',
         'psfsplit', 'psfsplit_r1', 'psfsplit_r2', 'psfsplit_epsilon',  # SECTION I
         'permanent_mask', 'cr_mask_rate', 'extrainput', 'n_inframe', 'labnoisethreshold',  # SECTION II
@@ -196,7 +198,7 @@ class Config:
         ----------
         cfg_file : str, optional
             File path to or text content of a JSON configuration file.
-            The default is ''. This uses pyimcom default_config.json.
+            The default is ''. This uses pyimcom/configs/default_config.json.
             Set cfg_file=None to build a configuration from scratch.
 
         Returns
@@ -208,8 +210,8 @@ class Config:
         self.cfg_file = cfg_file
         if cfg_file is not None:
             if cfg_file == '':
-                # print('> Using default_config.json', flush=True)
-                self.cfg_file = files(__package__).joinpath('default_config.json')
+                # print('> Using pyimcom/configs/default_config.json', flush=True)
+                self.cfg_file = files(__package__).joinpath('configs/default_config.json')
 
             try:
                 with open(self.cfg_file) as f:
@@ -221,10 +223,43 @@ class Config:
         else:
             self._build_config()
 
-        # calculate derived quantities
+        self()
+
+    def __call__(self) -> None:
+        '''
+        Calculate or update derived quantities
+
+        Returns
+        -------
+        None.
+
+        '''
+
+        ### SECTION I: INPUT FILES ###
+        if self.psfsplit:
+           self.psfsplit_r1 = float(self.psfsplit[0])
+           self.psfsplit_r2 = float(self.psfsplit[1])
+           self.psfsplit_epsilon = float(self.psfsplit[2])
+
+        ### SECTION II: MASKS AND LAYERS ###
+        self.n_inframe = len(self.extrainput)
+        
+        ### SECTION III: WHAT AREA TO COADD ###
+        self.Nside = self.n1 * self.n2
         self.NsideP = self.Nside + self.postage_pad * self.n2 * 2
         self.n1P = self.n1 + self.postage_pad * 2
         self.n2f = self.n2 + self.fade_kernel * 2
+
+        ### SECTION VIII: SOLVING LINEAR SYSTEMS ###
+        if self.linear_algebra == 'Empirical':
+            self.outmaps = self.outmaps.replace('T', '')
+            if self.no_qlt_ctrl:
+                self.outmaps = self.outmaps.replace('U', '').replace('S', '')
+            elif 'U' not in self.outmaps and 'S' not in self.outmaps:
+                self.no_qlt_ctrl = True
+
+        if self.linear_algebra == 'Empirical' or self.kappaC_arr.size == 1:
+            self.outmaps = self.outmaps.replace('K', '')
 
     def _from_dict(self, cfg_dict: dict) -> None:
         '''
@@ -249,13 +284,8 @@ class Config:
         self.use_filter = cfg_dict['FILTER']
         # input PSF information
         self.inpsf_path, self.inpsf_format, self.inpsf_oversamp = cfg_dict['INPSF']
-
         # if PSF splitting is used
         self.psfsplit = cfg_dict.get('PSFSPLIT', '')
-        if self.psfsplit:
-           self.psfsplit_r1 = float(self.psfsplit[0])
-           self.psfsplit_r2 = float(self.psfsplit[1])
-           self.psfsplit_epsilon = float(self.psfsplit[2])
 
         ### SECTION II: MASKS AND LAYERS ###
         # permanent mask file
@@ -264,7 +294,6 @@ class Config:
         self.cr_mask_rate = cfg_dict.get('CMASK', 0.0)
         # input images to stack at once
         self.extrainput = [None] + cfg_dict.get('EXTRAINPUT', [])
-        self.n_inframe = len(self.extrainput)
         # threshold for masking lab noise data
         self.labnoisethreshold = cfg_dict.get('LABNOISETHRESHOLD', 3.0)
 
@@ -280,7 +309,6 @@ class Config:
         self.n1, self.n2, self.dtheta = cfg_dict['OUTSIZE']
         assert self.n1 % 2 == 0, 'Error: n1 must be even since PSF computations are in 2x2 groups'
         self.dtheta *= u.arcsec.to('degree')
-        self.Nside = self.n1 * self.n2
 
         ### SECTION IV: MORE ABOUT POSTAGE STAMPS ###
         # fading kernel width
@@ -344,19 +372,12 @@ class Config:
             self.iter_rtol = cfg_dict.get('ITERRTOL', 1.5e-3)
             self.iter_max = cfg_dict.get('ITERMAX', 30)
         elif self.linear_algebra == 'Empirical':
-            self.outmaps = self.outmaps.replace('T', '')
             # no-quality control option
             self.no_qlt_ctrl = cfg_dict.get('EMPIRNQC', False)
-            if self.no_qlt_ctrl:
-                self.outmaps = self.outmaps.replace('U', '').replace('S', '')
-            elif 'U' not in self.outmaps and 'S' not in self.outmaps:
-                self.no_qlt_ctrl = True
 
         # Lagrange multiplier (kappa) information
         # list of kappa/C values, ascending order
         self.kappaC_arr = np.array(cfg_dict.get('KAPPAC', [1e-5, 1e-4, 1e-3]))
-        if self.linear_algebra == 'Empirical' or self.kappaC_arr.size == 1:
-            self.outmaps = self.outmaps.replace('K', '')
         # target (minimum) leakage
         self.uctarget = cfg_dict.get('UCMIN', 1e-6)
         # maximum allowed value of Sigma
@@ -451,8 +472,7 @@ class Config:
               '# layer.get_all_data, with the meaning based on the naming convention in INDATA)', flush=True)
         self._get_attrs_wrapper(
             "EXTRAINPUT = input('EXTRAINPUT (str str ...) [default: None]: ')" '\n'
-            "self.extrainput = [None] + (EXTRAINPUT.split() if EXTRAINPUT else [])" '\n'
-            "self.n_inframe = len(self.extrainput)")
+            "self.extrainput = [None] + (EXTRAINPUT.split() if EXTRAINPUT else [])")
 
         print('# mask out pixels with lab noise beyond this threshold' '\n'
               '# (ignored if labnoise is not in EXTRAINPUT or does not exist)', flush=True)
@@ -471,8 +491,7 @@ class Config:
         self._get_attrs_wrapper(
             "self.n1, self.n2, self.dtheta = map(eval, input('OUTSIZE (int int float): ').split(' '))" '\n'
             "assert self.n1 % 2 == 0, 'Error: n1 must be even since PSF computations are in 2x2 groups'" '\n'
-            "self.dtheta *= u.arcsec.to('degree')" '\n'
-            "self.Nside = self.n1 * self.n2")
+            "self.dtheta *= u.arcsec.to('degree')")
 
         print('### SECTION IV: MORE ABOUT POSTAGE STAMPS ###' '\n', flush=True)
         # more about postage stamps: FADE, PAD, PADSIDES, STOP
@@ -639,7 +658,6 @@ class Config:
                 "self.iter_max = (int(ITERMAX) if ITERMAX else 30)")
 
         elif self.linear_algebra == 'Empirical':
-            self.outmaps = self.outmaps.replace('K', '')
             print('# Empirical kernel: no-quality control option' '\n'
                   '# coadd images without computing system matrices A and B' '\n'
                   '# "U" and "S" will be automatically removed from OUTMAPS;' '\n'
@@ -647,10 +665,6 @@ class Config:
             self._get_attrs_wrapper(
                 "EMPIRNQC = input('EMPIRNQC (bool) [default: False]: ')" '\n'
                 "self.no_qlt_ctrl = (bool(eval(EMPIRNQC)) if EMPIRNQC else False)")
-            if self.no_qlt_ctrl:
-                self.outmaps = self.outmaps.replace('U', '').replace('S', '')
-            elif 'U' not in self.outmaps and 'S' not in self.outmaps:
-                self.no_qlt_ctrl = True
 
         print('# Lagrange multiplier (kappa) information' '\n'
               '# list of kappa/C values, ascending order' '\n'
@@ -663,8 +677,6 @@ class Config:
             "KAPPAC = input('KAPPAC (float ...) [default: [1e-5, 1e-4, 1e-3]]: ')" '\n'
             "self.kappaC_arr = np.array(list(map(float, KAPPAC.split(' '))) if KAPPAC else [1e-5, 1e-4, 1e-3])" '\n'
             "assert np.all(np.diff(self.kappaC_arr) > 0.0), 'must be in ascending order'")
-        if self.linear_algebra == 'Empirical' or self.kappaC_arr.size == 1:
-            self.outmaps = self.outmaps.replace('K', '')
 
         print('# target (minimum) leakage', flush=True)
         self._get_attrs_wrapper(
@@ -686,7 +698,7 @@ class Config:
         ----------
         fname : str, optional
             JSON configuration file name to save to.
-            The default is ''. This overwrites pyimcom default_config.json.
+            The default is ''. This overwrites pyimcom/configs/default_config.json.
             Set fname=None to get a text version of the configuration.
 
         Returns
@@ -761,8 +773,8 @@ class Config:
 
         if fname is not None:
             if fname == '':
-                print('> Overwriting default_config.json', flush=True)
-                fname = files(__package__).joinpath('default_config.json')
+                print('> Overwriting pyimcom/configs/default_config.json', flush=True)
+                fname = files(__package__).joinpath('configs/default_config.json')
 
             with open(fname, 'w') as f:
                 json.dump(cfg_dict, f, indent=4)
