@@ -230,7 +230,7 @@ class InImage:
         self.y_val = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2, npixmax), dtype=np.float64)
         self.x_val = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2, npixmax), dtype=np.float64)
         # and number of pixels in each postage stamp (from this InImage)
-        self.pix_count = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2), dtype=np.uint16)
+        self.pix_count = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2), dtype=np.uint32)
 
         # load masks here
         if self.blk.pmask is not None:
@@ -542,8 +542,8 @@ class InStamp:
 
         # numbers of input pixels from input images and the cumulative sum
         self.pix_count = np.array([inimage.pix_count[j_st, i_st]
-                                   for inimage in blk.inimages], dtype=np.uint16)
-        self.pix_cumsum = np.cumsum([0] + list(self.pix_count), dtype=np.uint16)
+                                   for inimage in blk.inimages], dtype=np.uint32)
+        self.pix_cumsum = np.cumsum([0] + list(self.pix_count), dtype=np.uint32)
 
         # input pixel positions and signals
         self.y_val = np.empty((self.pix_cumsum[-1],), dtype=np.float64)
@@ -600,7 +600,7 @@ class InStamp:
         if pivot[1] is not None:
             dist_sq += np.square(self.y_val - pivot[1])
 
-        selection = np.array(np.where(dist_sq < radius**2)[0], dtype=np.uint16)
+        selection = np.array(np.where(dist_sq < radius**2)[0], dtype=np.uint32)
         return selection if (selection.shape[0] < self.pix_cumsum[-1]) else None
 
     def get_inpsfgrp(self, sim_mode: bool = False) -> None:
@@ -766,7 +766,7 @@ class OutStamp:
         # fetch instamps and select input pixels
         self.instamps   = [None for _ in range(9)]
         self.selections = [None for _ in range(9)]
-        self.inpix_count = np.zeros((9,), dtype=np.uint16)
+        self.inpix_count = np.zeros((9,), dtype=np.uint32)
 
         # acceptance radius in units of output pixels
         rpix_search = (self.blk.cfg.instamp_pad / Stn.arcsec) \
@@ -784,7 +784,7 @@ class OutStamp:
             else:
                 self.inpix_count[idx] = self.selections[idx].shape[0]
 
-        self.inpix_cumsum = np.cumsum([0] + list(self.inpix_count), dtype=np.uint16)
+        self.inpix_cumsum = np.cumsum([0] + list(self.inpix_count), dtype=np.uint32)
 
         if visualize:
             fig, ax = plt.subplots(figsize=(4.8, 4.8))
