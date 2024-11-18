@@ -20,7 +20,12 @@ _assign_subvector : Assign values to a subvector of a vector.
 
 from warnings import warn
 
+import sys
+import os
+from pathlib import Path
+import time
 import numpy as np
+import subprocess
 from scipy.linalg import cholesky, cho_solve
 from astropy import units as u
 
@@ -197,6 +202,7 @@ class CholKernel(_LAKernel):
     Methods
     -------
     _cholesky_wrapper (staticmethod) : Wrapper for cholesky.
+    _cholesky_wrapper2 : Wrapper for cholesky (using subprocess).
     _call_single_kappa : Solve linear systems for single kappa node.
     _call_multi_kappa : Solve linear systems for multiple kappa nodes.
 
@@ -231,6 +237,7 @@ class CholKernel(_LAKernel):
             w, v = np.linalg.eigh(A)
             # AA[di] += kappa_arr[j] + np.abs(w[0])
             AA[di] += np.abs(w[0]) + 1e-16  # KC: this seems right
+            print('repair w', w[:8]); sys.stdout.flush()
             del v
             warn('Warning: pyimcom_lakernel Cholesky decomposition failed; '
                  'fixed negative eigenvalue {:19.12e}'.format(w[0]))
@@ -238,6 +245,42 @@ class CholKernel(_LAKernel):
             AA[di] -= np.abs(w[0]) + 1e-16  # KC: let's recover AA
 
         return L
+
+    def _cholesky_wrapper2(self, AA: np.array, di: (np.array, np.array),
+                          A: np.array) -> np.array:
+        '''
+        Wrapper for cholesky, rectifies negative eigenvalue(s) if needed.
+
+        Parameters
+        ----------
+        AA : np.array, shape : (n, n)
+            System matrix A plus kappa times noise.
+        di : (np.array, np.array), shapes : ((n,), (n,))
+            Indices to main diagonal of AA.
+        A : np.array, shape : (n, n)
+            Original system matrix.
+
+        Returns
+        -------
+        L : np.array, shape : (n, n)
+            cholesky results.
+
+        '''
+
+        # try to use the external command to do the Cholesky decomposition
+        if (self.outst.blk.cfg.tempfile is not None) and (self.outst.blk.cfg.laext!=''):
+            fname = str(self.outst.blk.cache_dir / 'chomatrix.npy')
+            cmd = self.outst.blk.cfg.laext.split() + [fname]
+            try:
+                with open(fname, 'wb') as f: np.save(f, AA)
+                subprocess.run(cmd)
+                L = np.load(fname)
+                if L[0,0]>0: return L
+            except:
+                warn('Warning: Exception in _cholesky_wrapper2')
+
+        # otherwise, just use the staticmethod
+        return CholKernel._cholesky_wrapper(AA, di, A)
 
     def _call_single_kappa(self) -> None:
         '''
@@ -257,19 +300,25 @@ class CholKernel(_LAKernel):
 
         # loop over output PSFs
         for j_out in range(self.n_out):
+            t0 = time.time()
 
             # Cholesky decomposition for the only eigenvalue node
             AA = np.copy(A); di = np.diag_indices(n)
             my_kappa = self.kappaC_arr[0] * C[j_out]
 
             if my_kappa: AA[di] += my_kappa
-            L = CholKernel._cholesky_wrapper(AA, di, A)
+            print(AA[:2,:2]); sys.stdout.flush()
+            t1 = time.time()
+            L = self._cholesky_wrapper2(AA, di, A)
+            t2 = time.time()
             Ti = cho_solve((L, True), mBhalf[j_out, :, :].T, check_finite=False).T  # (m, n)
+            t3 = time.time()
             del AA, di, L
 
             # build values at node
             D = np.einsum('ai,ai->a', mBhalf[j_out, :, :], Ti)
             N = np.einsum('ai,ai->a', Ti, Ti)
+            t4 = time.time()
 
             # make outputs
             self.kappa_ [j_out, :] = my_kappa
@@ -277,6 +326,8 @@ class CholKernel(_LAKernel):
             self.UC_    [j_out, :] = 1.0 - (my_kappa*N + D)/C[j_out]
             self.outst.T[j_out, :, :] = Ti
             del D, N, Ti
+            t5 = time.time()
+            print('Cholesky timing -> {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f}'.format(t1-t0, t2-t0, t3-t0, t4-t0, t5-t0))
 
     def _call_multi_kappa(self) -> None:
         '''

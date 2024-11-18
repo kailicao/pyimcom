@@ -11,10 +11,17 @@ class MetaMosaic:
     """
     Contains mosaic information for use in meta operations.
 
+    Attributes
+    ----------
+    cfg : configuration file
+    Nside : side length of image
+    in_image : the input image cube
+
     Methods
     -------
     __init__ : Constructor.
 
+    maskpix : Masks an additional set of pixels.
     to_file : Writes the mosaic object to a FITS file.
     shearimage : Generate a sheared image.
 
@@ -48,6 +55,7 @@ class MetaMosaic:
         self.in_image = np.zeros((self.nlayer, self.Nside, self.Nside), dtype=self.im_dtype)
         self.in_fidelity = np.zeros((self.Nside, self.Nside), dtype=np.float32)
         self.in_noise = np.zeros((self.Nside, self.Nside), dtype=np.float32)
+        self.in_mask = np.zeros((self.Nside, self.Nside), dtype=bool)
 
         # Load the data. A lot of logic in here to pull out which portions we need
         # (including handling of boundary effects)
@@ -90,6 +98,11 @@ class MetaMosaic:
                         # noise, converted to dB
                         self.in_noise[symin+cy:symax+cy,sxmin+cx:sxmax+cx] = f['SIGMA'].data[0,symin:symax,sxmin:sxmax].astype(np.float32)\
                             * HDU_to_bels(f['SIGMA'])/.1
+
+    def maskpix(self, extramask):
+        """Pixels that are 'true' in extramask are masked out.
+        """
+        self.in_mask = np.logical_or(extramask, self.in_mask)
 
     def to_file(self, fname):
         """Writes the input mosaic images to a FITS file.

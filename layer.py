@@ -710,6 +710,7 @@ def get_all_data(inimage: 'coadd.InImage'):
     # if n_inframe == 1: return <-- for saving purposes, don't want to exit here
 
     for i in range(1, n_inframe):
+        sys.stdout.flush()
         # truth image (no noise)
         if extrainput[i].casefold() == 'truth'.casefold():
             filename = _get_sca_imagefile(path, idsca, obsdata, format_, extraargs={'type': 'truth'})
