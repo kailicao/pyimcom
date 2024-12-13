@@ -202,7 +202,6 @@ class CholKernel(_LAKernel):
     Methods
     -------
     _cholesky_wrapper (staticmethod) : Wrapper for cholesky.
-    _cholesky_wrapper2 : Wrapper for cholesky (using subprocess).
     _call_single_kappa : Solve linear systems for single kappa node.
     _call_multi_kappa : Solve linear systems for multiple kappa nodes.
 
@@ -246,42 +245,6 @@ class CholKernel(_LAKernel):
 
         return L
 
-    def _cholesky_wrapper2(self, AA: np.array, di: (np.array, np.array),
-                          A: np.array) -> np.array:
-        '''
-        Wrapper for cholesky, rectifies negative eigenvalue(s) if needed.
-
-        Parameters
-        ----------
-        AA : np.array, shape : (n, n)
-            System matrix A plus kappa times noise.
-        di : (np.array, np.array), shapes : ((n,), (n,))
-            Indices to main diagonal of AA.
-        A : np.array, shape : (n, n)
-            Original system matrix.
-
-        Returns
-        -------
-        L : np.array, shape : (n, n)
-            cholesky results.
-
-        '''
-
-        # try to use the external command to do the Cholesky decomposition
-        if (self.outst.blk.cfg.tempfile is not None) and (self.outst.blk.cfg.laext!=''):
-            fname = str(self.outst.blk.cache_dir / 'chomatrix.npy')
-            cmd = self.outst.blk.cfg.laext.split() + [fname]
-            try:
-                with open(fname, 'wb') as f: np.save(f, AA)
-                subprocess.run(cmd)
-                L = np.load(fname)
-                if L[0,0]>0: return L
-            except:
-                warn('Warning: Exception in _cholesky_wrapper2')
-
-        # otherwise, just use the staticmethod
-        return CholKernel._cholesky_wrapper(AA, di, A)
-
     def _call_single_kappa(self) -> None:
         '''
         Solve linear systems for single kappa node.
@@ -307,9 +270,8 @@ class CholKernel(_LAKernel):
             my_kappa = self.kappaC_arr[0] * C[j_out]
 
             if my_kappa: AA[di] += my_kappa
-            print(AA[:2,:2]); sys.stdout.flush()
             t1 = time.time()
-            L = self._cholesky_wrapper2(AA, di, A)
+            L = self._cholesky_wrapper(AA, di, A)
             t2 = time.time()
             Ti = cho_solve((L, True), mBhalf[j_out, :, :].T, check_finite=False).T  # (m, n)
             t3 = time.time()

@@ -186,7 +186,7 @@ class Config:
         'outmaps', 'outstem', 'tempfile', 'inlayercache',  # SECTION V
         'n_out', 'outpsf', 'sigmatarget', 'outpsf_extra', 'sigmatarget_extra',  # SECTION VI
         'npixpsf', 'psf_circ', 'psf_norm', 'amp_penalty', 'flat_penalty', 'instamp_pad',  # SECTION VII
-        'linear_algebra', 'laext', 'iter_rtol', 'iter_max', 'no_qlt_ctrl',
+        'linear_algebra', 'iter_rtol', 'iter_max', 'no_qlt_ctrl',
         'kappaC_arr', 'uctarget', 'sigmamax',  # SECTION VIII
     )
 
@@ -374,7 +374,6 @@ class Config:
         elif self.linear_algebra == 'Empirical':
             # no-quality control option
             self.no_qlt_ctrl = cfg_dict.get('EMPIRNQC', False)
-        self.laext = cfg_dict.get('LAEXT', '')
 
         # Lagrange multiplier (kappa) information
         # list of kappa/C values, ascending order
@@ -667,12 +666,6 @@ class Config:
                 "EMPIRNQC = input('EMPIRNQC (bool) [default: False]: ')" '\n'
                 "self.no_qlt_ctrl = (bool(eval(EMPIRNQC)) if EMPIRNQC else False)")
 
-        print('# External location of linear algebra operations' '\n'
-              '# (usually empty)', flush=True)
-        self._get_attrs_wrapper(
-            "LAEXT = input('LAEXT (str) [default: \"\"]: ')" '\n'
-            "self.laext = LAEXT if LAEXT else ''")
-
         print('# Lagrange multiplier (kappa) information' '\n'
               '# list of kappa/C values, ascending order' '\n'
               '# if LAKERNEL == "Empirical", only the first kappa/C value is used;' '\n'
@@ -773,7 +766,6 @@ class Config:
             cfg_dict['ITERMAX'] = self.iter_max
         elif self.linear_algebra == 'Empirical':
             cfg_dict['EMPIRNQC'] = self.no_qlt_ctrl
-        cfg_dict['LAEXT'] = self.laext
 
         cfg_dict['KAPPAC'] = list(self.kappaC_arr)
         cfg_dict['UCMIN'] = self.uctarget
