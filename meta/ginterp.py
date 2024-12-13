@@ -207,7 +207,7 @@ def test():
     x_out, y_out = np.meshgrid(delta,delta)
     x_out = x_out.flatten()
     y_out = y_out.flatten()
-    x_in, y_in, T_, U_ = InterpMatrix(6, 5., x_out, y_out, [.05,0,.025])
+    x_in, y_in, T_, U_, S_ = InterpMatrix(6, 5., x_out, y_out, [.05,0,.025])
     print('# U:', np.amin(U_), np.amax(U_))
     print(np.vstack((x_in,y_in)))
     fits.PrimaryHDU(T_).writeto('T.fits', overwrite=True)
@@ -231,8 +231,8 @@ def test():
     nout = 2048
     C = [.25,0,0]
     pos_offset = [6.,3.]
-    OutArr, OutMask, Umax = MultiInterp(InArr, InMask, (nout,nout), pos_offset, mat, 6., samp, C)
-    print('Umax =', Umax)
+    OutArr, OutMask, Umax, Smax = MultiInterp(InArr, InMask, (nout,nout), pos_offset, mat, 6., samp, C)
+    print('Umax =', Umax, 'Smax = ', Smax)
     fits.PrimaryHDU(OutArr).writeto('OutArr.fits', overwrite=True)
 
     TargetArr = np.zeros((nf,nout,nout))
