@@ -358,7 +358,7 @@ class PSFGrp:
     nfft = 768
 
     @classmethod
-    def setup(cls, npixpsf: int = 48, oversamp: int = 8, dtheta: float = 0.025/3600) -> None:
+    def setup(cls, npixpsf: int = 48, oversamp: int = 8, dtheta: float = 0.025/3600, psfsplit : bool = False) -> None:
         '''
         Set up class attributes.
 
@@ -370,6 +370,8 @@ class PSFGrp:
             PSF oversampling factor relative to native pixel scale. The default is 8.
         dtheta : float, optional
             Output pixel scale in degrees. The default is 0.025/3600.
+        psfsplit : bool, optional
+            Is PSF splitting implemented in this run?
 
         Returns
         -------
@@ -394,6 +396,9 @@ class PSFGrp:
 
         # scale conversion for interpolations in PSF arrays
         cls.dscale = (Stn.pixscale_native/Stn.arcsec) / oversamp / (dtheta*3600)
+
+        # PSF splitting
+        cls.psfsplit = psfsplit
 
     def __init__(self, in_or_out: bool = True,
                  inst: 'coadd.InStamp' = None, blk: 'coadd.Block' = None,
@@ -531,6 +536,9 @@ class PSFGrp:
         # get sampling positions
         if outpix2world2inpix is None:
             yxco = PSFGrp.yxo
+        elif PSFGrp.psfsplit:
+            yx_cardinal = np.flip(outpix2world2inpix(np.array(self.inst.psf_compute_point_pix)[None,:] + np.array([[1,0],[0,1],[-1,0],[0,-1]])*PSFGrp.oversamp), axis=-1)/2. * PSFGrp.dscale
+            yxco = np.tensordot(yx_cardinal[0,:]-yx_cardinal[2,:], PSFGrp.yxo[1,:,:], axes=0) + np.tensordot(yx_cardinal[1,:]-yx_cardinal[3,:], PSFGrp.yxo[0,:,:], axes=0)
         else:
             xyo_ = np.flip(PSFGrp.yxo, axis=0).reshape((2, -1)).T * PSFGrp.dscale
             yxco = outpix2world2inpix(xyo_ + self.inst.psf_compute_point_pix)

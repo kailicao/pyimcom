@@ -30,6 +30,8 @@ from astropy import wcs
 import fitsio
 import matplotlib.pyplot as plt
 
+import importlib
+
 from .config import Timer, Settings as Stn, Config, format_axis
 from .layer import check_if_idsca_exists, get_all_data, Mask
 from .psfutil import PSFGrp, PSFOvl, SysMatA, SysMatB
@@ -1408,7 +1410,7 @@ class Block:
         cfg(); self.cfg = cfg
         if cfg is None: self.cfg = Config()  # use the default config
 
-        PSFGrp.setup(npixpsf=cfg.npixpsf, oversamp=cfg.inpsf_oversamp, dtheta=cfg.dtheta)
+        PSFGrp.setup(npixpsf=cfg.npixpsf, oversamp=cfg.inpsf_oversamp, dtheta=cfg.dtheta, psfsplit=bool(cfg.psfsplit))
         PSFOvl.setup(flat_penalty=cfg.flat_penalty)
         self.this_sub = this_sub
         if run_coadd: self()
@@ -1954,6 +1956,14 @@ class Block:
         config_hdu = fits.TableHDU.from_columns(
             [fits.Column(name='text', array=self.cfg.to_file(None).splitlines(), format='A512', ascii=True)])
         config_hdu.header['EXTNAME'] = 'CONFIG'
+        if is_final:
+            for package in ['numpy', 'scipy', 'astropy', 'fitsio']:
+                keyword = 'V' + package.upper()[:7]
+                try:
+                    with importlib.import_module(package) as m:
+                        config_hdu.header[keyword] = (str(m.__version), f'Current version of {package}')
+                except:
+                    config_hdu.header[keyword] = ('N/A', f'{package} had no version number')
         inlist_hdu = fits.BinTableHDU.from_columns([
             fits.Column(name='obsid', array=np.array([obs[0] for obs in self.obslist]), format='J'),
             fits.Column(name='sca',   array=np.array([obs[1] for obs in self.obslist]), format='I'),
