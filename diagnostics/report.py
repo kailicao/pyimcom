@@ -152,7 +152,10 @@ class ValidationReport():
 
         # put in title & summary
         self.tex['head'] += '\\maketitle\n\\tableofcontents\n'
-        self.tex['head'] += '\n\\section{Summary}\nThe tests returned the following results.\n\n'
+        self.tex['head'] += '\n\\section{Summary}\n'
+        self.tex['head'] += '\nThis is a report on the IMCOM run in ' + Settings.RomanFilters[self.cfg.use_filter] + ' band centered at:\n'
+        self.tex['head'] += '\\begin{verbatim}RA = ' + '{:8.4f}'.format(self.cfg.ra) + '    DEC = ' + '{:8.4f}'.format(self.cfg.dec) + '\\end{verbatim}\n'
+        self.tex['head'] += 'The tests returned the following results.\n\n'
 
         # appendix on configuration file
         self.tex['appendix'] += '\\section{Configuration file}\n\\label{app:config}\n{\\scriptsize\n\\begin{verbatim}\n'

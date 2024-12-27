@@ -26,6 +26,7 @@ class MosaicImage(ReportSection):
             srange=(-10.,1000.),
             stretch='asinh')
 
+        self.tex += '\\section{Mosaic image}\n'
         self.tex += '\\begin{figure}\n\\includegraphics[width=6.5in]{' + self.datastem_from_dir + '_mosaic.png}\n'
         self.tex += '\\caption{\\label{fig:MosaicImage1}The mosaic (PNG binned $'+str(j)+'\\times'+str(j)+'$).\n'
         self.tex += 'The image is ' + '{:7.5f}'.format(n*self.cfg.n1*self.cfg.n2*self.cfg.dtheta) + ' degrees across.}\n'

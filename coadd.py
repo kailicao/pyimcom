@@ -453,6 +453,11 @@ class InImage:
 
         '''
 
+        # The tophat width: in use_shortrange, the psfsplit module has already included this,
+        # so we set it to 0 so as to not double-count this contribution.
+        tophatwidth_use = self.blk.cfg.inpsf_oversamp
+        if use_shortrange: tophatwidth_use = 0
+
         # get the pixel location on the input image
         # (moved this up since some PSF models need it)
         pixloc = self.inwcs.all_world2pix(np.array([[*psf_compute_point]]).astype(np.float64), 0)[0]
@@ -463,7 +468,7 @@ class InImage:
                 assert exists(fname), 'Error: input psf does not exist'
                 with fitsio.FITS(fname) as fileh:
                     self.inpsf_arr = InImage.smooth_and_pad(
-                        fileh[self.idsca[1]][:, :], tophatwidth=self.blk.cfg.inpsf_oversamp)
+                        fileh[self.idsca[1]][:, :], tophatwidth=tophatwidth_use)
 
             this_psf = self.inpsf_arr
 
@@ -485,7 +490,7 @@ class InImage:
             lpoly = InImage.LPolyArr(1, (pixloc[0]-2043.5)/2044., (pixloc[1]-2043.5)/2044.)
             # pixels are in C/Python convention since pixloc was set this way
             this_psf = InImage.smooth_and_pad(
-                np.einsum('a,aij->ij', lpoly, self.inpsf_cube), tophatwidth=self.blk.cfg.inpsf_oversamp)/64
+                np.einsum('a,aij->ij', lpoly, self.inpsf_cube), tophatwidth=tophatwidth_use)/64
             # divide by 64=8**2 since anlsim files are in fractional intensity per s_in**2 instead of per (s_in/8)**2
 
         else:
@@ -1484,7 +1489,7 @@ class Block:
             print('Retrieved columns:', obscols.names, ' {:d} rows'.format(n_obs_tot))
 
         # display output information
-        print('Output information: ctr at RA={:10.6f},DEC={:10.6f}'.format(self.cfg.ra, self.cfg.dec))
+        print('Output information: ctr at RA={:10.6f},DEC={:10.6f} LONPOLE={:10.6f}'.format(self.cfg.ra, self.cfg.dec, self.cfg.lonpole))
         print('pixel scale={:8.6f} arcsec or {:11.5E} degree'.format(
             self.cfg.dtheta * u.degree.to('arcsec'), self.cfg.dtheta))
         print('output array size = {:d} ({:d} postage stamps of {:d})'.format(
@@ -1510,6 +1515,7 @@ class Block:
         self.outwcs.wcs.cdelt = [-self.cfg.dtheta, self.cfg.dtheta]
         self.outwcs.wcs.ctype = ["RA---STG", "DEC--STG"]
         self.outwcs.wcs.crval = [self.cfg.ra, self.cfg.dec]
+        self.outwcs.wcs.lonpole = self.cfg.lonpole
 
         # print the corners of the square and the center, ordering:
         #   2   3

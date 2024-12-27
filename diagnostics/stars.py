@@ -49,15 +49,11 @@ class SimulatedStar(ReportSection):
         # extract outputs (this is one way to get data back from a Perl script)
         outdict = {}
         checkfile = self.datastem+'_SimulatedStar_outputs.txt'
-        print("3", checkfile); sys.stdout.flush()
         if os.path.exists(checkfile):
-            print("4", checkfile); sys.stdout.flush()
             with open(checkfile, "r") as f:
                 returntext = f.readlines()
-            print(returntext)
             a = returntext[0].split()
             b = returntext[1].split()
-            print(a); print(b)
             for i,j in zip(a,b):
                 outdict[i]=j
             print(outdict)
@@ -117,11 +113,17 @@ class SimulatedStar(ReportSection):
         S.set_xlabel('block x')
         S.set_ylabel('block y')
         im = S.imshow(sigma/RR-1., cmap='RdBu_r', aspect=1, interpolation='nearest', origin='lower',
-        norm=colors.SymLogNorm(3e-4, vmin=-.004, vmax=.004))
+                      norm=colors.SymLogNorm(3e-4, vmin=-.004, vmax=.004))
         phi = np.arctan2(g2,g1)/2.
         g = np.sqrt(g1**2+g2**2)
-        v = g/5e-4
-        im2 = S.quiver(X,Y,v*np.cos(phi),v*np.sin(phi), headaxislength=0, headlength=0, headwidth=0, pivot='mid', scale=1., scale_units='xy', angles='xy')
+        v = g/1e-4
+        v = np.where(v<1, v, np.log(v)+1)**.5/2.
+        g50 = np.nanpercentile(g,50)
+        g90 = np.nanpercentile(g,90)
+        outdict['BLK_SIMSTAR_G50PCT'] = g50
+        outdict['BLK_SIMSTAR_G90PCT'] = g90
+        print('percentiles of the binned median:', g50, g90)
+        im2 = S.quiver(X,Y,v*np.cos(phi),v*np.sin(phi), headaxislength=0, headlength=0, headwidth=0, width=.03/nblock, pivot='mid', scale=1., scale_units='xy', angles='xy')
         F.colorbar(im, orientation='vertical')
         F.set_tight_layout(True)
         F.savefig(self.datastem+'_SimulatedStar_etmap.pdf')
@@ -129,7 +131,8 @@ class SimulatedStar(ReportSection):
         # ... and describe it
         self.tex += '\\begin{figure}\n\\includegraphics[width=6in]{' + self.datastem_from_dir + '_SimulatedStar_etmap.pdf}\n'
         self.tex += '\\caption{\\label{fig:SimulatedStar_etmap}PSF size error (diverging color scale) and ellipticity (whiskers).'
-        self.tex += ' A whisher length of 1 block corresponds to an ellipticity of $g=5\\times 10^{-4}$.}\n\\end{figure}\n\n'
+        self.tex += ' Whisher lengths are on a square root scale: 0.5 blocks for $g=10^{-4}$; 1.0 blocks for $g=4\\times 10^{-4}$; etc.'
+        self.tex += ' so that the ellipticity relates to the moment of inertia of the line.}\n\\end{figure}\n\n'
         self.tex += 'A map of the PSF size and ellipticity errors from the noiseless simulated stars is shown in Fig.~\\ref{fig:SimulatedStar_etmap}.\n'
 
         # put the key results in the data section
