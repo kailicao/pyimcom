@@ -4,13 +4,16 @@
 import sys
 import numpy
 import healpy
+import numpy as np
 from astropy.io import fits
 from astropy import wcs
 from astropy.table import Table, Column
 from os.path import exists
-import galsim
+from layer import GalSimInject, GridInject
 import json
 import re
+import galsim
+import scipy
 from .outimage_utils.helper import HDU_to_bels
 
 bd = 40 # padding size
@@ -33,8 +36,9 @@ image = numpy.zeros((1,bd*2-1,bd*2-1))
 # prefix and suffix
 in1 = sys.argv[2]
 outstem = sys.argv[3]
-
 outfile_g = outstem + '_TruthCat_{:s}.fits'.format(filter)
+
+fullTable = Table()
 
 for iblock in range(nstart,nblockmax**2):
 
@@ -76,19 +80,27 @@ for iblock in range(nstart,nblockmax**2):
           use_layers[str(m.group(0))]=i
 
   if not exists(infile): continue
+
   with fits.open(infile) as f:
     mywcs = wcs.WCS(f[0].header)
-    wt = numpy.sum(numpy.where(f['INWEIGHT'].data[0,:,:,:]>0.01, 1, 0), axis=0)
 
-  resolutions=[]
-  for layer in use_layers.keys():
-    params = re.split(r',',layer)
+
+  resolutionTables={} # re-initiate these to zero for each block, since we need to redo coords per block
+  blockTable = Table()
+
+  for layerName in use_layers.keys():
+
+    params = re.split(r',',layerName)
     m = re.search(r'(\D*)(\d*)',params[0])
     if m:
       res=m.group(2)
+      resTable = 'res'+str(res)
 
-    if res not in resolutions:
+    if resTable not in resolutionTables.keys:
 
+      resolutionTables[resTable]=None #initialize to None-- will replace with blockTable eventually
+
+      # Calculate the coordinate information for this block
       ra_cent, dec_cent = mywcs.all_pix2world([(n-1)/2], [(n-1)/2], [0.], [0.], 0, ra_dec_order=True)
       ra_cent = ra_cent[0]; dec_cent = dec_cent[0]
       vec = healpy.ang2vec(ra_cent, dec_cent, lonlat=True)
@@ -100,6 +112,7 @@ for iblock in range(nstart,nblockmax**2):
       grp = numpy.where(numpy.logical_and(numpy.logical_and(xi>=bdpad,xi<n-bdpad),numpy.logical_and(yi>=bdpad,yi<n-bdpad)))
       ra_hpix = ra_hpix[grp]
       dec_hpix = dec_hpix[grp]
+      ipix = qp[grp]
       x = x[grp]
       y = y[grp]
       npix = len(x)
@@ -109,55 +122,75 @@ for iblock in range(nstart,nblockmax**2):
       yi = numpy.rint(y).astype(numpy.int16)
 
       # Initiate table
-      t = Table()
-      t['Block'] = [r'{:02d}_{:02d}'.format(ibx,iby)] * npix
-      t['Layer'] = [layer] * npix
+      blockTable = Table()
+      blockTable['Block'] = [r'{:02d}_{:02d}'.format(ibx, iby)] * npix
+      blockTable['Layer'] = [layer] * npix
       # Position information
-      t['ra_hpix'] = ra_hpix
-      t['dec_hpix'] = dec_hpix
-      t['ibx'] = ibx
-      t['iby'] = iby
-      t['x'] = x
-      t['y'] = y
-      t['xi'] = xi
-      t['yi'] = yi
-      t['dx=x-xi'] = dx = x-xi
-      t['dy=y-yi'] = dy = y-yi
-
-      resolutions.append(res)
+      blockTable['ra_hpix'] = ra_hpix
+      blockTable['dec_hpix'] = dec_hpix
+      blockTable['ipix'] = ipix
+      blockTable['ibx'] = ibx
+      blockTable['iby'] = iby
+      blockTable['x'] = x
+      blockTable['y'] = y
+      blockTable['xi'] = xi
+      blockTable['yi'] = yi
+      blockTable['dx=x-xi'] = dx = x - xi
+      blockTable['dy=y-yi'] = dy = y - yi
 
     else:
-      # if res is in resolutions i need to figure out how to get the correct table?
-      # KL work on this bit later, for now keep going as though things are defined
+      # Do nothing; end 'if new resolution' clause
 
-    # parse params for arguments
-    # also get defaults for when there arent
+    # default params
+    seed = 4096
+    shear = None
 
-    # if layer is a gs:
-      # if layer is a galaxy:
-        # truthcat = GalSimInject.genobj(12*4**res, ipix, 'exp1', seed)
-      # if layer is a star:
-        # truthcat = GalSimInject ???
-    # if layer is a ns:
+    if 'gsext' in layerName:
+      for param in params:
+        m=re.match(r'seed=(\d*)', param)
+        if m: seed=m.group(1)
+        m=re.match(r'shear=(\S*)', param)
+        if m: shear=m.group(1)
+
+    truthcat = GalSimInject.genobj(12 * 4 ** res, ipix, 'exp1', seed)
+
+    if shear is not None:
+      g_i = truthcat['g'][0,:] + truthcat['g'][1,:]*1j
+      q_i = (1-numpy.absolute(g_i))/(1+numpy.absolute(g_i))
+
+      apply_shear = re.split(r':',shear)
+      g_t = apply_shear[0] + apply_shear[1]*1j
+      q_t = (1-numpy.absolute(g_t))/(1+numpy.absolute(g_t))
+
+      g_f = (g_i+g_t)/(1+numpy.conj(g_t) * g_i) # transformations
+      r_f = truthcat['sersic']['r'][:] * numpy.sqrt(q_t/q_i)
+      truthcat['g'][0,:] = g_f.real # update the catalog
+      truthcat['g'][1,:] = g_f.imag
+      truthcat['sersic']['r'][:] = r_f
+
+
+    elif 'gstrstar' or 'gsfdstar' in layerName:
+      for param in params:
+        m=re.match(r'[^a-zA-Z]+', param)
+        if m: idkwhatthisis=m.group(0) # KL SOmething equals this
+
+    elif 'nstar' in layerName:
         # truthcat = croutine thing
+        args = re.split(r',', params)
+        tot_int = float(args[0])
+        bg = float(args[1])
+        q = int(args[2])
+        seed = 1000000 * (18 * q + idsca[1]) + idsca[0]
+        rng = np.random.default_rng(seed)
+        brightness = GridInject.make_image_from_grid(
+          res, inpsf, idsca, obsdata, inwcs, Stn.sca_nside, inpsf_oversamp)
+        inimage.indata[i, :, :] = rng.poisson(lam=brightness * tot_int + bg) - bg
+        del rng
 
-  for k in range(npix):
 
+    blockTable['sersic_r_' + layerName] = truthcat['sersic']['r'][:]
+    blockTable['g1_' + layerName] = truthcat['g'][0, :]
+    blockTable['g2_' + layerName] = truthcat['g'][1, :]
 
     # flush
     sys.stdout.flush()
-    # end galaxy loop
-
-  pos = numpy.concatenate((pos, newpos), axis=0)
-  image = numpy.concatenate((image, newimage), axis=0)
-
-pos = pos[1:,:]
-image = image[1:,:,:]
-
-fits.HDUList([fits.PrimaryHDU(image.astype(numpy.float32))]).writeto(outfile_g, overwrite=True)
-
-numpy.savetxt(outstem + '_StarCat_{:s}.txt'.format(filter), pos,
-  header = ' {:14.8E}'.format(numpy.median(newpos[:,13])))
-
-for fy in range(20,81):
-  print('{:2d} {:8.6f} {:8.6f}'.format(fy, fhist[fy]/numpy.sum(fhist), numpy.sum(fhist[:fy+1])/numpy.sum(fhist)))
