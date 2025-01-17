@@ -142,9 +142,6 @@ for iblock in range(nstart, nblockmax ** 2):
 
             resolutionTables[this_res]=blockTable
 
-        else:
-            # Do nothing
-
         # default params
         seed = 4096
         shear = None
@@ -201,6 +198,10 @@ for iblock in range(nstart, nblockmax ** 2):
             # inside layer loop
 
     # inside block loop
+    print('TABLE INFO:')
+    print('N_COLS:', len(resolutionTables[0].colnames))
+    if iblock==nstart:
+        print('BLOCK_INFO:',resolutionTables[0].info)
     # At this point all the layers have been added, the block table is complete
     for key1 in resolutionTables.keys:
         for key2 in fullTables.keys:
