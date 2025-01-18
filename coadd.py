@@ -30,6 +30,8 @@ from astropy import wcs
 import fitsio
 import matplotlib.pyplot as plt
 
+import importlib
+
 from .config import Timer, Settings as Stn, Config, format_axis
 from .layer import check_if_idsca_exists, get_all_data, Mask
 from .psfutil import PSFGrp, PSFOvl, SysMatA, SysMatB
@@ -230,7 +232,7 @@ class InImage:
         self.y_val = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2, npixmax), dtype=np.float64)
         self.x_val = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2, npixmax), dtype=np.float64)
         # and number of pixels in each postage stamp (from this InImage)
-        self.pix_count = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2), dtype=np.uint16)
+        self.pix_count = np.zeros((self.blk.cfg.n1P+2, self.blk.cfg.n1P+2), dtype=np.uint32)
 
         # load masks here
         if self.blk.pmask is not None:
@@ -451,6 +453,11 @@ class InImage:
 
         '''
 
+        # The tophat width: in use_shortrange, the psfsplit module has already included this,
+        # so we set it to 0 so as to not double-count this contribution.
+        tophatwidth_use = self.blk.cfg.inpsf_oversamp
+        if use_shortrange: tophatwidth_use = 0
+
         # get the pixel location on the input image
         # (moved this up since some PSF models need it)
         pixloc = self.inwcs.all_world2pix(np.array([[*psf_compute_point]]).astype(np.float64), 0)[0]
@@ -461,7 +468,7 @@ class InImage:
                 assert exists(fname), 'Error: input psf does not exist'
                 with fitsio.FITS(fname) as fileh:
                     self.inpsf_arr = InImage.smooth_and_pad(
-                        fileh[self.idsca[1]][:, :], tophatwidth=self.blk.cfg.inpsf_oversamp)
+                        fileh[self.idsca[1]][:, :], tophatwidth=tophatwidth_use)
 
             this_psf = self.inpsf_arr
 
@@ -483,7 +490,7 @@ class InImage:
             lpoly = InImage.LPolyArr(1, (pixloc[0]-2043.5)/2044., (pixloc[1]-2043.5)/2044.)
             # pixels are in C/Python convention since pixloc was set this way
             this_psf = InImage.smooth_and_pad(
-                np.einsum('a,aij->ij', lpoly, self.inpsf_cube), tophatwidth=self.blk.cfg.inpsf_oversamp)/64
+                np.einsum('a,aij->ij', lpoly, self.inpsf_cube), tophatwidth=tophatwidth_use)/64
             # divide by 64=8**2 since anlsim files are in fractional intensity per s_in**2 instead of per (s_in/8)**2
 
         else:
@@ -542,8 +549,8 @@ class InStamp:
 
         # numbers of input pixels from input images and the cumulative sum
         self.pix_count = np.array([inimage.pix_count[j_st, i_st]
-                                   for inimage in blk.inimages], dtype=np.uint16)
-        self.pix_cumsum = np.cumsum([0] + list(self.pix_count), dtype=np.uint16)
+                                   for inimage in blk.inimages], dtype=np.uint32)
+        self.pix_cumsum = np.cumsum([0] + list(self.pix_count), dtype=np.uint32)
 
         # input pixel positions and signals
         self.y_val = np.empty((self.pix_cumsum[-1],), dtype=np.float64)
@@ -600,7 +607,7 @@ class InStamp:
         if pivot[1] is not None:
             dist_sq += np.square(self.y_val - pivot[1])
 
-        selection = np.array(np.where(dist_sq < radius**2)[0], dtype=np.uint16)
+        selection = np.array(np.where(dist_sq < radius**2)[0], dtype=np.uint32)
         return selection if (selection.shape[0] < self.pix_cumsum[-1]) else None
 
     def get_inpsfgrp(self, sim_mode: bool = False) -> None:
@@ -766,7 +773,7 @@ class OutStamp:
         # fetch instamps and select input pixels
         self.instamps   = [None for _ in range(9)]
         self.selections = [None for _ in range(9)]
-        self.inpix_count = np.zeros((9,), dtype=np.uint16)
+        self.inpix_count = np.zeros((9,), dtype=np.uint32)
 
         # acceptance radius in units of output pixels
         rpix_search = (self.blk.cfg.instamp_pad / Stn.arcsec) \
@@ -784,7 +791,7 @@ class OutStamp:
             else:
                 self.inpix_count[idx] = self.selections[idx].shape[0]
 
-        self.inpix_cumsum = np.cumsum([0] + list(self.inpix_count), dtype=np.uint16)
+        self.inpix_cumsum = np.cumsum([0] + list(self.inpix_count), dtype=np.uint32)
 
         if visualize:
             fig, ax = plt.subplots(figsize=(4.8, 4.8))
@@ -1408,7 +1415,7 @@ class Block:
         cfg(); self.cfg = cfg
         if cfg is None: self.cfg = Config()  # use the default config
 
-        PSFGrp.setup(npixpsf=cfg.npixpsf, oversamp=cfg.inpsf_oversamp, dtheta=cfg.dtheta)
+        PSFGrp.setup(npixpsf=cfg.npixpsf, oversamp=cfg.inpsf_oversamp, dtheta=cfg.dtheta, psfsplit=bool(cfg.psfsplit))
         PSFOvl.setup(flat_penalty=cfg.flat_penalty)
         self.this_sub = this_sub
         if run_coadd: self()
@@ -1482,7 +1489,7 @@ class Block:
             print('Retrieved columns:', obscols.names, ' {:d} rows'.format(n_obs_tot))
 
         # display output information
-        print('Output information: ctr at RA={:10.6f},DEC={:10.6f}'.format(self.cfg.ra, self.cfg.dec))
+        print('Output information: ctr at RA={:10.6f},DEC={:10.6f} LONPOLE={:10.6f}'.format(self.cfg.ra, self.cfg.dec, self.cfg.lonpole))
         print('pixel scale={:8.6f} arcsec or {:11.5E} degree'.format(
             self.cfg.dtheta * u.degree.to('arcsec'), self.cfg.dtheta))
         print('output array size = {:d} ({:d} postage stamps of {:d})'.format(
@@ -1508,6 +1515,7 @@ class Block:
         self.outwcs.wcs.cdelt = [-self.cfg.dtheta, self.cfg.dtheta]
         self.outwcs.wcs.ctype = ["RA---STG", "DEC--STG"]
         self.outwcs.wcs.crval = [self.cfg.ra, self.cfg.dec]
+        self.outwcs.wcs.lonpole = self.cfg.lonpole
 
         # print the corners of the square and the center, ordering:
         #   2   3
@@ -1954,6 +1962,14 @@ class Block:
         config_hdu = fits.TableHDU.from_columns(
             [fits.Column(name='text', array=self.cfg.to_file(None).splitlines(), format='A512', ascii=True)])
         config_hdu.header['EXTNAME'] = 'CONFIG'
+        if is_final:
+            for package in ['numpy', 'scipy', 'astropy', 'fitsio']:
+                keyword = 'V' + package.upper()[:7]
+                try:
+                    with importlib.import_module(package) as m:
+                        config_hdu.header[keyword] = (str(m.__version), f'Current version of {package}')
+                except:
+                    config_hdu.header[keyword] = ('N/A', f'{package} had no version number')
         inlist_hdu = fits.BinTableHDU.from_columns([
             fits.Column(name='obsid', array=np.array([obs[0] for obs in self.obslist]), format='J'),
             fits.Column(name='sca',   array=np.array([obs[1] for obs in self.obslist]), format='I'),

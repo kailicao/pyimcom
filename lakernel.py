@@ -20,7 +20,12 @@ _assign_subvector : Assign values to a subvector of a vector.
 
 from warnings import warn
 
+import sys
+import os
+from pathlib import Path
+import time
 import numpy as np
+import subprocess
 from scipy.linalg import cholesky, cho_solve
 from astropy import units as u
 
@@ -231,6 +236,7 @@ class CholKernel(_LAKernel):
             w, v = np.linalg.eigh(A)
             # AA[di] += kappa_arr[j] + np.abs(w[0])
             AA[di] += np.abs(w[0]) + 1e-16  # KC: this seems right
+            print('repair w', w[:8]); sys.stdout.flush()
             del v
             warn('Warning: pyimcom_lakernel Cholesky decomposition failed; '
                  'fixed negative eigenvalue {:19.12e}'.format(w[0]))
@@ -257,19 +263,24 @@ class CholKernel(_LAKernel):
 
         # loop over output PSFs
         for j_out in range(self.n_out):
+            t0 = time.time()
 
             # Cholesky decomposition for the only eigenvalue node
             AA = np.copy(A); di = np.diag_indices(n)
             my_kappa = self.kappaC_arr[0] * C[j_out]
 
             if my_kappa: AA[di] += my_kappa
-            L = CholKernel._cholesky_wrapper(AA, di, A)
+            t1 = time.time()
+            L = self._cholesky_wrapper(AA, di, A)
+            t2 = time.time()
             Ti = cho_solve((L, True), mBhalf[j_out, :, :].T, check_finite=False).T  # (m, n)
+            t3 = time.time()
             del AA, di, L
 
             # build values at node
             D = np.einsum('ai,ai->a', mBhalf[j_out, :, :], Ti)
             N = np.einsum('ai,ai->a', Ti, Ti)
+            t4 = time.time()
 
             # make outputs
             self.kappa_ [j_out, :] = my_kappa
@@ -277,6 +288,8 @@ class CholKernel(_LAKernel):
             self.UC_    [j_out, :] = 1.0 - (my_kappa*N + D)/C[j_out]
             self.outst.T[j_out, :, :] = Ti
             del D, N, Ti
+            t5 = time.time()
+            print('Cholesky timing -> {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f}'.format(t1-t0, t2-t0, t3-t0, t4-t0, t5-t0))
 
     def _call_multi_kappa(self) -> None:
         '''

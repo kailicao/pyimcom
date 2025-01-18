@@ -181,7 +181,7 @@ class Config:
         'obsfile', 'inpath', 'informat', 'use_filter', 'inpsf_path', 'inpsf_format', 'inpsf_oversamp',
         'psfsplit', 'psfsplit_r1', 'psfsplit_r2', 'psfsplit_epsilon',  # SECTION I
         'permanent_mask', 'cr_mask_rate', 'extrainput', 'n_inframe', 'labnoisethreshold',  # SECTION II
-        'ra', 'dec', 'nblock', 'n1', 'n2', 'dtheta', 'Nside',  # SECTION III
+        'ra', 'dec', 'lonpole', 'nblock', 'n1', 'n2', 'dtheta', 'Nside',  # SECTION III
         'fade_kernel', 'postage_pad', 'pad_sides', 'stoptile',  # SECTION IV
         'outmaps', 'outstem', 'tempfile', 'inlayercache',  # SECTION V
         'n_out', 'outpsf', 'sigmatarget', 'outpsf_extra', 'sigmatarget_extra',  # SECTION VI
@@ -300,6 +300,7 @@ class Config:
         ### SECTION III: WHAT AREA TO COADD ###
         # tile center in degrees RA, DEC
         self.ra, self.dec = cfg_dict['CTR']
+        self.lonpole = float(cfg_dict.get('LONPOLE', 180.0))
         # if we are doing a nblock x nblock array on the same projection
         self.nblock = cfg_dict['BLOCK']
         # and output size: n1 (number of IMCOM postage stamps)
@@ -486,6 +487,8 @@ class Config:
         print('# location of the output region to make', flush=True)
         self._get_attrs_wrapper(
             "self.ra, self.dec = map(float, input('CTR (float float): ').split(' '))", newline=False)
+        self._get_attrs_wrapper(
+            "self.lonpole = map(float, input('LONPOLE (float): ').split(' '))", newline=False)
         self._get_attrs_wrapper(
             "self.nblock = int(input('BLOCK (int): '))", newline=False)
         self._get_attrs_wrapper(
@@ -726,6 +729,7 @@ class Config:
 
         ### SECTION III: WHAT AREA TO COADD ###
         cfg_dict['CTR'] = [self.ra, self.dec]
+        cfg_dict['LONPOLE'] = self.lonpole
         cfg_dict['BLOCK'] = self.nblock
         cfg_dict['OUTSIZE'] = [self.n1, self.n2, self.dtheta * u.degree.to('arcsec')]
 
