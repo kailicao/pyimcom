@@ -19,6 +19,7 @@ get_all_data : Makes a 3D array of the image data.
 from os.path import exists
 import re
 import sys
+import time
 from filelock import Timeout, FileLock
 
 import numpy as np
@@ -36,7 +37,6 @@ try:
     from pyimcom_croutines import iD5512C
 except:
     from .routine import iD5512C
-
 
 class GalSimInject:
     '''
@@ -112,6 +112,7 @@ class GalSimInject:
         pad = n_in_stamp+2*(d+1)
         sca_image = galsim.ImageF(sca_nside+pad, sca_nside+pad, scale=0.11)
 
+        firsttime = True
         for n in range(num_obj):
 
             # if angle transient mode is on, check if we really need this object
@@ -120,7 +121,16 @@ class GalSimInject:
 
             psf = inpsf((my_ra[n], my_dec[n]))  # now with PSF variation
             psf_image = galsim.Image(psf, scale=0.11/inpsf_oversamp)
-            interp_psf = galsim.InterpolatedImage(psf_image, x_interpolant='lanczos50')
+            # interp_psf = galsim.InterpolatedImage(psf_image, x_interpolant='lanczos32')
+            # the first time, get the preferred stepk and maxk
+            if firsttime:
+                interp_psf_test = galsim.InterpolatedImage(psf_image, x_interpolant='lanczos32')
+                stepk = interp_psf_test.stepk
+                maxk = interp_psf_test.maxk
+                del interp_psf_test
+                firsttime = False
+            psf_image.setCenter(0,0)
+            interp_psf = galsim._InterpolatedImage(psf_image, x_interpolant=galsim.interpolant.Lanczos(32), force_stepk=stepk, force_maxk=maxk)
 
             xy = galsim.PositionD(x_sca[n], y_sca[n])
             xyI = xy.round()
@@ -278,11 +288,19 @@ class GalSimInject:
         n_in_stamp = 280
         pad = n_in_stamp+2*(d+1)
         sca_image = galsim.ImageF(sca_nside+pad, sca_nside+pad, scale=refscale)
+        t0 = time.time()
         for n in range(num_obj):
             psf = inpsf((my_ra[n], my_dec[n]))  # now with PSF variation
             psf_image = galsim.Image(psf, scale=0.11/inpsf_oversamp)
-            interp_psf = galsim.InterpolatedImage(
-                psf_image, x_interpolant='lanczos50')
+            #interp_psf = galsim.InterpolatedImage(psf_image, x_interpolant='lanczos32')
+            # the first time, get the preferred stepk and maxk
+            if n==0:
+                interp_psf_test = galsim.InterpolatedImage(psf_image, x_interpolant='lanczos32')
+                stepk = interp_psf_test.stepk
+                maxk = interp_psf_test.maxk
+                del interp_psf_test
+            psf_image.setCenter(0,0)
+            interp_psf = galsim._InterpolatedImage(psf_image, x_interpolant=galsim.interpolant.Lanczos(32), force_stepk=stepk, force_maxk=maxk)
 
             # Jacobian
             Jac = wcs.utils.local_partial_pixel_derivatives(
@@ -337,6 +355,8 @@ class GalSimInject:
             source = galsim.Convolve([interp_psf, st_model])
             source.drawImage(sub_image, offset=draw_offset, add_to_image=True, method='no_pixel')
 
+        t1 = time.time()-t0
+        print(f'n={n}, tot={t1}'); sys.stdout.flush()
         return sca_image.array[pad//2:-pad//2, pad//2:-pad//2]
 
 
@@ -710,6 +730,7 @@ def get_all_data(inimage: 'coadd.InImage'):
     # if n_inframe == 1: return <-- for saving purposes, don't want to exit here
 
     for i in range(1, n_inframe):
+        sys.stdout.flush()
         # truth image (no noise)
         if extrainput[i].casefold() == 'truth'.casefold():
             filename = _get_sca_imagefile(path, idsca, obsdata, format_, extraargs={'type': 'truth'})
