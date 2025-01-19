@@ -223,7 +223,7 @@ class GalSimInject:
         return mydict
 
     @staticmethod
-    def galsim_extobj_grid(res, mywcs, inpsf, idsca, obsdata, sca_nside, inpsf_oversamp, extraargs=[]):
+    def galsim_extobj_grid(res, mywcs, inpsf, sca_nside, inpsf_oversamp, extraargs=[]):
         '''
         Example of a function used here that we can call from coadd_utils.get_all_data:
 
@@ -234,10 +234,11 @@ class GalSimInject:
           idsca = tuple (obsid, sca) (sca in 1..18)
           obsdata = observation table (needed for some data format)
           sca_nside = side length of the SCA (4088 for Roman)
-          extraargs = for future compatibility
+          extraargs = for future compatibility;
+          tc = if tc, return galtype instead of going through the whole function; this is for use in starcube2
 
           Output: [when complete]
-          nside x nside SCA with a grid of stars with unit flux
+          nside x nside SCA with a grid of extended sources with unit flux
 
           to apply shear, include
           'g': must have galtype['g'] as length 2 array giving g1 and g2.
@@ -283,7 +284,6 @@ class GalSimInject:
         # generate object parameters
         galstring = 'exp1'
         galtype = GalSimInject.genobj(12*4**res, ipix, galstring, seed)
-        # print(galtype)
 
         n_in_stamp = 280
         pad = n_in_stamp+2*(d+1)
@@ -837,7 +837,7 @@ def get_all_data(inimage: 'coadd.InImage'):
             extargs = extrainput[i].split(',')[1:]
             print('making grid using GalSim: ', res, idsca, 'extended object type:', extargs)
             inimage.indata[i, :, :] = GalSimInject.galsim_extobj_grid(
-                res, inwcs, inpsf, idsca, obsdata, Stn.sca_nside, inpsf_oversamp, extraargs=extargs)
+                res, inwcs, inpsf, Stn.sca_nside, inpsf_oversamp, extraargs=extargs)
 
         sys.stdout.flush()
 
