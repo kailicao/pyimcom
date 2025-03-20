@@ -43,7 +43,7 @@ def InterpMatrix(Rsearch, samp, x_out, y_out, Cov, kappa=1.e-10, deweight=1.e24)
     posx,posy = np.meshgrid(posx1D,posy1D)
     posx = posx.flatten()
     posy = posy.flatten()
-    g = np.where((posx-.5)**2+(posy-.5)**2<=(R+.5**2)**2)
+    g = np.where((posx-.5)**2+(posy-.5)**2<=(R+.5**.5)**2)
     posx = posx[g]
     posy = posy[g]
     NN = np.size(posx)
@@ -218,31 +218,41 @@ def test():
     n = 1024
     x, y = np.meshgrid(np.linspace(0,n-1,n),np.linspace(0,n-1,n))
     nf = 4
-    nf2 = 5
+    nf2 = 6
     u0 = .243; v0 = .128
     InArr = np.zeros((nf2,n,n), dtype=np.float32)
     for j in range(nf): InArr[j,:,:] = 1. + .1*np.cos(2*np.pi*(u0*x+v0*y)/2.**j)
+    InArr[-2,:,:] = np.sum(InArr[:-2,:,:], axis=0) - 3.6
     for k in range(128):
         xc = 500 + 400*np.cos(k/64*np.pi)
         yc = 500 + 400*np.sin(k/64*np.pi)
         InArr[-1,:,:] += np.exp(-.5*((x-xc)**2+(y-yc)**2)/sigma**2)
     InMask = np.zeros((n,n), dtype=bool)
-    mat = [[.475,.005],[-.01,.45]]
-    nout = 2048
-    C = [.25,0,0]
+    mat = np.array([[.52,.005],[-.015,.51]]); sc = .5
+    nout = 1950
+    eC = (mat@mat.T/sc**2 - np.identity(2)) * sigma**2
+    C = [eC[0,0], eC[0,1], eC[1,1]]
     pos_offset = [6.,3.]
     OutArr, OutMask, Umax, Smax = MultiInterp(InArr, InMask, (nout,nout), pos_offset, mat, 6., samp, C)
     print('Umax =', Umax, 'Smax = ', Smax)
+    fits.PrimaryHDU(InArr).writeto('InArr.fits', overwrite=True)
     fits.PrimaryHDU(OutArr).writeto('OutArr.fits', overwrite=True)
 
-    TargetArr = np.zeros((nf,nout,nout))
+    TargetArr = np.zeros((nf2,nout,nout))
     xo, yo = np.meshgrid(np.linspace(0,nout-1,nout),np.linspace(0,nout-1,nout))
     W = np.exp(-2*np.pi**2*(u0**2*C[0]+2*u0*v0*C[1]+v0**2*C[2]))
     tf0 = np.exp(-2*np.pi**2*(u0**2+v0**2)*sigma**2)
     for j in range(nf):
         print(j, tf0**(.25**j), W**(.25**j))
         TargetArr[j,:,:] = 1. + .1*np.cos(2*np.pi*((mat[0][0]*xo+mat[0][1]*yo+pos_offset[0])*u0+(mat[1][0]*xo+mat[1][1]*yo+pos_offset[1])*v0)/2.**j) * W**(.25**j)
-    fits.PrimaryHDU(np.where(OutMask,0.,OutArr[:nf,:,:]-TargetArr).astype(np.float32)).writeto('DiffArr.fits', overwrite=True)
+    TargetArr[-2,:,:] = np.sum(TargetArr[:-2,:,:], axis=0) - 3.6
+    for k in range(128):
+        xc = 500 + 400*np.cos(k/64*np.pi)
+        yc = 500 + 400*np.sin(k/64*np.pi)
+        v = np.array([xc,yc]) - pos_offset
+        tt = np.linalg.solve(mat,v); xt = tt[0]; yt = tt[1]
+        TargetArr[-1,:,:] += np.exp(-.5*((xo-xt)**2+(yo-yt)**2)/(sigma/sc)**2)/np.linalg.det(mat/sc)
+    fits.PrimaryHDU(np.where(OutMask,0.,OutArr-TargetArr).astype(np.float32)).writeto('DiffArr.fits', overwrite=True)
     return
 
 if __name__ == "__main__":
