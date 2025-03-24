@@ -9,17 +9,17 @@ Documentation on this site
 Running PyIMCOM
 -------------------
 
-- :doc:`How to write a PyIMCOM configuration file <docs/config_README.rst>`
+- `How to write a PyIMCOM configuration file <docs/config_README.rst>`
 
 Post-processing of PyIMCOM outputs
 ---------------------------------------
 
-- Instructions for using the :doc:`meta post-processing module <meta/meta.rst>`
+- Instructions for using the `meta post-processing module <meta/meta.rst>`
 
 Information relevant to various runs we have done in the past
 ---------------------------------------------------------------
 
-- :doc:`Preparing the PSFs for the OpenUniverse simulation <historical/OpenUniverse2024/README.rst>`
+- `Preparing the PSFs for the OpenUniverse simulation <historical/OpenUniverse2024/README.rst>`
 
 References
 ********************
