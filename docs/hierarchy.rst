@@ -18,7 +18,7 @@ The PyIMCOM coadded images have 4 layers of hierarchical information. From small
 
 - \[b\] The block is composed of a square array of ``cfg.n1`` x ``cfg.n1`` postage stamps. The intention is that these are coadded in a single job submitted on a supercomputer.
 
-- \[a\] The mosaic is composed of a square array of `cfg.nblock`` x ``cfg.nblock`` blocks (this is the ``BLOCK`` keyword in the configuration file). A mosaic has a single projection plane on the celestial sphere and is intended to be a higher-level unit of processing (e.g., so that temporary files generated on a scratch disk are available for the rest of the mosaic processing before they need to be cleared). The mosaic center is described by the ``CTR`` keyword.
+- \[a\] The mosaic is composed of a square array of ``cfg.nblock`` x ``cfg.nblock`` blocks (this is the ``BLOCK`` keyword in the configuration file). A mosaic has a single projection plane on the celestial sphere and is intended to be a higher-level unit of processing (e.g., so that temporary files generated on a scratch disk are available for the rest of the mosaic processing before they need to be cleared). The mosaic center is described by the ``CTR`` keyword.
 
 Orders of magnitude that we would normally consider would be 0.04 arcsec for an output pixel; 1.6 arcsec for a postage stamp; 2 arcmin for a block; and 1 degree for a mosaic. The full survey will consists of many mosaics tiling the sky.
 
