@@ -24,7 +24,7 @@ Orders of magnitude that we would normally consider would be 0.04 arcsec for an 
 
 These concepts are graphically displayed as follows:
 
-.. image:: tilefig.pdf
+.. image:: tilefig.png
   :width: 600
   :alt: 3 nested layers of PyIMCOM coadds
 
