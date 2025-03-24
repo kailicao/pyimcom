@@ -10,7 +10,7 @@ The input images for PyIMCOM are specified by observation IDs (a sequential non-
 Outputs
 **********
 
-The PyIMCOM coadded images have 4 layers of hierarchical information. From smallest to largest (and where ``cfg`` is the configuration class)):
+The PyIMCOM coadded images have 4 layers of hierarchical information. From smallest to largest (and where ``cfg`` is the configuration class):
 
 - The individual output pixel, of size ``cfg.dtheta`` (input in arcsec, but stored internally to PyIMCOM in degrees)
 
