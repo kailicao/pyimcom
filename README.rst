@@ -6,6 +6,12 @@ This is the Python implementation of Image Combination (PyIMCOM) package being d
 Documentation on this site
 *******************************
 
+
+Overview of PyIMCOM concepts
+------------------------------
+
+- `Hierarchy of input and output information <docs/hierarchy.rst>`_
+
 Running PyIMCOM
 -------------------
 
