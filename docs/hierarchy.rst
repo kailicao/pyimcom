@@ -25,7 +25,7 @@ Orders of magnitude that we would normally consider would be 0.04 arcsec for an 
 These concepts are graphically displayed as follows:
 
 .. image:: tilefig.png
-  :width: 600
+  :width: 800
   :alt: 3 nested layers of PyIMCOM coadds
 
 \[Figure 4 in `Hirata et al., MNRAS 528:2533 (2024) <https://academic.oup.com/mnras/article/528/2/2533/7560566>`_\]
