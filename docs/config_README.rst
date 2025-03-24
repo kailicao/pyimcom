@@ -30,13 +30,15 @@ There are several ways to set up the configuration:
 
    cfg = config.Config('test_F_00_00.fits', inmode='block')
 
-  **Warning**: If you do this, it will reconstruct the *entire* configuration file, including the input and output file paths on the system that generated the file. If you simply want to do this so that the grid spacings, choices of input layers, etc. are accessible from your process, this is fine. But if you are going to run the co-adds, you will want to `edit the configuration file <Editing a configuration>`_ so that the file paths correspond to your platform, and (if on the same platform) you don't unintentionally overwrite the outputs.
+  **Warning**: If you do this, it will reconstruct the *entire* configuration file, including the input and output file paths on the system that generated the file. If you simply want to do this so that the grid spacings, choices of input layers, etc. are accessible from your process, this is fine. But if you are going to run the co-adds, you will want to :ref:`edit the configuration file <edconfig>` so that the file paths correspond to your platform, and (if on the same platform) you don't unintentionally overwrite the outputs.
 
 - You can input a configuration in interactive mode so that the user types the configuration directly in the terminal::
 
    cfg = config.Config(None)
 
   This is useful for testing, but we don't expect many users will want to do production runs this way.
+
+.. _edconfig:
 
 Editing a configuration
 =======================
