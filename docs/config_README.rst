@@ -30,15 +30,13 @@ There are several ways to set up the configuration:
 
    cfg = config.Config('test_F_00_00.fits', inmode='block')
 
-  **Warning**: If you do this, it will reconstruct the *entire* configuration file, including the input and output file paths on the system that generated the file. If you simply want to do this so that the grid spacings, choices of input layers, etc. are accessible from your process, this is fine. But if you are going to run the co-adds, you will want to :ref:`edit the configuration file <edconfig>` so that the file paths correspond to your platform, and (if on the same platform) you don't unintentionally overwrite the outputs.
+  **Warning**: If you do this, it will reconstruct the *entire* configuration file, including the input and output file paths on the system that generated the file. If you simply want to do this so that the grid spacings, choices of input layers, etc. are accessible from your process, this is fine. But if you are going to run the co-adds, you will want to edit the configuration file so that the file paths correspond to your platform, and (if on the same platform) you don't unintentionally overwrite the outputs.
 
 - You can input a configuration in interactive mode so that the user types the configuration directly in the terminal::
 
    cfg = config.Config(None)
 
   This is useful for testing, but we don't expect many users will want to do production runs this way.
-
-.. _edconfig:
 
 Editing a configuration
 =======================
@@ -143,7 +141,7 @@ This keyword is optional (it defaults to ``None``). If provided, it means that t
 
     "PSFSPLIT": [6.0, 10.0, 0.01]
 
-This directs ``pyimcom.splitpsf`` to split the PSF so that the short-range part goes smoothly to zero from 6 to 10 pixels, with a regularization parameter for the long-range part of :math:`\varepsilon=0.01`.
+This directs ``pyimcom.splitpsf`` to split the PSF so that the short-range part goes smoothly to zero from 6 to 10 pixels, with a regularization parameter for the long-range part of epsilon=0.01.
 
 **Comment**: The PSF splitting tool is under development: it runs, but the iterative cleaning of the long-range PSF is not yet implemented. So if you use the current version, you won't achieve the improvements that we ultimately expect.
 
@@ -157,7 +155,7 @@ This provides a permanent mask file::
 
        "PMASK": "/users/PCON0003/cond0007/imcom/pyimcom/anlsim/permanent_mask_ft_231228.fits"
 
-The mask is a FITS file with an integer-type primary HDU consisting of a :math:`18\times4088\times4088` (18 SCAs, 4088 rows, 4088 columns) data cube. Nonzero values indicate that a pixel should be permanently masked.
+The mask is a FITS file with an integer-type primary HDU consisting of a 18x4088x4088 (18 SCAs, 4088 rows, 4088 columns) data cube. Nonzero values indicate that a pixel should be permanently masked.
 
 If not provided, defaults to no permanent mask.
 
@@ -170,14 +168,14 @@ This specifies a cosmic ray rate per pixel that should be randomly masked::
 
 This is useful in simulations to explore what a cosmic ray mask does to downstream processing (e.g., shape measurements of galaxies where some input pixels were masked). It is not something that we expect to apply to real data (since then we will have a tool that masks the pixels that were really hit).
 
-The simulation masks a :math:`3\times 3` region around each hit. The random number generator is configured to produce the same masks if the simulation is re-run or if another mosaic is built that uses the same SCA.
+The simulation masks a 3x3 region around each hit. The random number generator is configured to produce the same masks if the simulation is re-run or if another mosaic is built that uses the same SCA.
 
 The default (0) is to not implement a cosmic ray mask.
 
 EXTRAINPUT: Additional layers\*
 -----------------------------------
 
-This allows the user to specify a list of additional layers (suites of input images) to run through PyIMCOM with the same coaddition matrix **T**. The "science" layer is layer 0, and if :math:`N` additional layers are specified then the output FITS images are data cubes with :math:`N+1` frames along axis ``-3``. The defailt is no additional layers. An example usage is::
+This allows the user to specify a list of additional layers (suites of input images) to run through PyIMCOM with the same coaddition matrix **T**. The "science" layer is layer 0, and if N additional layers are specified then the output FITS images are data cubes with N+1 frames along axis -3. The defailt is no additional layers. An example usage is::
 
     "EXTRAINPUT": [
         "labnoise",
@@ -202,31 +200,31 @@ The ``pyimcom.layers`` module contains instructions for building each of the dif
 
 - ``truth`` : This layer is the true (no noise or saturation, but including PSF) image, if supported by that input format. Clearly this is only available for the simulations.
 
-- ``whitenoise``:math:`n` : This layer generates white noise. The trailing integer :math:`n` controls the random number generator seed. If the same :math:`n` is used in another mosaic, then each observation ID + SCA will produce the same noise realization. The normalization is mean 0 and variance 1 in each pixel; if you are interested in other normalizations, you can appropriately re-scale the output.
+- ``whitenoise`` n : This layer generates white noise. The trailing integer n controls the random number generator seed. If the same n is used in another mosaic, then each observation ID + SCA will produce the same noise realization. The normalization is mean 0 and variance 1 in each pixel; if you are interested in other normalizations, you can appropriately re-scale the output.
 
-- ``1fnoise``:math:`n` : This layer generates :math:`1/f` noise in each readout channel, with striping along the fast-read direction. The trailing integer :math:`n` controls the random number generator seed. If the same :math:`n` is used in another mosaic, then each observation ID + SCA will produce the same noise realization. The normalization is mean 0 and variance 1 per logarithmic range in frequency, :math:`\Delta^2(f) = 2fP(f) = 1`; if you are interested in other normalizations, you can appropriately re-scale the output.
+- ``1fnoise`` n : This layer generates 1/f noise in each readout channel, with striping along the fast-read direction. The trailing integer n controls the random number generator seed. If the same n is used in another mosaic, then each observation ID + SCA will produce the same noise realization. The normalization is mean 0 and variance 1 per logarithmic range in frequency; if you are interested in other normalizations, you can appropriately re-scale the output.
 
 - ``labnoise`` : This layer is a "real" dark from ground testing that has been matched to the corresponding observation ID + SCA. See `Laliotis et al. (2024) <https://ui.adsabs.harvard.edu/abs/2024PASP..136l4506L/abstract>`_.
 
 - ``skyerr`` : This is the realization of sky noise provided by the simulation (only available for the ``dc2_imsim`` input format).
 
-- ``cstar``:math:`n` : This is a grid of ideal point sources with unit flux at HEALPix resolution :math:`n` (i.e., :math:`12\times 4^n` pixels). They are drawn according to the PSF provided using PyIMCOM's internal routines.
+- ``cstar`` n : This is a grid of ideal point sources with unit flux at HEALPix resolution n (i.e., 12\*4^n pixels). They are drawn according to the PSF provided using PyIMCOM's internal routines.
 
-- ``nstar``:math:`n,f,s,\xi` : This is a grid of noisy point sources at HEALPix resolution :math:`n` (i.e., :math:`12\times 4^n` pixels). The flux (in electrons) is given by :math:`f`; the sky background (which is included in the Poisson noise but subtracted from the layer) is given by :math:`s`; and the random number generator seed is :math:`\xi`. So ``nstar14,2e5,86,3`` will generate stars on a resolution 14 grid, with flux :math:`2\times 10^5` electrons, with Poisson noise from 86 electrons per pixel, and use random seed :math:`\xi=3`. 
+- ``nstar`` n,f,s,p : This is a grid of noisy point sources at HEALPix resolution n (i.e., 12\*4^n pixels). The flux (in electrons) is given by f; the sky background (which is included in the Poisson noise but subtracted from the layer) is given by s; and the random number generator seed is p. So ``nstar14,2e5,86,3`` will generate stars on a resolution 14 grid, with flux 2e5 electrons, with Poisson noise from 86 electrons per pixel, and use random seed p=3.
 
-- ``gsstar``:math:`n` : This is a grid of ideal point sources with unit flux at HEALPix resolution :math:`n` (i.e., :math:`12\times 4^n` pixels). They are drawn using GalSim (as opposed to ``cstar``:math:`n`, which does the same thing but internally).
+- ``gsstar`` n : This is a grid of ideal point sources with unit flux at HEALPix resolution n (i.e., 12\*4^n pixels). They are drawn using GalSim (as opposed to ``cstar`` n, which does the same thing but internally).
 
-- ``gstrstar``:math:`n` : This is a grid of transient point sources with unit flux at HEALPix resolution :math:`n` (i.e., :math:`12\times 4^n` pixels), drawn using GalSim. It is used to test what happens in PyIMCOM if a source is present in one pass but not the other. Point sources in even-numbered pixels are drawn if WFI +Y is pointed north (±90°) and those in odd-numbered pixels are drawn if WFI +Y is pointed south (±90°).
+- ``gstrstar`` n : This is a grid of transient point sources with unit flux at HEALPix resolution n (i.e., 12\*4^n pixels), drawn using GalSim. It is used to test what happens in PyIMCOM if a source is present in one pass but not the other. Point sources in even-numbered pixels are drawn if WFI +Y is pointed north (±90°) and those in odd-numbered pixels are drawn if WFI +Y is pointed south (±90°).
 
-- ``gsfdstar``:math:`n,A` : This is a grid of point sources with field-dependent flux at HEALPix resolution :math:`n` (i.e., :math:`12\times 4^n` pixels). The flux is :math:`1+A(x^2+y^2)/R^2`, where :math:`R` is the radius of the focal plane and :math:`(x,y)` are the focal plane coordinates. So for example, ``gsfdstar14,0.05`` will generate stars on a resolution 14 grid, with flux ranging from 1 at the field center up to 1.05 at the corners. This was used as a test of how large-scale flat field errors or field-dependent bandpass terms multiplying an object's SED would impact PyIMCOM coadded images.
+- ``gsfdstar`` n,A : This is a grid of point sources with field-dependent flux at HEALPix resolution n (i.e., 12\*4^n pixels). The flux is 1+A(x^2+y^2)/R^2, where R is the radius of the focal plane and (x,y) are the focal plane coordinates. So for example, ``gsfdstar14,0.05`` will generate stars on a resolution 14 grid, with flux ranging from 1 at the field center up to 1.05 at the corners. This was used as a test of how large-scale flat field errors or field-dependent bandpass terms multiplying an object's SED would impact PyIMCOM coadded images.
 
-- ``gsext``:math:`n`\+ : This is a grid of extended objects drawn by GalSim at HEALPix resolution :math:`n` (i.e., :math:`12\times 4^n` pixels). It can contain multiple arguments. The current version makes exponential profile objects, with half-light radius logarithmically distributed between 0.125 and 0.5 arcsec, and shapes :math:`(g_1,g_2)` uniformly distributed in the circle :math:`|g|<0.5`. The arguments are comma-delimited, e.g., ``gsext14,seed=100,shear=.02:0``. Legal arguments include:
+- ``gsext`` n\+ : This is a grid of extended objects drawn by GalSim at HEALPix resolution n (i.e., 12\*4^n pixels). It can contain multiple arguments. The current version makes exponential profile objects, with half-light radius logarithmically distributed between 0.125 and 0.5 arcsec, and shapes (g_1,g_2) uniformly distributed in the circle \|g\|\<0.5. The arguments are comma-delimited, e.g., ``gsext14,seed=100,shear=.02:0``. Legal arguments include:
 
-  - ``seed=``:math:`\xi` : The random seed :math:`\xi` to use (you can generate the same galaxies in multiple layers by using the same seed).
+  - ``seed=`` p : The random seed p to use (you can generate the same galaxies in multiple layers by using the same seed).
 
-  - ``rot=``:math:`\theta` : Rotate by the angle :math:`\theta` (in degrees, counterclockwise as seen by the observer) after drawing it but before any shear is applied. The ``rot=90`` option is commonly used in simulations to partially cancel shape noise.
+  - ``rot=`` theta : Rotate by the angle theta (in degrees, counterclockwise as seen by the observer) after drawing it but before any shear is applied. The ``rot=90`` option is commonly used in simulations to partially cancel shape noise.
 
-  - ``shear=``:math:`g_1:g_2` : Shears the galaxy by the indicated amount, in coordinates where :math:`g_1` is the East-West direction and :math:`g_2` is the Northeast-Southwest direction.
+  - ``shear=`` g_1:g_2 : Shears the galaxy by the indicated amount, in coordinates where g_1 is the East-West direction and g_2 is the Northeast-Southwest direction.
 
 LABNOISETHRESHOLD: Mask based on a laboratory dark\*
 -------------------------------------------------------
@@ -261,7 +259,7 @@ This is the same as the ``LONPOLE`` FITS keyword (see the `standard <https://ui.
 BLOCK: Size of the mosaic
 ------------------------------
 
-The mosaic is a square array of blocks. So to make a :math:`12\times12` array, we use::
+The mosaic is a square array of blocks. So to make a 12x12 array, we use::
 
     "BLOCK": 12
 
@@ -277,9 +275,9 @@ This controls the size of a block; for example: ::
         40,
         0.0425]
 
-This case has an output pixel size of 0.0425 arcsec. Each postage stamp to coadd is :math:`40\times40` output pixels, so has a size of :math:`40\times 0.0425 = 1.7` arcsec. Then each block is :math:`72\times 72` postage stamps, so the block size is :math:`72\times 1.7 =122.4` arcsec.
+This case has an output pixel size of 0.0425 arcsec. Each postage stamp to coadd is 40x40 output pixels, so has a size of 40x0.0425 = 1.7 arcsec. Then each block is 72x72 postage stamps, so the block size is 72x17=122.4 arcsec.
 
-**Important**: Because of the way PSF computations are saved (every :math:`2\times 2` postage stamps), the number of postage stamps per block (72 in the above example) must be even.
+**Important**: Because of the way PSF computations are saved (every 2x2 postage stamps), the number of postage stamps per block (72 in the above example) must be even.
 
 More about postage stamps
 ==============================
@@ -291,9 +289,9 @@ This controls the number of transition pixels around each postage stamp where it
 
        "FADE": 2
 
-In detail: a truncated sine function is used, so if you are :math:`j` pixels from the edge of a postage stamp (so :math:`j=-1` for the last pixel in a postage stamp, and :math:`j=0` for the first pixel outside the stamp), and the ``FADE`` parameter is set to :math:`k`, then for :math:`-k\le j<k` that postage stamp gets a weight of :math:`w=\beta - \sin(2\pi\beta)/(2\pi)`, :math:`\beta =(k-j)/(2k+1)` and the next postage stamp gets a weight of :math:`1-w`. 
+Specifying this is optional; it defaults to 3.
 
-Specifying this is optional; it defaults to :math:`k=3`.
+A truncated sine function is used for the weights, so that the total weight is always 1.
 
 PAD: Padding postage stamps\*
 -------------------------------
@@ -304,7 +302,7 @@ This tells PyIMCOM to compute an additional set of postage stamps around each bl
 
       "PAD": 1
 
-For most applications where you may be interested in sources near the edge of a block, having a padding postage stamp is recommended. If there are :math:`n_2` pixels per postage stamps, ``FADE``:math:`=k`, and ``PAD``:math:`=\delta`, then there will be :math:`2(kn_2-\delta)` output pixels that are exactly the same between one block and the next. 
+For most applications where you may be interested in sources near the edge of a block, having a padding postage stamp is recommended. If there are n\_2 pixels per postage stamps, ``FADE`` =k, and ``PAD`` =P, then there will be 2(kn\_2-P) output pixels that are exactly the same between one block and the next. 
 
 PADSIDES: Which padding stamps to compute\*
 ----------------------------------------------
@@ -333,7 +331,7 @@ If specified and positive, halts coaddition after the specified number of postag
 
     "STOP": 148
 
-This will give you an output block that has the bottom filled in, but then the rest will be empty. This is mostly useful during de-bugging: you might want to run only, say, 1/4 of a block so that your modification :math:`\rightarrow` re-run :math:`\rightarrow` analysis :math:`\rightarrow` next modification cycle is shorter.
+This will give you an output block that has the bottom filled in, but then the rest will be empty. This is mostly useful during de-bugging: you might want to run only, say, 1/4 of a block so that your modification -> re-run -> analysis -> next modification cycle is shorter.
 
 What and where to output
 ===========================
@@ -349,19 +347,19 @@ This is a string with a capital letter for each possible output we want to save,
 
 The outputs choices (and the names of the extension HDUs they generate in the coadded image FITS files) are rescaled versions of:
 
-- ``U`` [``FIDELITY``]: This is the PSF leakage map, the square norm of the difference between the PSF of an output pixel and the target PSF: :math:`1/(U_\alpha/C)`.
+- ``U`` [``FIDELITY``]: This is the PSF leakage map, the square norm of the difference between the PSF of an output pixel and the target PSF: 1/(U_alpha/C).
 
-- ``S`` [``SIGMA``]: The noise amplification map, or sum of squares of weights of each input pixel that went into each output pixel: :math:`1/\Sigma_\alpha`.
+- ``S`` [``SIGMA``]: The noise amplification map, or sum of squares of weights of each input pixel that went into each output pixel: 1/\Sigma_\alpha.
 
-- ``K`` [``KAPPA``]: The Lagrange multiplier :math:`1/\kappa_\alpha` used for that pixel that specifies where on the Pareto front PyIMCOM chose. Larger values reduce noise at the expense of more PSF leakage.
+- ``K`` [``KAPPA``]: The Lagrange multiplier 1/\kappa_\alpha used for that pixel that specifies where on the Pareto front PyIMCOM chose. Larger values reduce noise at the expense of more PSF leakage.
 
-- ``T`` [``INWTSUM``]: The total weight over input pixels, :math:`\sum_i T_{\alpha i}`. Expect this to be close to but not exactly 1.
+- ``T`` [``INWTSUM``]: The total weight over input pixels, ∑_i T_{alpha i}. Expect this to be close to but not exactly 1.
 
-- ``N`` [``EFFCOVER``]: The effective coverage :math:`\bar n_{eff,\alpha}` as defined in `Cao et al. (2025) <https://ui.adsabs.harvard.edu/abs/2024arXiv241005442C/abstract>`_. This is like a number of exposures, but because of partial weights it need not be an integer.
+- ``N`` [``EFFCOVER``]: The effective coverage n\_\{eff,alpha\} as defined in `Cao et al. (2025) <https://ui.adsabs.harvard.edu/abs/2024arXiv241005442C/abstract>`_. This is like a number of exposures, but because of partial weights it need not be an integer.
 
 Specific conventions for U, S, K, and T are as described in `Rowe et al. (2011) <https://ui.adsabs.harvard.edu/abs/2011ApJ...741...46R/abstract>`_.
 
-**Convention note**: To save space, the output images are stored as 16-bit integers on a logarithmic scale. The ``UNIT`` keyword in the output images specifies the scale in bels with an SI prefix: for example, if it is ``0.2mB``, then the quantity :math:`x` is stored as :math:`(\log_{10}x)/(0.2\times 10^{-3})`. You can get the original quantity back with the code::
+**Convention note**: To save space, the output images are stored as 16-bit integers on a logarithmic scale. The ``UNIT`` keyword in the output images specifies the scale in bels with an SI prefix: for example, if it is ``0.2mB``, then the quantity x is stored as (log_{10}x)/(0.2*1e-3). You can get the original quantity back with the code::
 
    from pyimcom.diagnostics.outimage_utils.helper import HDU_to_bels
    x = 10**(HDU_to_bels(hdu)*hdu.data)
@@ -424,7 +422,7 @@ This sets the type of target output PSF::
 
 The options are:
 
-- ``GAUSSIAN`` : This output PSF is a simple Gaussian, with a :math:`1\sigma` width set by the ``EXTRASMOOTH`` keyword. (This is the baseline for the Roman PIT analysis.)
+- ``GAUSSIAN`` : This output PSF is a simple Gaussian, with a 1 sigma width set by the ``EXTRASMOOTH`` keyword. (This is the baseline for the Roman PIT analysis.)
 
 - ``AIRYOBSC`` : An obscured Airy PSF (diffraction pattern from an annular aperture), convolved with optional extra smoothing. (This was used in `Hirata et al. 2024 <https://ui.adsabs.harvard.edu/abs/2024MNRAS.528.2533H/abstract>`_.)
 
@@ -435,11 +433,11 @@ In the latter two cases, the ``EXTRASMOOTH`` keyword determines the extra smooth
 EXTRASMOOTH: Output PSF Gaussian component
 -----------------------------------------------
 
-This sets the Gaussian width (if ``OUTPSF`` is ``GAUSSIAN``) or the extra smoothing (if ``OUTPSF`` is one of the diffractive options). The width is the :math:`1\sigma` width (or rms per axis) in units of undistorted input pixels (i.e., 0.11 arcsec). So for example::
+This sets the Gaussian width (if ``OUTPSF`` is ``GAUSSIAN``) or the extra smoothing (if ``OUTPSF`` is one of the diffractive options). The width is the 1 sigma width (or rms per axis) in units of undistorted input pixels (i.e., 0.11 arcsec). So for example::
 
    "EXTRASMOOTH": 0.9767200703312219
 
-will give a Gaussian with a :math:`1\sigma` width of :math:`0.97672\times 0.11 = 0.10744` arcsec.
+will give a Gaussian with a 1 sigma width of 0.97672x0.11 = 0.10744 arcsec.
 
 Building linear systems
 ==========================
@@ -449,13 +447,13 @@ NPIXPSF: Size of PSF inner product arrays\*
 
 *Optional; default is 48.*
 
-This is the size of the arrays used to compute PSF inner products in native pixels (should be an even integer). So to set this to 42 native pixels or :math:`42\times0.11 = 4.64` arcsec, you may write::
+This is the size of the arrays used to compute PSF inner products in native pixels (should be an even integer). So to set this to 42 native pixels or 42x0.11 = 4.64 arcsec, you may write::
 
     "NPIXPSF": 42
 
 The default of 48 is recommended for most Roman uses for now based on experience with the DC2 and OpenUniverse simulations.
 
-**Comment**: If you use the PSF splitting, then we know rigorously that ``NPIXPSF`` :math:`>4(1+\alpha)R_{out}`, where :math:`R_{out}` is the outer radius of the PSF and :math:`\alpha` is the geometric distortion (i.e., true pixel size is :math:`0.11\times(1+\alpha)` arcsec), is sufficient. So this will be the plan for production runs on Roman data.
+**Comment**: If you use the PSF splitting, then we know rigorously that ``NPIXPSF`` \>4(1+alpha)R\_{out}, where R\_{out} is the outer radius of the PSF and alpha is the geometric distortion (i.e., true pixel size is 0.11(1+alpha) arcsec), is sufficient. So this will be the plan for production runs on Roman data.
 
 PSFCIRC: Apply a circular cutout to the PSF\*
 -----------------------------------------------
@@ -503,7 +501,7 @@ The choices are (see `Cao et al. (2025) <https://ui.adsabs.harvard.edu/abs/2024a
 
 - ``Eigen`` : This does an eigendecomposition of **A**, as initially suggested in `Rowe et al. (2011) <https://ui.adsabs.harvard.edu/abs/2011ApJ...741...46R/abstract>`_.
 
-- ``Cholesky`` : This does a Cholesky decomposition of **A**, and is much faster if only a few values of :math:`\kappa` are needed (or if one can interpolate between them, see `Cao et al. 2025 <https://ui.adsabs.harvard.edu/abs/2024arXiv241005442C/abstract>`_ §3.1).
+- ``Cholesky`` : This does a Cholesky decomposition of **A**, and is much faster if only a few values of kappa are needed (or if one can interpolate between them, see `Cao et al. 2025 <https://ui.adsabs.harvard.edu/abs/2024arXiv241005442C/abstract>`_ §3.1).
 
 - ``Iterative`` : This does a conjugate-gradient solution of the linear system rather than a decomposition of **A**. It has intermediate speed.
 
@@ -514,7 +512,7 @@ The ``Iterative`` kernel uses two additional keywords (these are the default val
    "ITERTOL": 1.5e-3
    "ITERMAX": 30
 
-The ``Empirical`` kernel takes an additional keyword that allows one to turn off the :math:`U_\alpha/C` and :math:`\Sigma_\alpha` computations (default is false, but turning this on makes the code very fast)::
+The ``Empirical`` kernel takes an additional keyword that allows one to turn off the U_alpha/C and Sigma_alpha computations (default is false, but turning this on makes the code very fast)::
 
    "EMPIRNQC": false
 
@@ -525,15 +523,15 @@ This sets the grid of Lagrange multipliers for Cholesky and Iterative methods. I
 
        "KAPPAC": [0.0002]
 
-If one value is given (as in the above case), a single choice of :math:`\kappa_\alpha` is used. If multiple values are given, then interpolation is used to approximate the Pareto front (see `Cao et al. 2025 <https://ui.adsabs.harvard.edu/abs/2024arXiv241005442C/abstract>`_ §3.1).
+If one value is given (as in the above case), a single choice of kappa_alpha is used. If multiple values are given, then interpolation is used to approximate the Pareto front (see `Cao et al. 2025 <https://ui.adsabs.harvard.edu/abs/2024arXiv241005442C/abstract>`_ §3.1).
 
 UCMIN and SMAX: Bounding the search space of the Lagrange multiplier
 -----------------------------------------------------------------------
 
-These values describe the bounds in leakage :math:`U_\alpha/C` and noise :math:`\Sigma_\alpha` metrics::
+These values describe the bounds in leakage U_alpha/C and noise Sigma_alpha metrics::
 
     "UCMIN": 1e-06,
     "SMAX": 0.5
 
-The "normal" behavior of PyIMCOM (except in Empirical mode, or if only a single value is given in ``KAPPAC``) is to find the best possible leakage performance subject to the noise constraint; but if the noise can be reduced below ``SMAX`` at :math:`U_\alpha/C` = ``UCMIN`` then it switches to this behavior.
+The "normal" behavior of PyIMCOM (except in Empirical mode, or if only a single value is given in ``KAPPAC``) is to find the best possible leakage performance subject to the noise constraint; but if the noise can be reduced below ``SMAX`` at U_alpha/C = ``UCMIN`` then it switches to this behavior.
 
