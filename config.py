@@ -18,6 +18,7 @@ from time import perf_counter
 from importlib.resources import files
 import json
 
+from astropy.io import fits
 from astropy import units as u
 import numpy as np
 
@@ -190,7 +191,7 @@ class Config:
         'kappaC_arr', 'uctarget', 'sigmamax',  # SECTION VIII
     )
 
-    def __init__(self, cfg_file: str = '') -> None:
+    def __init__(self, cfg_file: str = '', inmode=None) -> None:
         '''
         Constructor.
 
@@ -200,12 +201,27 @@ class Config:
             File path to or text content of a JSON configuration file.
             The default is ''. This uses pyimcom/configs/default_config.json.
             Set cfg_file=None to build a configuration from scratch.
+        inmode : str, optional
+            Directives for special behavior. Right now the only one supported
+            is 'block' (meaning the configuration is read from a block output)
 
         Returns
         -------
         None.
 
         '''
+
+        # option to load from a block output file
+        if inmode == 'block':
+            with fits.open(cfg_file) as f:
+                c = f['CONFIG'].data['text']
+                n = len(c)
+                cf = ''
+                for j in range(n):
+                    cf += c[j]+'\n'
+            self._from_dict(json.loads(cf))
+            self()
+            return
 
         self.cfg_file = cfg_file
         if cfg_file is not None:
