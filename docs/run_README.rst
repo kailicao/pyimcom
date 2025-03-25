@@ -3,7 +3,7 @@ Workflow to run PyIMCOM
 
 This is a quick guide for the jobs you will want to submit to build a mosaic in PyIMCOM. To build a mosaic, you will need:
 
-- The configuration file (for production runs, this is usually an external JSON file). See `configuration files </README_config.rst>`_ for the format.
+- The configuration file (for production runs, this is usually an external JSON file). See `configuration files <README_config.rst>`_ for the format.
 
 - The input images. The format should be as indicated in the ``INDATA`` keyword in the configuration file.
 
