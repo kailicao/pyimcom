@@ -15,6 +15,8 @@ Overview of PyIMCOM concepts
 Running PyIMCOM
 -------------------
 
+- `How to build a mosaic in PyIMCOM <docs/run_README.rst>`_
+
 - `How to write a PyIMCOM configuration file <docs/config_README.rst>`_
 
 Post-processing of PyIMCOM outputs

@@ -12,6 +12,7 @@ import json
 import re
 
 from .outimage_utils.helper import HDU_to_bels
+from ..config import Config
 
 def gen_starcube_nonoise(infile_fcn, outstem, nblockmax=100):
     """Extracts the noiseless star cube and the moments.
@@ -35,6 +36,14 @@ def gen_starcube_nonoise(infile_fcn, outstem, nblockmax=100):
 
     bd = 40 # padding size
     bd2 = 8 # fidelity extraction size
+
+    # if needed, shrink the padding size
+    try:
+        configStruct = Config(infile_fcn(0,0))
+        n2_ = configStruct.n2
+        if n2_<bd: bd=n2_
+    except:
+        pass
 
     ncol = 22 # number of columns in star catalog
 
