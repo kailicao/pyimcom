@@ -91,4 +91,5 @@ Currently Available Reports
     - Thumbnail of the mosaic
   * - ``SimulatedStar``
     - 1-point statistics of simulated stars
-
+  * - ``NoiseReport``
+    - Statistics of coadded noise
