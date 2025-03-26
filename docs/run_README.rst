@@ -35,7 +35,7 @@ The input data may be in one of the following formats (more may be added in the 
 
 - ``dc2_sim`` : Roman + Rubin Data Challenge 2 format (`Troxel et al. 2023 <https://ui.adsabs.harvard.edu/abs/2023MNRAS.522.2801T/abstract>`_). The WCS is part of the FITS header for the images, and the PSF images were provided separately.
 
-- ``anlsim`` : OpenUniverse 2024 simulation format (`Open Universe 2024 <https://ui.adsabs.harvard.edu/abs/2025arXiv250105632O/abstract>`_). The WCS is part of the FITS header for the images. The PSF Legendre data cubes have to be constructed separately from the main data release; see instructions `here <historical/OpenUniverse2024/genpsf.py>`_.
+- ``anlsim`` : OpenUniverse 2024 simulation format (`Open Universe 2024 <https://ui.adsabs.harvard.edu/abs/2025arXiv250105632O/abstract>`_). The WCS is part of the FITS header for the images. The PSF Legendre data cubes have to be constructed separately from the main data release; see instructions `here <../historical/OpenUniverse2024/README.rst>`_.
 
   - Science image example: \<indata directory\> ``/simple/Roman_WAS_simple_model_F184_1591_8.fits`` (filter F184, observation ID 1591, SCA 8)
 
