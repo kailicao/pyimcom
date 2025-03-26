@@ -79,7 +79,7 @@ This is the most time-consuming step. In principle, all the blocks can be run in
    import sys
    from pyimcom.config import Config
    from pyimcom.coadd import Block
-   from .truthcats import gen_truthcats_from_cfg
+   from pyimcom.truthcats import gen_truthcats_from_cfg
 
    cfg = Config(sys.argv[1])
    block = Block(cfg=cfg, this_sub=int(sys.argv[2]))
