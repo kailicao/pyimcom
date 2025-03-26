@@ -39,8 +39,9 @@ def gen_starcube_nonoise(infile_fcn, outstem, nblockmax=100):
 
     # if needed, shrink the padding size
     try:
-        configStruct = Config(infile_fcn(0,0))
+        configStruct = Config(infile_fcn(0,0), inmode='block')
         n2_ = configStruct.n2
+        print('# n2 =', n2_)
         if n2_<bd: bd=n2_
     except:
         pass
