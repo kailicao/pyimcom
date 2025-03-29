@@ -189,6 +189,8 @@ class Config:
         'npixpsf', 'psf_circ', 'psf_norm', 'amp_penalty', 'flat_penalty', 'instamp_pad',  # SECTION VII
         'linear_algebra', 'iter_rtol', 'iter_max', 'no_qlt_ctrl',
         'kappaC_arr', 'uctarget', 'sigmamax',  # SECTION VIII
+        'ds_model', 'ds_outpath', 'ds_outstem', 'cg_model', 'cost_model',
+        'cost_prior', 'resid_model', 'hub_thresh'# SECTION IX
     )
 
     def __init__(self, cfg_file: str = '', inmode=None) -> None:
@@ -276,6 +278,18 @@ class Config:
 
         if self.linear_algebra == 'Empirical' or self.kappaC_arr.size == 1:
             self.outmaps = self.outmaps.replace('K', '')
+
+        ### SECTION IX: DESTRIPING PARAMS ###
+        if self.cost_model:
+            if self.cost_model=='quadratic':
+                self.resid_model = 'quad_prime'
+            elif self.cost_model=='absolute':
+                self.resid_model = 'abs_prime'
+            elif self.cost_model=='huber_loss':
+                self.resid_model = 'hub_prime'
+                self.hub_thresh = 0.0001
+            #stuff
+
 
     def _from_dict(self, cfg_dict: dict) -> None:
         '''
@@ -391,6 +405,12 @@ class Config:
         elif self.linear_algebra == 'Empirical':
             # no-quality control option
             self.no_qlt_ctrl = cfg_dict.get('EMPIRNQC', False)
+
+        ### SECTION IX: DESTRIPING PARAMS ###
+        self.ds_model = cfg_dict.get('DSPARAMS', False)
+        self.ds_outpath, self.ds_outstem = cfg_dict['DSOUT']
+        self.cg_model = cfg_dict.get('CGMODEL', 'FR')
+        self.cost_model, self.cost_prior = cfg_dict['DSCOST']
 
         # Lagrange multiplier (kappa) information
         # list of kappa/C values, ascending order
