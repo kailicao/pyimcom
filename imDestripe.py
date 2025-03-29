@@ -31,7 +31,6 @@ t_exp = 154  # sec
 
 # Import config file
 CFG = Config(cfg_file='configs/config_destripe-H.json')
-
 filter_ = filters[CFG.use_filter]
 A_eff = areas[CFG.use_filter]
 obsfile = CFG.obsfile
@@ -840,13 +839,15 @@ def main():
 
         return best_p, best_psi
 
-    def conjugate_gradient(p, f, f_prime, tol=1e-5, max_iter=100):
+    def conjugate_gradient(p, f, f_prime, method, tol=1e-5, max_iter=100):
         """
         Algorithm to use conjugate gradient descent to optimize the parameters for destriping.
         Direction is updated using Fletcher-Reeves method
         :param p: parameters object, containing initial parameters guess
         :param f: function, functional form to use for cost function
-        :param f_prime: function, thederivative of f. KL: eventually f should dictate f prime
+        :param f_prime: function, the derivative of f. KL: eventually f should dictate f prime
+        :param method: str, the method to use for CG direction update.
+                Current Options: 'FR', 'PR', 'HS', 'DY' (Fletcher-Reeves, Polak-Ribiere, Hestenes-Stiefel, Dai-Yuan)
         :param tol: float, the value of the norm at which we say CG has converged
         :param max_iter: int, number of iterations at which to force CG to stop
         :return p: params object, the best fit parameters for destriping the SCA images
@@ -891,7 +892,14 @@ def main():
                 tol = tol * norm_0
                 direction = -grad
             else:
-                beta = np.sum(np.square(grad)) / np.sum(np.square(grad_prev))  # Calculate beta (direction scaling)
+                # Calculate beta (direction scaling) depending on method
+                if method=='FR': beta = np.sum(np.square(grad)) / np.sum(np.square(grad_prev))
+                elif method=='PR': beta = max(0,np.sum(grad * (grad - grad_prev)) / (np.sum(np.square(grad_prev))))
+                elif method== 'HS': beta = (np.sum(grad * (grad - grad_prev)) /
+                                            np.sum(-direction_prev * (grad - grad_prev)))
+                elif method== 'DY': beta = np.sum(np.square(grad)) / np.sum(-direction_prev * (grad - grad_prev))
+                else: raise ValueError(f"Unknown method: {method}")
+
                 write_to_file(f"Current Beta: {beta}")
 
                 direction = -grad + beta * direction_prev
