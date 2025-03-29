@@ -38,6 +38,8 @@ labnoise_prefix = CFG.inpath
 use_model = CFG.ds_model
 permanent_mask = CFG.permanent_mask
 cg_model = CFG.cg_model
+cg_maxiter = CFG.cg_maxiter
+cg_tol = CFG.cg_tol
 cost_model = CFG.cost_model
 resid_model = CFG.resid_model
 
@@ -839,14 +841,14 @@ def main():
 
         return best_p, best_psi
 
-    def conjugate_gradient(p, f, f_prime, method, tol=1e-5, max_iter=100):
+    def conjugate_gradient(p, f, f_prime, method='FR', tol=1e-5, max_iter=100):
         """
         Algorithm to use conjugate gradient descent to optimize the parameters for destriping.
         Direction is updated using Fletcher-Reeves method
         :param p: parameters object, containing initial parameters guess
         :param f: function, functional form to use for cost function
         :param f_prime: function, the derivative of f. KL: eventually f should dictate f prime
-        :param method: str, the method to use for CG direction update.
+        :param method: str, the method to use for CG direction update. Default: 'FR'
                 Current Options: 'FR', 'PR', 'HS', 'DY' (Fletcher-Reeves, Polak-Ribiere, Hestenes-Stiefel, Dai-Yuan)
         :param tol: float, the value of the norm at which we say CG has converged
         :param max_iter: int, number of iterations at which to force CG to stop
@@ -898,7 +900,8 @@ def main():
                 elif method== 'HS': beta = (np.sum(grad * (grad - grad_prev)) /
                                             np.sum(-direction_prev * (grad - grad_prev)))
                 elif method== 'DY': beta = np.sum(np.square(grad)) / np.sum(-direction_prev * (grad - grad_prev))
-                else: raise ValueError(f"Unknown method: {method}")
+                else: raise ValueError(f"Unknown method for CG direction update: {method}"
+                                       f" (Options are: {CG_models})")
 
                 write_to_file(f"Current Beta: {beta}")
 
@@ -938,7 +941,8 @@ def main():
     p0 = Parameters(use_model, 4088)
 
     # Do it
-    p = conjugate_gradient(p0, Cost_models(cost_model).f, Cost_models(cost_model).f_prime)
+    p = conjugate_gradient(p0, Cost_models(cost_model).f, Cost_models(cost_model).f_prime,
+                           cg_model, cg_tol, cg_maxiter)
     hdu = fits.PrimaryHDU(p.params)
     hdu.writeto(tempfile + 'final_params.fits', overwrite=True)
     print(tempfile + 'final_params.fits created \n')
