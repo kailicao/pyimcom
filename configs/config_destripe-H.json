@@ -47,7 +47,10 @@
     "DSOUT": ["/fs/scratch/PCON0003/cond0007/destripe/",
         "_ds_out.txt"
     ],
-    "CGMODEL": "FR",
+    "CGMODEL": ["FR",
+        80,
+        1e-3
+        ],
     "DSCOST": ["quadratic",
         0
         ]
