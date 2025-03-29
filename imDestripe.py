@@ -1,8 +1,5 @@
 """
-Program to remove correlated noise stripes from Roman ST images.
-KL To do list:
-- Link with config file
-- Write outputs to file instead of print
+Program to remove correlated noise stripes from RST images.
 """
 
 import os
@@ -11,38 +8,56 @@ import time
 import numpy as np
 from astropy.io import fits
 from astropy import wcs
-from scipy.signal import convolve2d
+from scipy.signal import convolve2d, residue
 from utils import compareutils
+from .config import Settings as Stn, Config
 import re
 import sys
 import copy
-import pyimcom_croutines
+import furryparakeet.pyimcom_croutines
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from filelock import Timeout, FileLock
 
 tempfile_Katherine_dir = True
 TIME = True
-# KL: Placeholders, some of these should be input arguments or in a config or something
-# input_dir = '/fs/scratch/PCON0003/cond0007/anl-run-in-prod/simple/'
-input_dir = '/fs/scratch/PCON0003/klaliotis/destripe/inputs/'
-image_prefix = 'Roman_WAS_simple_model_'
-labnoise_prefix = '/fs/scratch/PCON0003/cond0007/anl-run-in-prod/labnoise/slope_'
-filter = 'H158'
+
+filters = ['Y106', 'J129', 'H158', 'F184', 'K213']
+areas = [7006, 7111, 7340, 4840, 4654]  # cm^2
 model_params = {'constant': 1, 'linear': 2}
-permanent_mask = '/users/PCON0003/cond0007/imcom/coadd-test-fall2022/permanent_mask_220730.fits'
-if tempfile_Katherine_dir:
-    tempfile = '/fs/scratch/PCON0003/klaliotis/destripe/LS_test_out/'  # temporary temp file so that i can check these things
-else:
-    tempfile = '/fs/scratch/PCON0003/cond0007/test_out/'
-global outfile
-outfile = tempfile + 'destripe_' + filter + '_out.txt'
-# tempfile = '/tmp/klaliotis-tmp/'
+CG_models = {'FR', 'PR', 'HS', 'DY'}
+
 s_in = 0.11  # arcsec^2
 t_exp = 154  # sec
-A_eff = 7340  # cm ^2; for H
-t0 = time.time()
-test = True
 
+# Import config file
+CFG = Config(cfg_file='configs/config_destripe-H.json')
+
+filter_ = filters[CFG.use_filter]
+A_eff = areas[CFG.use_filter]
+obsfile = CFG.obsfile
+labnoise_prefix = CFG.inpath
+use_model = CFG.ds_model
+permanent_mask = CFG.permanent_mask
+cg_model = CFG.cg_model
+cost_model = CFG.cost_model
+resid_model = CFG.resid_model
+
+if use_model not in [model_params.keys()]:
+    raise ValueError(f"Model {use_model} not in model_params dictionary.")
+if tempfile_Katherine_dir:
+    obsfile = '/fs/scratch/PCON0003/klaliotis/destripe/inputs/Roman_WAS_simple_model_'
+    tempfile = '/fs/scratch/PCON0003/klaliotis/destripe/test_out/'
+if CFG.cost_prior != 0:
+    cost_prior = CFG.cost_prior
+if cg_model not in CG_models:
+    raise ValueError(f"CG model {cg_model} not in CG_models dictionary.")
+global outfile
+outfile = CFG.ds_outpath + filter_ + CFG.ds_outstem
+
+CFG()
+CFG.to_file(outfile+'ds.cfg')
+
+t0 = time.time()
 
 def write_to_file(text, filename=None):
     """
@@ -101,7 +116,46 @@ def apply_object_mask(image, mask=None):
     return image, neighbor_mask
 
 
-class sca_img:
+class Cost_models:
+    """
+    Class holding the cost function models. This is a dictionary of functions
+    """
+
+    def __init__(self, model):
+
+        self.model = model
+
+        def quadratic(x):
+            return x ** 2
+
+        def absolute(x):
+            return np.abs(x)
+
+        def huber_loss(x, x0, d):
+            if (x - x0) <= d:
+                return quadratic(x - x0)
+            else:
+                return absolute(x - x0)
+
+        # Derivatives
+        def quad_prime(x):
+            return 2 * x
+
+        def abs_prime(x):
+            return np.sign(x)
+
+        def huber_prime(x, x0, b):
+            if (x - x0) <= b:
+                return quad_prime(x - x0)
+            else:
+                return abs_prime(x - x0)
+
+        models = {"quadratic": (quadratic, quad_prime), "absolute": (absolute, abs_prime),
+                  "huber_loss": (huber_loss, huber_prime)}
+        self.f, self.f_prime = models[model]
+
+
+class Sca_img:
     """
     Class defining an SCA image object.
     Arguments:
@@ -132,7 +186,7 @@ class sca_img:
             file = fits.open(tempfile + 'interpolations/' + obsid + '_' + scaid + '_interp.fits')
             image_hdu = 'PRIMARY'
         else:
-            file = fits.open(input_dir + image_prefix + filter + '_' + obsid + '_' + scaid + '.fits')
+            file = fits.open(obsfile + filter_ + '_' + obsid + '_' + scaid + '.fits')
             image_hdu = 'SCI'
         self.image = np.copy(file[image_hdu].data).astype(np.float32)
         self.shape = np.shape(self.image)
@@ -267,7 +321,7 @@ class sca_img:
 
             if obsid_B != self.obsid and ov_mat[ind, k] != 0:  # Check if this sca_b overlaps sca_a
                 N_BinA += 1
-                I_B = sca_img(obsid_B, scaid_B)  # Initialize image B
+                I_B = Sca_img(obsid_B, scaid_B)  # Initialize image B
                 # I_B.apply_noise() <-- redundant
 
                 if self.obsid == '670' and self.scaid == '10':
@@ -312,7 +366,7 @@ class sca_img:
         return this_interp, new_mask
 
 
-class parameters:
+class Parameters:
     """
     Class holding the parameters for a given mosaic. This can be the destriping parameters, or a slew of other
     parameters that need to be the same shape and have the same methods...
@@ -334,7 +388,7 @@ class parameters:
     def __init__(self, model, n_rows):
         self.model = model
         self.n_rows = n_rows
-        self.params_per_row = model_params[str(self.model)]
+        self.params_per_row = model_params[model]
         self.params = np.zeros((len(all_scas), self.n_rows * self.params_per_row))
         self.current_shape = '2D'
 
@@ -365,7 +419,7 @@ class parameters:
         return np.array(self.params[sca_i, :])[:, np.newaxis] * np.ones((self.n_rows, self.n_rows))
 
 
-def get_scas(filter, prefix):
+def get_scas(filter, obsfile):
     """
     Function to get a list of all SCA images and their WCSs for this mosaic
     :param filter: Str, which filter to use for this run. Options: Y106, J129, H158, F184, K213
@@ -376,7 +430,7 @@ def get_scas(filter, prefix):
     n_scas = 0
     all_scas = []
     all_wcs = []
-    for f in glob.glob(input_dir + prefix + filter + '_*'):
+    for f in glob.glob(obsfile+ filter + '_*'):
         n_scas += 1
         m = re.search(r'(\w\d+)_(\d+)_(\d+)', f)
         if m:
@@ -499,10 +553,10 @@ def get_ids(sca):
 
 ############################ Main Sequence ############################
 
-all_scas, all_wcs = get_scas(filter, image_prefix)
+all_scas, all_wcs = get_scas(filter_, obsfile)
 write_to_file(f"{len(all_scas)} SCAs in this mosaic")
 
-if test:
+if tempfile_Katherine_dir:
     if os.path.isfile(tempfile + 'ovmat.npy'):
         ov_mat = np.load(tempfile + 'ovmat.npy')
     else:
@@ -548,7 +602,7 @@ def residual_function_single(k, sca_a, psi, f_prime):
         obsid_B, scaid_B = get_ids(sca_b)
 
         if obsid_B != obsid_A and ov_mat[k, j] != 0:
-            I_B = sca_img(obsid_B, scaid_B)
+            I_B = Sca_img(obsid_B, scaid_B)
             gradient_original = np.zeros(I_B.shape)
 
             if TIME: T = time.time()
@@ -571,7 +625,7 @@ def cost_function_single(j, sca_a, p, f):
     m = re.search(r'_(\d+)_(\d+)', sca_a)
     obsid_A, scaid_A = m.group(1), m.group(2)
 
-    I_A = sca_img(obsid_A, scaid_A)
+    I_A = Sca_img(obsid_A, scaid_A)
     I_A.subtract_parameters(p, j)
     I_A.apply_all_mask()
 
@@ -603,44 +657,6 @@ def cost_function_single(j, sca_a, p, f):
         write_to_file(f"Local epsilon for SCA {j}: {local_epsilon}")
 
     return j, psi, local_epsilon
-
-
-# Function options. KL: Could move these to another .py file and call them as modules?
-# import functions and then function.quadratic etc.
-# Each of these will have the input x be a 2D array of a sca image.
-
-def quadratic(x):
-    return x ** 2
-
-
-def absolute_value(x):
-    return np.abs(x)
-
-
-def quadratic_loss(x, x0, b):
-    if (x - x0) <= b:
-        return quadratic(x - x0)
-    else:
-        return absolute_value(x - x0)
-
-
-# Derivatives
-def quad_prime(x):
-    return 2 * x
-
-
-def absval_prime(x):
-    return np.sign(x)
-
-
-def quadloss_prime(x, x0, b):
-    if (x - x0) <= b:
-        return quad_prime(x - x0)
-    else:
-        return absval_prime(x - x0)
-
-
-# function_dictionary = {"quad": quadratic, "abs": absolute_value, "quadloss": quadratic_loss}
 
 # Optimization Functions
 
@@ -680,7 +696,7 @@ def main():
                 in addition to full residuals. returns resids, resids1, resids2
         :return resids: 2D np array, with one row per SCA and one col per parameter
         """
-        resids = (parameters('constant', 4088).params)
+        resids = (Parameters(use_model, 4088).params)
         if extrareturn:
             resids1 = np.zeros_like(resids)
             resids2 = np.zeros_like(resids)
@@ -911,25 +927,25 @@ def main():
         return p
 
     # Initialize parameters
-    p0 = parameters('constant', 4088)
+    p0 = Parameters(use_model, 4088)
 
     # Do it
-    p = conjugate_gradient(p0, quadratic, quad_prime)
+    p = conjugate_gradient(p0, Cost_models(cost_model).f, Cost_models(cost_model).f_prime)
     hdu = fits.PrimaryHDU(p.params)
     hdu.writeto(tempfile + 'final_params.fits', overwrite=True)
     print(tempfile + 'final_params.fits created \n')
 
     for i, sca in enumerate(all_scas):
         obsid, scaid = get_ids(sca)
-        this_sca = sca_img(obsid, scaid)
+        this_sca = Sca_img(obsid, scaid)
         this_param_set = p.forward_par(i)
         ds_image = this_sca.image - this_param_set
 
         header = this_sca.w
         hdu = fits.PrimaryHDU(ds_image, header=header)
-        hdu.writeto(tempfile + filter + '_DS_' + obsid + scaid + '.fits', overwrite=True)
+        hdu.writeto(tempfile + filter_ + '_DS_' + obsid + scaid + '.fits', overwrite=True)
 
-    write_to_file(f'Destriped images saved to {tempfile + filter} _DS_*.fits')
+    write_to_file(f'Destriped images saved to {tempfile + filter_} _DS_*.fits')
     write_to_file(f'Total hours elapsed: {(time.time() - t0) / 3600}')
 
 
