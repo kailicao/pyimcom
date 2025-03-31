@@ -80,7 +80,7 @@ def write_to_file(text, filename=None):
     print(text)
 
 
-def save_fits(image, filename, dir=outpath, overwrite=True, s=False):
+def save_fits(image, filename, dir=outpath, overwrite=True, s=False, header=None):
     """
     Function to save an image to .fits.
     :param image: 2D np array; the image
@@ -93,7 +93,10 @@ def save_fits(image, filename, dir=outpath, overwrite=True, s=False):
 
     try:
         with lock.acquire(timeout=30):
-            hdu = fits.PrimaryHDU(image)
+            if header is not None:
+                hdu = fits.PrimaryHDU(image, header=header)
+            else:
+                hdu = fits.PrimaryHDU(image)
             hdu.writeto(filepath, overwrite=overwrite)
             if s: write_to_file(f"Array {filename} written out to {dir + filename + '.fits'}")
     except Timeout:
@@ -369,8 +372,7 @@ class Sca_img:
                                0)  # only do the division where N_eff nonzero
         header = self.w.to_header(relax=True)
         this_interp = np.divide(this_interp, self.g_eff)
-        hdu = fits.PrimaryHDU(this_interp, header=header)
-        hdu.writeto(outpath + 'interpolations/' + self.obsid + '_' + self.scaid + '_interp.fits', overwrite=True)
+        save_fits(this_interp, self.obsid + '_' + self.scaid + '_interp.fits', outpath + 'interpolations/', header=header)
         t_elapsed_a = time.time() - t_a_start
 
         if make_Neff: N_eff.flush()
