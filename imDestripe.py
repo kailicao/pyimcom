@@ -58,7 +58,7 @@ if cg_model not in CG_models:
 outfile = outpath + filter_ + CFG.ds_outstem
 
 CFG()
-CFG.to_file(outfile+'ds.cfg')
+#CFG.to_file(outpath+'ds.cfg')
 
 t0 = time.time()
 
@@ -71,8 +71,12 @@ def write_to_file(text, filename=None):
     """
     if filename is None:
         filename = outfile
-    with open(filename, "a") as f:
-        f.write(text + '\n')
+    if not os.path.exists(filename):
+        with open(filename, "w+") as f:
+            f.write(text + '\n')
+    else:
+        with open(filename, "a") as f:
+            f.write(text + '\n')
     print(text)
 
 
