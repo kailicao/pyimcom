@@ -10,11 +10,11 @@ from astropy.io import fits
 from astropy import wcs
 from scipy.signal import convolve2d, residue
 from utils import compareutils
-from .config import Settings as Stn, Config
+from config import Settings as Stn, Config
 import re
 import sys
 import copy
-import furryparakeet.pyimcom_croutines
+import pyimcom_croutines
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from filelock import Timeout, FileLock
 
@@ -864,7 +864,7 @@ def main():
 
         write_to_file('Starting initial cost function')
         global test_image_dir
-        test_image_dir = 'LS_test_images/' + str(0) + '/'
+        test_image_dir = 'test_images/' + str(0) + '/'
         psi = cost_function(p, f)[1]
         sys.stdout.flush()
 
