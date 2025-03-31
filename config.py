@@ -407,7 +407,7 @@ class Config:
             self.no_qlt_ctrl = cfg_dict.get('EMPIRNQC', False)
 
         ### SECTION IX: DESTRIPING PARAMS ###
-        self.ds_model = cfg_dict.get('DSPARAMS', False)
+        self.ds_model = cfg_dict.get('DSMODEL', False)
         self.ds_outpath, self.ds_outstem = cfg_dict['DSOUT']
         self.cg_model, self.cg_maxiter, self.cg_tol = cfg_dict['CGMODEL']
         self.cost_model, self.cost_prior = cfg_dict['DSCOST']
