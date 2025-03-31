@@ -43,7 +43,7 @@
     "PMASK": "/users/PCON0003/cond0007/imcom/pyimcom/anlsim/permanent_mask_ft_231228.fits",
     "CMASK": 0.00077,
     "TEMPFILE": "/fs/scratch/PCON0003/klaliotis/destripe/inputs/",
-    "DSMODEL": "Constant",
+    "DSMODEL": "constant",
     "DSOUT": ["/fs/scratch/PCON0003/cond0007/destripe/",
         "_ds_out.txt"
     ],
