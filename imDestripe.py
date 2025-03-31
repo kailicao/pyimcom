@@ -123,6 +123,36 @@ def apply_object_mask(image, mask=None):
     return image, neighbor_mask
 
 
+def quadratic(x):
+    return x ** 2
+
+
+def absolute(x):
+    return np.abs(x)
+
+
+def huber_loss(x, x0, d):
+    if (x - x0) <= d:
+        return quadratic(x - x0)
+    else:
+        return absolute(x - x0)
+
+
+# Derivatives
+def quad_prime(x):
+    return 2 * x
+
+
+def abs_prime(x):
+    return np.sign(x)
+
+
+def huber_prime(x, x0, b):
+    if (x - x0) <= b:
+        return quad_prime(x - x0)
+    else:
+        return abs_prime(x - x0)
+
 class Cost_models:
     """
     Class holding the cost function models. This is a dictionary of functions
@@ -131,31 +161,6 @@ class Cost_models:
     def __init__(self, model):
 
         self.model = model
-
-        def quadratic(x):
-            return x ** 2
-
-        def absolute(x):
-            return np.abs(x)
-
-        def huber_loss(x, x0, d):
-            if (x - x0) <= d:
-                return quadratic(x - x0)
-            else:
-                return absolute(x - x0)
-
-        # Derivatives
-        def quad_prime(x):
-            return 2 * x
-
-        def abs_prime(x):
-            return np.sign(x)
-
-        def huber_prime(x, x0, b):
-            if (x - x0) <= b:
-                return quad_prime(x - x0)
-            else:
-                return abs_prime(x - x0)
 
         models = {"quadratic": (quadratic, quad_prime), "absolute": (absolute, abs_prime),
                   "huber_loss": (huber_loss, huber_prime)}
