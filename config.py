@@ -190,7 +190,7 @@ class Config:
         'linear_algebra', 'iter_rtol', 'iter_max', 'no_qlt_ctrl',
         'kappaC_arr', 'uctarget', 'sigmamax',  # SECTION VIII
         'ds_model', 'ds_outpath', 'ds_outstem', 'cg_model', 'cost_model',
-        'cost_prior', 'resid_model', 'hub_thresh' 'cg_maxiter', 'cg_tol'  # SECTION IX
+        'cost_prior', 'resid_model', 'hub_thresh', 'cg_maxiter', 'cg_tol'  # SECTION IX
     )
 
     def __init__(self, cfg_file: str = '', inmode=None) -> None:
