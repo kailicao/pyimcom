@@ -18,8 +18,10 @@ import furryparakeet.pyimcom_croutines
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from filelock import Timeout, FileLock
 
-tempfile_Katherine_dir = True
+outfile_Katherine_dir = True
 TIME = True
+global outfile
+global outpath
 
 filters = ['Y106', 'J129', 'H158', 'F184', 'K213']
 areas = [7006, 7111, 7340, 4840, 4654]  # cm^2
@@ -34,6 +36,7 @@ CFG = Config(cfg_file='configs/config_destripe-H.json')
 filter_ = filters[CFG.use_filter]
 A_eff = areas[CFG.use_filter]
 obsfile = CFG.obsfile
+outpath =  CFG.ds_outpath
 labnoise_prefix = CFG.inpath
 use_model = CFG.ds_model
 permanent_mask = CFG.permanent_mask
@@ -45,15 +48,14 @@ resid_model = CFG.resid_model
 
 if use_model not in [model_params.keys()]:
     raise ValueError(f"Model {use_model} not in model_params dictionary.")
-if tempfile_Katherine_dir:
+if outfile_Katherine_dir:
     obsfile = '/fs/scratch/PCON0003/klaliotis/destripe/inputs/Roman_WAS_simple_model_'
-    tempfile = '/fs/scratch/PCON0003/klaliotis/destripe/test_out/'
+    outfile = '/fs/scratch/PCON0003/klaliotis/destripe/test_out/'
 if CFG.cost_prior != 0:
     cost_prior = CFG.cost_prior
 if cg_model not in CG_models:
     raise ValueError(f"CG model {cg_model} not in CG_models dictionary.")
-global outfile
-outfile = CFG.ds_outpath + filter_ + CFG.ds_outstem
+outfile = outpath + filter_ + CFG.ds_outstem
 
 CFG()
 CFG.to_file(outfile+'ds.cfg')
@@ -74,7 +76,7 @@ def write_to_file(text, filename=None):
     print(text)
 
 
-def save_fits(image, filename, dir=tempfile, overwrite=True, s=False):
+def save_fits(image, filename, dir=outpath, overwrite=True, s=False):
     """
     Function to save an image to .fits.
     :param image: 2D np array; the image
@@ -184,7 +186,7 @@ class Sca_img:
     def __init__(self, obsid, scaid, interpolated=False, add_noise=True, add_objmask=True):
 
         if interpolated:
-            file = fits.open(tempfile + 'interpolations/' + obsid + '_' + scaid + '_interp.fits')
+            file = fits.open(outpath + 'interpolations/' + obsid + '_' + scaid + '_interp.fits')
             image_hdu = 'PRIMARY'
         else:
             file = fits.open(obsfile + filter_ + '_' + obsid + '_' + scaid + '.fits')
@@ -200,9 +202,9 @@ class Sca_img:
         self.params_subtracted = False
 
         # Calculate effecive gain
-        if not os.path.isfile(tempfile + obsid + '_' + scaid + '_geff.dat'):
+        if not os.path.isfile(outpath + obsid + '_' + scaid + '_geff.dat'):
             g0 = time.time()
-            g_eff = np.memmap(tempfile + obsid + '_' + scaid + '_geff.dat', dtype='float32', mode='w+',
+            g_eff = np.memmap(outpath + obsid + '_' + scaid + '_geff.dat', dtype='float32', mode='w+',
                               shape=self.shape)
             ra, dec = self.get_coordinates(pad=2.)
             ra = ra.reshape((4090, 4090))
@@ -216,7 +218,7 @@ class Sca_img:
             write_to_file(f'G_eff calc duration: {time.time() - g0}')
             del g_eff
 
-        self.g_eff = np.memmap(tempfile + obsid + '_' + scaid + '_geff.dat', dtype='float32', mode='r',
+        self.g_eff = np.memmap(outpath + obsid + '_' + scaid + '_geff.dat', dtype='float32', mode='r',
                                shape=self.shape)
 
         # Add a noise frame, if requested
@@ -302,12 +304,12 @@ class Sca_img:
         """
         this_interp = np.zeros(self.shape)
 
-        if not os.path.isfile(tempfile + self.obsid + '_' + self.scaid + '_Neff.dat'):
-            N_eff = np.memmap(tempfile + self.obsid + '_' + self.scaid + '_Neff.dat', dtype='float32', mode='w+',
+        if not os.path.isfile(outpath + self.obsid + '_' + self.scaid + '_Neff.dat'):
+            N_eff = np.memmap(outpath + self.obsid + '_' + self.scaid + '_Neff.dat', dtype='float32', mode='w+',
                               shape=self.shape)
             make_Neff = True
         else:
-            N_eff = np.memmap(tempfile + self.obsid + '_' + self.scaid + '_Neff.dat', dtype='float32', mode='r',
+            N_eff = np.memmap(outpath + self.obsid + '_' + self.scaid + '_Neff.dat', dtype='float32', mode='r',
                               shape=self.shape)
             make_Neff = False
 
@@ -359,7 +361,7 @@ class Sca_img:
         header = self.w.to_header(relax=True)
         this_interp = np.divide(this_interp, self.g_eff)
         hdu = fits.PrimaryHDU(this_interp, header=header)
-        hdu.writeto(tempfile + 'interpolations/' + self.obsid + '_' + self.scaid + '_interp.fits', overwrite=True)
+        hdu.writeto(outpath + 'interpolations/' + self.obsid + '_' + self.scaid + '_interp.fits', overwrite=True)
         t_elapsed_a = time.time() - t_a_start
 
         if make_Neff: N_eff.flush()
@@ -534,8 +536,8 @@ def get_effective_gain(sca):
     m = re.search(r'_(\d+)_(\d+)', sca)
     obsid = m.group(1)
     scaid = m.group(2)
-    g_eff = np.memmap(tempfile + obsid + '_' + scaid + '_geff.dat', dtype='float32', mode='r', shape=(4088, 4088))
-    N_eff = np.memmap(tempfile + obsid + '_' + scaid + '_Neff.dat', dtype='float32', mode='r', shape=(4088, 4088))
+    g_eff = np.memmap(outpath + obsid + '_' + scaid + '_geff.dat', dtype='float32', mode='r', shape=(4088, 4088))
+    N_eff = np.memmap(outpath + obsid + '_' + scaid + '_Neff.dat', dtype='float32', mode='r', shape=(4088, 4088))
     return g_eff, N_eff
 
 
@@ -557,16 +559,16 @@ def get_ids(sca):
 all_scas, all_wcs = get_scas(filter_, obsfile)
 write_to_file(f"{len(all_scas)} SCAs in this mosaic")
 
-if tempfile_Katherine_dir:
-    if os.path.isfile(tempfile + 'ovmat.npy'):
-        ov_mat = np.load(tempfile + 'ovmat.npy')
+if outfile_Katherine_dir:
+    if os.path.isfile(outpath + 'ovmat.npy'):
+        ov_mat = np.load(outpath + 'ovmat.npy')
     else:
         ovmat_t0 = time.time()
         write_to_file('Overlap matrix computing start')
         ov_mat = compareutils.get_overlap_matrix(all_wcs, verbose=True)
-        np.save(tempfile + 'ovmat.npy', ov_mat)
+        np.save(outpath + 'ovmat.npy', ov_mat)
         write_to_file(f"Overlap matrix complete. Duration: {(time.time() - ovmat_t0) / 60} Minutes")
-        write_to_file(f"Overlap matrix saved to: {tempfile}ovmat.npy")
+        write_to_file(f"Overlap matrix saved to: {outpath}ovmat.npy")
 else:
     ovmat_t0 = time.time()
     write_to_file('Overlap matrix computing start')
@@ -578,7 +580,7 @@ else:
 def residual_function_single(k, sca_a, psi, f_prime):
     # Go and get the WCS object for image A
     obsid_A, scaid_A = get_ids(sca_a)
-    file = fits.open(tempfile + 'interpolations/' + obsid_A + '_' + scaid_A + '_interp.fits')
+    file = fits.open(outpath + 'interpolations/' + obsid_A + '_' + scaid_A + '_interp.fits')
     wcs_A = wcs.WCS(file[0].header)
     file.close()
 
@@ -944,8 +946,8 @@ def main():
     p = conjugate_gradient(p0, Cost_models(cost_model).f, Cost_models(cost_model).f_prime,
                            cg_model, cg_tol, cg_maxiter)
     hdu = fits.PrimaryHDU(p.params)
-    hdu.writeto(tempfile + 'final_params.fits', overwrite=True)
-    print(tempfile + 'final_params.fits created \n')
+    hdu.writeto(outpath + 'final_params.fits', overwrite=True)
+    print(outpath + 'final_params.fits created \n')
 
     for i, sca in enumerate(all_scas):
         obsid, scaid = get_ids(sca)
@@ -955,9 +957,9 @@ def main():
 
         header = this_sca.w
         hdu = fits.PrimaryHDU(ds_image, header=header)
-        hdu.writeto(tempfile + filter_ + '_DS_' + obsid + scaid + '.fits', overwrite=True)
+        hdu.writeto(outpath + filter_ + '_DS_' + obsid + scaid + '.fits', overwrite=True)
 
-    write_to_file(f'Destriped images saved to {tempfile + filter_} _DS_*.fits')
+    write_to_file(f'Destriped images saved to {outpath + filter_} _DS_*.fits')
     write_to_file(f'Total hours elapsed: {(time.time() - t0) / 3600}')
 
 
