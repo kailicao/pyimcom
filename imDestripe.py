@@ -46,7 +46,7 @@ cg_tol = CFG.cg_tol
 cost_model = CFG.cost_model
 resid_model = CFG.resid_model
 
-if use_model not in [model_params.keys()]:
+if use_model not in model_params.keys():
     raise ValueError(f"Model {use_model} not in model_params dictionary.")
 if outfile_Katherine_dir:
     obsfile = '/fs/scratch/PCON0003/klaliotis/destripe/inputs/Roman_WAS_simple_model_'
