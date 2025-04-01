@@ -372,7 +372,7 @@ class Sca_img:
                                0)  # only do the division where N_eff nonzero
         header = self.w.to_header(relax=True)
         this_interp = np.divide(this_interp, self.g_eff)
-        save_fits(this_interp, self.obsid + '_' + self.scaid + '_interp.fits', outpath + 'interpolations/', header=header)
+        save_fits(this_interp, self.obsid + '_' + self.scaid + '_interp', outpath + 'interpolations/', header=header)
         t_elapsed_a = time.time() - t_a_start
 
         if make_Neff: N_eff.flush()
