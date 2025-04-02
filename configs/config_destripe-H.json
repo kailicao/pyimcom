@@ -44,7 +44,7 @@
     "CMASK": 0.00077,
     "TEMPFILE": "/fs/scratch/PCON0003/klaliotis/destripe/inputs/",
     "DSMODEL": "constant",
-    "DSOUT": ["/fs/scratch/PCON0003/klaliotis/destripe/",
+    "DSOUT": ["/fs/scratch/PCON0003/klaliotis/imdestripe/",
         "_ds_out.txt"
     ],
     "CGMODEL": ["PR",
