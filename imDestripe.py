@@ -35,9 +35,9 @@ t_exp = 154  # sec
 CFG = Config(cfg_file='configs/config_destripe-H.json')
 filter_ = filters[CFG.use_filter]
 A_eff = areas[CFG.use_filter]
-obsfile = CFG.obsfile
-outpath =  CFG.ds_outpath
-labnoise_prefix = CFG.inpath
+obsfile = CFG.obsfile #location and stem of input images. overwritten by temp input dir
+outpath =  CFG.ds_outpath #path to put outputs, /fs/scratch/PCON0003/klaliotis/imdestripe/
+labnoise_prefix = CFG.inpath #path to lab noise frames,  /fs/scratch/PCON0003/cond0007/anl-run-in-prod/labnoise/slope_
 use_model = CFG.ds_model
 permanent_mask = CFG.permanent_mask
 cg_model = CFG.cg_model
@@ -50,27 +50,25 @@ if use_model not in model_params.keys():
     raise ValueError(f"Model {use_model} not in model_params dictionary.")
 if outfile_Katherine_dir:
     obsfile = '/fs/scratch/PCON0003/klaliotis/destripe/inputs/Roman_WAS_simple_model_'
-    outfile = '/fs/scratch/PCON0003/klaliotis/destripe/test_out/'
 if CFG.cost_prior != 0:
     cost_prior = CFG.cost_prior
 if cg_model not in CG_models:
     raise ValueError(f"CG model {cg_model} not in CG_models dictionary.")
-outfile = outpath + filter_ + CFG.ds_outstem
+outfile = outpath + filter_ + CFG.ds_outstem # the file that the output prints etc are written to
 
 CFG()
 #CFG.to_file(outpath+'ds.cfg')
 
 t0 = time.time()
 
-def write_to_file(text, filename=None):
+def write_to_file(text, filename=outfile):
     """
     Function to write some text to an output file
     :param text: Str, what to print
     :param filename: Str, an alternative filename if not going into the outfile
     :return: nothing
     """
-    if filename is None:
-        filename = outfile
+
     if not os.path.exists(filename):
         with open(filename, "w+") as f:
             f.write(text + '\n')
@@ -85,6 +83,10 @@ def save_fits(image, filename, dir=outpath, overwrite=True, s=False, header=None
     Function to save an image to .fits.
     :param image: 2D np array; the image
     :param filename: str; the filename
+    :param dir: str, where to save the image
+    :param overwrite: bool; if True, overwrite existing file
+    :param s: bool; if True, print a message to the screen
+    :param header: optional: the header to use for the fits file. If None, default header only
     :return: None
     """
     filepath = dir + filename + '.fits'
@@ -267,7 +269,7 @@ class Sca_img:
 
     def apply_all_mask(self):
         """
-        Apply permanent pixel mask. Updates self.image and self.mask
+        Apply permanent pixel mask. Updates self.image in-place
         :return:
         """
         self.image *= self.mask
@@ -279,7 +281,7 @@ class Sca_img:
         :param j: int, the index of the SCA image into all_scas list
         :return: None
         """
-        if self.params_subtracted == True:
+        if self.params_subtracted:
             write_to_file('WARNING: PARAMS HAVE ALREADY BEEN SUBTRACTED. ABORTING NOW')
             sys.exit()
 
@@ -600,9 +602,11 @@ def residual_function_single(k, sca_a, psi, f_prime):
                 wcs_A = wcs.WCS(file[0].header)
                 file.close()
     except Timeout:
-        print(f"Timeout: Could not acquire lock on {filepath} within {timeout} seconds.")
+        print(f"RF Exception Timeout: Could not acquire lock on {filepath} within {timeout} seconds.")
     except FileNotFoundError:
-        print(f"File not found: {filepath}")
+        print(f"RF Exception File not found: {filepath}")
+    except Exception as e:
+        print(f"RF Exception Other error: {e}")
 
     # Calculate and then transpose the gradient of I_A-J_A
     if TIME: T = time.time()
@@ -719,7 +723,7 @@ def main():
                 in addition to full residuals. returns resids, resids1, resids2
         :return resids: 2D np array, with one row per SCA and one col per parameter
         """
-        resids = (Parameters(use_model, 4088).params)
+        resids = Parameters(use_model, 4088).params
         if extrareturn:
             resids1 = np.zeros_like(resids)
             resids2 = np.zeros_like(resids)
@@ -884,15 +888,15 @@ def main():
 
         write_to_file('Starting initial cost function')
         global test_image_dir
-        test_image_dir = 'LS_test_images/' + str(0) + '/'
+        test_image_dir = outpath + '/test_images/' + str(0) + '/'
         psi = cost_function(p, f)[1]
         sys.stdout.flush()
 
         for i in range(max_iter):
             write_to_file(f"CG Iteration: {i + 1}")
-            if not os.path.exists('test_images/' + str(i + 1)):
-                os.makedirs('test_images/' + str(i + 1))
-            test_image_dir = 'test_images/' + str(i + 1) + '/'
+            if not os.path.exists(outpath + '/test_images/' + str(i + 1)):
+                os.makedirs(outpath + '/test_images/' + str(i + 1))
+            test_image_dir = outpath + '/test_images/' + str(i + 1) + '/'
             t_start_CG_iter = time.time()
 
             # Compute the gradient
