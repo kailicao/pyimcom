@@ -207,7 +207,6 @@ class Sca_img:
             file = fits.open(obsfile + filter_ + '_' + obsid + '_' + scaid + '.fits')
             image_hdu = 'SCI'
         self.image = np.copy(file[image_hdu].data).astype(np.float32)
-        write_to_file(f'SELF IMAGE mean, std: {np.mean(self.image)}, {np.std(self.image)}')
 
         self.shape = np.shape(self.image)
         self.w = wcs.WCS(file[image_hdu].header)
@@ -240,14 +239,12 @@ class Sca_img:
 
         # Add a noise frame, if requested
         if add_noise: self.apply_noise()
-        write_to_file(f'NOISY SELF IMAGE mean, std: {np.mean(self.image)}, {np.std(self.image)}')
 
         if add_objmask:
             _, object_mask = apply_object_mask(self.image)
             self.apply_permanent_mask()
             self.mask *= np.logical_not(
                 object_mask)  # self.mask = True for good pixels, so set object_mask'ed pixels to False
-        write_to_file(f'MASKED SELF IMAGE mean, std: {np.mean(self.image)}, {np.std(self.image)}')
 
     def apply_noise(self):
         """
@@ -658,11 +655,8 @@ def cost_function_single(j, sca_a, p, f):
     obsid_A, scaid_A = m.group(1), m.group(2)
 
     I_A = Sca_img(obsid_A, scaid_A)
-    write_to_file(f'INITIAL Image A mean, std: {np.mean(I_A.image)}, {np.std(I_A.image)}')
     I_A.subtract_parameters(p, j)
-    write_to_file(f'MINUS P Image A mean, std: {np.mean(I_A.image)}, {np.std(I_A.image)}')
     I_A.apply_all_mask()
-    write_to_file(f'MASK Image A mean, std: {np.mean(I_A.image)}, {np.std(I_A.image)}')
 
     if obsid_A == '670' and scaid_A == '10':
         hdu = fits.PrimaryHDU(I_A.image)
