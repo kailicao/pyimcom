@@ -207,6 +207,8 @@ class Sca_img:
             file = fits.open(obsfile + filter_ + '_' + obsid + '_' + scaid + '.fits')
             image_hdu = 'SCI'
         self.image = np.copy(file[image_hdu].data).astype(np.float32)
+        write_to_file(f'SELF IMAGE mean, std: {np.mean(self.image)}, {np.std(self.image)}')
+
         self.shape = np.shape(self.image)
         self.w = wcs.WCS(file[image_hdu].header)
         file.close()
@@ -238,12 +240,14 @@ class Sca_img:
 
         # Add a noise frame, if requested
         if add_noise: self.apply_noise()
+        write_to_file(f'NOISY SELF IMAGE mean, std: {np.mean(self.image)}, {np.std(self.image)}')
 
         if add_objmask:
             _, object_mask = apply_object_mask(self.image)
             self.apply_permanent_mask()
             self.mask *= np.logical_not(
                 object_mask)  # self.mask = True for good pixels, so set object_mask'ed pixels to False
+        write_to_file(f'MASKED SELF IMAGE mean, std: {np.mean(self.image)}, {np.std(self.image)}')
 
     def apply_noise(self):
         """
