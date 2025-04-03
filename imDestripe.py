@@ -888,11 +888,6 @@ def main():
 
         write_to_file('Starting initial cost function')
         global test_image_dir
-<<<<<<< HEAD
-        test_image_dir = 'test_images/' + str(0) + '/'
-=======
-        test_image_dir = outpath + '/test_images/' + str(0) + '/'
->>>>>>> 95fc83178fae33413e6f079ce7818596aa55c841
         psi = cost_function(p, f)[1]
         sys.stdout.flush()
 
