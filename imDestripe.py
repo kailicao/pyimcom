@@ -654,8 +654,11 @@ def cost_function_single(j, sca_a, p, f):
     obsid_A, scaid_A = m.group(1), m.group(2)
 
     I_A = Sca_img(obsid_A, scaid_A)
+    write_to_file(f'INITIAL Image A mean, std: {np.mean(I_A.image)}, {np.std(I_A.image)}')
     I_A.subtract_parameters(p, j)
+    write_to_file(f'MINUS P Image A mean, std: {np.mean(I_A.image)}, {np.std(I_A.image)}')
     I_A.apply_all_mask()
+    write_to_file(f'MASK Image A mean, std: {np.mean(I_A.image)}, {np.std(I_A.image)}')
 
     if obsid_A == '670' and scaid_A == '10':
         hdu = fits.PrimaryHDU(I_A.image)
