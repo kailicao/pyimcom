@@ -781,6 +781,18 @@ def main():
             alpha_max = 1 / np.max(p.params)
 
         alpha_min = -alpha_max
+
+        # Calculate f(alpha_max) and f(alpha_min), which need to be defined for secant update
+        max_params = p.params + alpha_max * direction
+        max_epsilon, max_psi = cost_function(max_params, f)
+        max_resids = residual_function(max_psi, f_prime)
+        d_cost_max = np.sum(max_resids * direction)
+        
+        min_params = p.params + alpha_min * direction
+        min_epsilon, min_psi = cost_function(min_params, f)
+        min_resids = residual_function(min_psi, f_prime)
+        d_cost_min = np.sum(min_resids * direction)
+        
         conv_params = []
 
         for k in range(1, n_iter):
