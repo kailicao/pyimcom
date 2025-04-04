@@ -753,7 +753,7 @@ def main():
         if extrareturn: return resids, resids1, resids2
         return resids
 
-    def linear_search(p, direction, f, f_prime, n_iter=100, tol=10 ** -3):
+    def linear_search(p, direction, f, f_prime, n_iter=100, tol=10 ** -4):
         """
         Linear search via combination bisection and secant methods for parameters that minimize the function
          d_epsilon/d_alpha in the given direction . Note alpha = depth of step in direction
@@ -849,10 +849,15 @@ def main():
             write_to_file(f"Current delta alpha: {convergence_crit}")
             write_to_file(f"Time spent in this LS iteration: {(time.time() - t0_ls_iter) / 60} minutes.")
 
-            if working_epsilon < best_epsilon:
+            # Convergence and update criteria and checks
+            if working_epsilon <= best_epsilon + tol * alpha_test * d_cost:
                 best_epsilon = working_epsilon
                 best_p = copy.deepcopy(working_p)
                 best_psi = working_psi
+                write_to_file(f"Linear search convergence via Armijo condition in {k} iterations")
+                save_fits(best_p, 'best_p', dir=test_image_dir, overwrite=True)
+                save_fits(conv_params, 'conv_params', dir=test_image_dir, overwrite=True)
+                return best_p, best_psi
 
             if np.abs(d_cost) < tol:
                 write_to_file(f"Linear search convergence via |d_cost|< {tol} in {k} iterations")
@@ -870,6 +875,7 @@ def main():
                 hdu.writeto(test_image_dir + 'conv_params.fits', overwrite=True)
                 return best_p, best_psi
 
+            # Updates for next iteration, if convergence isn't yet reached
             if d_cost > tol and method == 'bisection':
                 alpha_max = alpha_test
                 d_cost_max = d_cost
