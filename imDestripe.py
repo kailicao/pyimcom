@@ -777,11 +777,11 @@ def main():
         convergence_crit = 99.
         method = 'bisection'
 
-        if not np.any(p.params):
-            alpha_max = 1
-        else:
-            alpha_max = 1 / np.max(p.params)
-
+        # if not np.any(p.params):
+        #     alpha_max = 1
+        # else:
+        #     alpha_max = 1 / np.max(p.params)
+        alpha_max = 1
         alpha_min = -alpha_max
 
         # Calculate f(alpha_max) and f(alpha_min), which need to be defined for secant update
@@ -847,7 +847,7 @@ def main():
             write_to_file(f"Working params: {working_p.params}")
             write_to_file(f"Current alpha range (min, test, max): {alpha_min, alpha_test, alpha_max}")
             write_to_file(f"Current delta alpha: {convergence_crit}")
-            write_to_file(f"Time spent in this LS iteration: {(time.time() - t0_ls_iter) / 60} minutes.")
+            if TIME:  write_to_file(f"Time spent in this LS iteration: {(time.time() - t0_ls_iter) / 60} minutes.")
 
             # Convergence and update criteria and checks
             if working_epsilon <= best_epsilon + tol * alpha_test * d_cost:
