@@ -850,13 +850,14 @@ def main():
             if TIME:  write_to_file(f"Time spent in this LS iteration: {(time.time() - t0_ls_iter) / 60} minutes.")
 
             # Convergence and update criteria and checks
-            if working_epsilon <= best_epsilon + tol * alpha_test * d_cost:
+            if (working_epsilon < best_epsilon + tol * alpha_test * d_cost) and (np.abs(alpha_test)>=1e-6)\
+                    and (working_epsilon<best_epsilon-(1e-8*np.abs(best_epsilon))):
                 best_epsilon = working_epsilon
                 best_p = copy.deepcopy(working_p)
                 best_psi = working_psi
                 write_to_file(f"Linear search convergence via Armijo condition in {k} iterations")
-                save_fits(best_p, 'best_p', dir=test_image_dir, overwrite=True)
-                save_fits(conv_params, 'conv_params', dir=test_image_dir, overwrite=True)
+                save_fits(best_p.params, 'best_p', dir=test_image_dir, overwrite=True)
+                save_fits(np.array(conv_params), 'conv_params', dir=test_image_dir, overwrite=True)
                 return best_p, best_psi
 
             if np.abs(d_cost) < tol:
