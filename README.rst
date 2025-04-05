@@ -21,6 +21,8 @@ Running PyIMCOM
 
 - `How to write a PyIMCOM configuration file <docs/config_README.rst>`_
 
+- `How to compress PyIMCOM modules <compress/compress_README.rst>`_
+
 Post-processing of PyIMCOM outputs
 ---------------------------------------
 
