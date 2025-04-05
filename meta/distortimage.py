@@ -49,7 +49,7 @@ class MetaMosaic:
         if fname[-9:]=='_map.fits':
             self.LegacyName = True
             self.stem = fname[:-15]; tail = fname[-15:]
-        if fname[-12:]=='.cpr.fits.gz:
+        if fname[-12:]=='.cpr.fits.gz':
             self.cprfitsgz = True
             self.stem = fname[:-18]; tail = fname[-18:]
         self.ix = int(tail[1:3])
@@ -274,7 +274,7 @@ def shearimage_to_fits(im, fname, layers=None, overwrite=False):
     """utility to save a shearimage dictionary a FITS file"""
 
     # which layers to use?
-    nlayer = np.shape(im['image'])[-2]
+    nlayer = np.shape(im['image'])[-3]
     use_layers = layers
     if layers is None:
         use_layers = range(nlayer)
