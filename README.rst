@@ -15,6 +15,10 @@ Overview of PyIMCOM concepts
 Running PyIMCOM
 -------------------
 
+- You will want to install the C kernel `furry-parakeet <https://github.com/hirata10/furry-parakeet>`_ for best performance and for some of the advanced features.
+
+- `How to build a mosaic in PyIMCOM <docs/run_README.rst>`_
+
 - `How to write a PyIMCOM configuration file <docs/config_README.rst>`_
 
 Post-processing of PyIMCOM outputs
