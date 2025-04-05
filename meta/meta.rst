@@ -26,15 +26,13 @@ file using the ``shearimage_to_fits`` function.
 Stand-alone usage
 -----------------
 
-It is possible to call this module in a few different ways. A simple one is to put a file ``test.py`` in the ``pyimcom/`` directory such as::
+It is possible to call this module in a few different ways. A simple one is the following code, which rotates the image by 30 degrees and grows the PSF by a factor of 1.05::
 
   import numpy as np
-  from .meta import distortimage
+  from pyimcom.meta import distortimage
   mosaic = distortimage.MetaMosaic('/fs/scratch/PCON0003/cond0007/anl-run-out/prod_H_24_13_map.fits', verbose=True)
   rot = 30*np.pi/180.
   im = mosaic.shearimage(3200, jac=[[np.cos(rot),np.sin(rot)],[-np.sin(rot),np.cos(rot)]], psfgrow=1.05, oversamp=1.)
   distortimage.shearimage_to_fits(im, 'xdist.fits', overwrite=True)
 
-(you'll have to replace the path to the PyIMCOM output file you want) and then call it from one level up via::
-
-  python3 -m pyimcom.test
+This will work either with the original ``.fits`` files, or with the ``.cpr.fits.gz`` files.

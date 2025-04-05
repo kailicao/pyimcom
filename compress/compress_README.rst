@@ -35,7 +35,7 @@ The configuration used to generate file ``fname`` appears as ``f.cfg``. So this 
 
 Metadata on the compression scheme (needed to decompress the data) is stored in a new ASCII Table in the compressed file (the ``CPRESS`` HDU). The possible schemes and parameters are described in more detail below.
 
-It is recommended to use the ``.cpr.fits.gz`` suffix for a compressed PyIMCOM file, e.g., ``itertest2_F_10_04.fits`` compresses to ``itertest2_F_10_04.cpr.fits.gz``, but this is not enforced. The .gzipped file can be unzipped (it is a valid .fits.gz file!) but we expect this won't be common; if you need the uncompressed file, you will probably just decompress it.
+It is recommended to use the ``.cpr.fits.gz`` suffix for a compressed PyIMCOM file, e.g., ``itertest2_F_10_04.fits`` compresses to ``itertest2_F_10_04.cpr.fits.gz``. This is not enforced by ``compressutils``, but some analysis tools recognize compressed files by this convention. The .gzipped file can be unzipped (it is a valid .fits.gz file!) but we expect this won't be common; if you need the uncompressed file, you will probably just decompress it.
 
 Decompression
 ==================

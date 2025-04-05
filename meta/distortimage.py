@@ -3,6 +3,7 @@ import os
 from astropy.io import fits
 from astropy import wcs
 from . import ginterp
+from ..compress.compressutils import ReadFile
 
 from ..config import Config, Settings
 from ..diagnostics.outimage_utils.helper import HDU_to_bels
@@ -31,7 +32,7 @@ class MetaMosaic:
         """Build from an example file.
         """
 
-        with fits.open(fname) as f:
+        with ReadFile(fname) as f:
             c = f['CONFIG'].data['text']
             n = len(c)
             cf = ''
@@ -43,10 +44,14 @@ class MetaMosaic:
 
         # get the file coordinates
         self.LegacyName = False
+        self.cprfitsgz = False
         self.stem = fname[:-11]; tail = fname[-11:]
         if fname[-9:]=='_map.fits':
-             self.LegacyName = True
-             self.stem = fname[:-15]; tail = fname[-15:]
+            self.LegacyName = True
+            self.stem = fname[:-15]; tail = fname[-15:]
+        if fname[-12:]=='.cpr.fits.gz:
+            self.cprfitsgz = True
+            self.stem = fname[:-18]; tail = fname[-18:]
         self.ix = int(tail[1:3])
         self.iy = int(tail[4:6])
 
@@ -84,12 +89,14 @@ class MetaMosaic:
                 if in_x>=0 and in_x<self.cfg.nblock and in_y>=0 and in_y<self.cfg.nblock:
                     in_fname = self.stem + '_{:02d}_{:02d}'.format(in_x,in_y)
                     if self.LegacyName: in_fname += '_map'
+                    if self.cprfitsgz: in_fname += '.cpr'
                     in_fname += '.fits'
+                    if self.cprfitsgz: in_fname += '.gz'
                     if verbose:
                         print('IN {:2d},{:2d} [{:4d}:{:4d},{:4d}:{:4d}] offset x={:5d} y={:5d}'.format(in_x, in_y, symin, symax, sxmin, sxmax, cx, cy))
                         print('  <<', in_fname)
 
-                    with fits.open(in_fname) as f:
+                    with ReadFile(in_fname) as f:
                         # the map
                         self.in_image[:,symin+cy:symax+cy,sxmin+cx:sxmax+cx] = f['PRIMARY'].data[0,:,symin:symax,sxmin:sxmax]
                         # fidelity, converted to dB
