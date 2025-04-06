@@ -23,6 +23,7 @@ class MetaMosaic:
     __init__ : Constructor.
 
     maskpix : Masks an additional set of pixels.
+    in_mask : boolean mask for input data (False = OK, True = masked)
     to_file : Writes the mosaic object to a FITS file.
     shearimage : Generate a sheared image.
 
@@ -105,6 +106,9 @@ class MetaMosaic:
                         # noise, converted to dB
                         self.in_noise[symin+cy:symax+cy,sxmin+cx:sxmax+cx] = f['SIGMA'].data[0,symin:symax,sxmin:sxmax].astype(np.float32)\
                             * HDU_to_bels(f['SIGMA'])/.1
+
+        # mask pixels that weren't covered at all
+        self.in_mask |= self.in_fidelity==0
 
     def maskpix(self, extramask):
         """Pixels that are 'true' in extramask are masked out.
@@ -206,7 +210,7 @@ class MetaMosaic:
         })
 
         #input mask
-        inmask = self.in_fidelity<fidelity_min
+        inmask = np.logical_or(self.in_fidelity<fidelity_min, self.in_mask)
 
         # get smearing information
         sigma = self.cfg.sigmatarget * Settings.pixscale_native * (180./np.pi) / self.cfg.dtheta

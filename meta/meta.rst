@@ -42,8 +42,11 @@ Detailed usage information
 
 There are several options available and points to keep in mind when working with the ``distortimage.MetaMosaic`` class.
 
+Building a MetaMosaic
+========================
+
 Constructor
-============
+---------------
 
 Construction of a mosaic is in principle quite simple: it is built from a PyIMCOM output file, with the optional ``verbose`` keyword::
 
@@ -55,10 +58,24 @@ The constructor can work with either the raw ``.fits`` files, or with the compre
 
 The configuration that generated an object is accessible as an attribute, e.g., you may get the pixel scale in the coated image by asking for ``mosaic.cfg.dtheta``, or the additional layers from ``mosaic.cfg.extrainput``.
 
-Masking an image
-==================
+Attributes
+---------------
 
-*under construction*
+The ``MetaMosaic`` class has the following attributes:
+
+- ``cfg`` : The configuration file as an instance of the ``pyimcom.config.Config`` class
+- ``Nside`` : The side length of the image (must be square)
+- ``in_image`` : The 3D image cube, pre-shear
+- ``in_mask`` : The 2D mask, pre-shear (False = OK, True = masked)
+- ``in_fidelity`` : The fidelity of the coadded image (in dB)
+- ``in_noise`` : The inverse noise amplification of the coadded image (in dB)
+
+Masking an image
+------------------
+
+The mask can be updated with the ``maskpix`` method, e.g., to mask pixels that are over 1.0e4 in the science image::
+
+    mosaic.maskpix(mosaic.in_image[0,:,:]>1.0e4)
 
 Shearing an image
 ==================
