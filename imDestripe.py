@@ -753,7 +753,7 @@ def main():
         if extrareturn: return resids, resids1, resids2
         return resids
 
-    def linear_search(p, direction, f, f_prime, n_iter=100, tol=10 ** -4):
+    def linear_search(p, direction, f, f_prime, grad_current, n_iter=100, tol=10 ** -4):
         """
         Linear search via combination bisection and secant methods for parameters that minimize the function
          d_epsilon/d_alpha in the given direction . Note alpha = depth of step in direction
@@ -761,6 +761,7 @@ def main():
         :param direction: 2D np array, direction of conjugate gradient search
         :param f: function, cost function form
         :param f_prime: function, derivative of cost function form
+        :param grad_current: 2D np array, current gradient
         :param n_iter: int, number of iterations at which to stop searching
         :param tol: float, absolute value of d_cost at which to converge
         :return best_p: parameters object, containing the best parameters found via search
@@ -781,8 +782,16 @@ def main():
         #     alpha_max = 1
         # else:
         #     alpha_max = 1 / np.max(p.params)
-        alpha_max = 1
-        alpha_min = -alpha_max
+        eta = 0.1
+        alpha_test = -eta * (np.dot(grad_current,direction))/(np.dot(direction,direction)+1e-12)
+        if alpha_test <= 0:
+            # Not a descent direction — fallback
+            alpha_min = -0.9
+            alpha_max = 1.0
+        else:
+            # Curvature-based search window
+            alpha_min = alpha_test * 1e-4
+            alpha_max = alpha_test * 10
 
         # Calculate f(alpha_max) and f(alpha_min), which need to be defined for secant update
         max_params = p.params + alpha_max * direction
@@ -809,12 +818,13 @@ def main():
                 hdu.writeto(test_image_dir + 'LSdirection.fits', overwrite=True)
                 write_to_file(f"Initial params: {p.params}")
                 write_to_file(f"Initial epsilon: {best_epsilon}")
+                write_to_file(f"Initial alpha range (min, test, max): {print(alpha_min, alpha_test, alpha_max)}")
 
             if k == n_iter - 1:
                 write_to_file(
                     'WARNING: Linear search did not converge!! This is going to break because best_p is not assigned.')
 
-            if convergence_crit < 0.001:
+            if (convergence_crit < 0.001) and (k!=1):
                 alpha_test = alpha_min - (
                             d_cost_min * (alpha_max - alpha_min) / (d_cost_max - d_cost_min))  # secant update
                 write_to_file(f"Secant update: alpha_test={alpha_test}")
@@ -825,7 +835,7 @@ def main():
                     write_to_file(f"Bisection update: alpha_test={alpha_test}")
                     method = 'bisection'
             else:
-                alpha_test = .5 * (alpha_min + alpha_max)  # bisection update
+                if k!=1: alpha_test = .5 * (alpha_min + alpha_max)  # bisection update
                 write_to_file(f"Bisection update: alpha_test={alpha_test}")
 
             working_params = p.params + alpha_test * direction
@@ -854,26 +864,31 @@ def main():
                 best_epsilon = working_epsilon
                 best_p = copy.deepcopy(working_p)
                 best_psi = working_psi
+                best_resids = working_resids
                 write_to_file(f"Linear search convergence via Armijo condition in {k} iterations")
                 save_fits(best_p.params, 'best_p', dir=test_image_dir, overwrite=True)
                 save_fits(np.array(conv_params), 'conv_params', dir=test_image_dir, overwrite=True)
-                return best_p, best_psi
+                return best_p, best_psi ,best_resids
 
             if np.abs(d_cost) < tol:
                 write_to_file(f"Linear search convergence via |d_cost|< {tol} in {k} iterations")
+                write_to_file("I think this is bad because nothing has actually been updated if I exit this way... \n"
+                              "so I'm going to let this break the program bc best_resids isn't defined")
                 hdu = fits.PrimaryHDU(best_p.params)
                 hdu.writeto(test_image_dir + 'best_p.fits', overwrite=True)
                 hdu = fits.PrimaryHDU(np.array(conv_params))
                 hdu.writeto(test_image_dir + 'conv_params.fits', overwrite=True)
-                return best_p, best_psi
+                return best_p, best_psi, best_resids
 
             if convergence_crit < (0.01 / current_norm):
                 write_to_file(f"Linear search convergence via crit<{0.01 / current_norm} in {k} iterations")
+                write_to_file("I think this is bad because nothing has actually been updated if I exit this way... \n"
+                              "so I'm going to let this break the program bc best_resids isn't defined")
                 hdu = fits.PrimaryHDU(best_p.params)
                 hdu.writeto(test_image_dir + 'best_p.fits', overwrite=True)
                 hdu = fits.PrimaryHDU(np.array(conv_params))
                 hdu.writeto(test_image_dir + 'conv_params.fits', overwrite=True)
-                return best_p, best_psi
+                return best_p, best_psi, best_resids
 
             # Updates for next iteration, if convergence isn't yet reached
             if d_cost > tol and method == 'bisection':
@@ -924,14 +939,15 @@ def main():
             t_start_CG_iter = time.time()
 
             # Compute the gradient
-            grad, gr_term1, gr_term2 = residual_function(psi, f_prime, extrareturn=True)
-            # if i==0:
-            #    hdu_ = fits.PrimaryHDU(np.stack((grad,gr_term1,gr_term2)))
-            #    hdu_.writeto('grterms.fits', overwrite=True)
-            #    del hdu_
-            del gr_term1, gr_term2
-            write_to_file(f"Minutes spent in residual function: {(time.time() - t_start_CG_iter) / 60}")
-            sys.stdout.flush()
+            if i==0:
+                grad, gr_term1, gr_term2 = residual_function(psi, f_prime, extrareturn=True)
+                # if i==0:
+                #    hdu_ = fits.PrimaryHDU(np.stack((grad,gr_term1,gr_term2)))
+                #    hdu_.writeto('grterms.fits', overwrite=True)
+                #    del hdu_
+                del gr_term1, gr_term2
+                write_to_file(f"Minutes spent in initial residual function: {(time.time() - t_start_CG_iter) / 60}")
+                sys.stdout.flush()
 
             # Compute the norm of the gradient
             global current_norm
@@ -964,7 +980,7 @@ def main():
             # Perform linear search
             t_start_LS = time.time()
             write_to_file(f"Initiating linear search in direction: {direction}")
-            p_new, psi_new = linear_search(p, direction, f, f_prime)
+            p_new, psi_new, grad_new = linear_search(p, direction, f, f_prime, grad)
             write_to_file(f'Total time spent in linear search: {(time.time() - t_start_LS) / 60}')
             write_to_file(
                 f'Current norm: {current_norm}, Tol * Norm_0: {tol}, Difference (CN-TOL): {current_norm - tol}')
@@ -974,6 +990,7 @@ def main():
             p = p_new
             psi = psi_new
             grad_prev = grad
+            grad = grad_new
             direction_prev = direction
 
             write_to_file(f'Total time spent in this CG iteration: {(time.time() - t_start_CG_iter) / 60} minutes.')
