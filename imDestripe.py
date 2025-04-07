@@ -783,7 +783,7 @@ def main():
         # else:
         #     alpha_max = 1 / np.max(p.params)
         eta = 0.1
-        alpha_test = -eta * (grad_current@direction)/(direction@direction+1e-12)
+        alpha_test = -eta * (np.sum(grad_current*direction))/(np.sum(direction*direction)+1e-12)
         if alpha_test <= 0:
             # Not a descent direction — fallback
             alpha_min = -0.9
