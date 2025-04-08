@@ -187,9 +187,7 @@ class GalSimInject:
             if not chrom:
                 psf = inpsf((my_ra[n], my_dec[n]))  # now with PSF variation
             else:
-                #psf = inpsf
                 psf = GalSimInject.get_psf_pos(inpsf, mywcs, (my_ra[n], my_dec[n]), inpsf_oversamp)
-                #psf = GalSimInject.get_psf_pos(inpsf_path, mywcs, idsca, (my_ra[n], my_dec[n]), inpsf_oversamp)
             psf_image = galsim.Image(psf, scale=0.11/inpsf_oversamp)
             # interp_psf = galsim.InterpolatedImage(psf_image, x_interpolant='lanczos32')
             # the first time, get the preferred stepk and maxk
@@ -890,13 +888,6 @@ def get_all_data(inimage: 'coadd.InImage'):
         if m:
             inpsfchrom_path = extrainput[i].split(',')[1]
             psf_cube = GalSimInject.get_psf(inpsfchrom_path,idsca)
-            #tophatwidth_use = inpsf_oversamp
-            #fname = inpsfchrom_path + '/psf_{:d}.fits'.format(idsca[0])
-            #assert exists(fname), 'Error: input chromatic psf does not exist'
-            #with fitsio.FITS(fname) as fileh:
-            #    inpsfchrom = InImage.smooth_and_pad(
-            #        fileh[idsca[1]][:, :], tophatwidth=tophatwidth_use)
-            
             res = int(m.group(1))
             print('making chromatic grid using GalSim: ', res, idsca)
             inimage.indata[i, :, :] = GalSimInject.galsim_star_grid(
