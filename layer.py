@@ -47,8 +47,73 @@ class GalSimInject:
 
     '''
 
+    ### New Code
     @staticmethod
-    def galsim_star_grid(res, mywcs, inpsf, idsca, obsdata, sca_nside, inpsf_oversamp, extraargs=None):
+    def get_psf(inpsf_path,idsca):
+        '''
+        Get input PSF array at given position.
+
+        This is an interface for layer.get_all_data and psfutil.PSFGrp._build_inpsfgrp.
+
+        Parameters
+        ----------
+        psf_compute_point : np.array, shape : (2,)
+            Point to compute PSF in RA and Dec.
+        use_shortrange : bool, optional
+            If True and PSFSPLIT is set, then pulls only the short-range PSF G^(S).
+            The default is False.
+
+        Returns
+        -------
+        tuple : np.array, shape : see smooth_and_pad
+            Input PSF array at given position. 
+
+        '''
+        #from .coadd import InImage
+        import fitsio
+        # The tophat width: in use_shortrange, the psfsplit module has already included this,
+        # so we set it to 0 so as to not double-count this contribution.
+        #tophatwidth_use = inpsf_oversamp
+
+        # get the pixel location on the input image
+        # (moved this up since some PSF models need it)
+        #pixloc = inwcs.all_world2pix(np.array([[*psf_compute_point]]).astype(np.float64), 0)[0]
+        
+        fname = inpsf_path + '/psf_polyfit_{:d}.fits'.format(idsca[0])
+        sskip = 0
+        readskip = False
+        assert exists(fname), 'Error: input psf does not exist'
+        with fits.open(fname) as f:
+            if readskip: sskip = int(f[0].header['GSSKIP'])
+            inpsf_cube = f[idsca[1]+sskip].data[:, :, :]
+            #print(' <<', fname, sskip)
+
+            # order = 1
+            #lpoly = InImage.LPolyArr(1, (pixloc[0]-2043.5)/2044., (pixloc[1]-2043.5)/2044.)
+            # pixels are in C/Python convention since pixloc was set this way
+            #this_psf = InImage.smooth_and_pad(
+                #np.einsum('a,aij->ij', lpoly, inpsf_cube), tophatwidth=tophatwidth_use)/64
+            # divide by 64=8**2 since anlsim files are in fractional intensity per s_in**2 instead of per (s_in/8)**2
+
+
+        return inpsf_cube
+    @staticmethod
+    def get_psf_pos(inpsf_cube, inwcs, psf_compute_point, inpsf_oversamp = 8):
+        from .coadd import InImage
+        tophatwidth_use = inpsf_oversamp
+        pixloc = inwcs.all_world2pix(np.array([[*psf_compute_point]]).astype(np.float64), 0)[0]
+        lpoly = InImage.LPolyArr(1, (pixloc[0]-2043.5)/2044., (pixloc[1]-2043.5)/2044.)
+        # pixels are in C/Python convention since pixloc was set this way
+        this_psf = InImage.smooth_and_pad(
+            np.einsum('a,aij->ij', lpoly, inpsf_cube), tophatwidth=tophatwidth_use)/64
+        # divide by 64=8**2 since anlsim files are in fractional intensity per s_in**2 instead of per (s_in/8)**2
+
+
+        return this_psf
+    ### New Code
+
+    @staticmethod
+    def galsim_star_grid(res, mywcs, inpsf, idsca, obsdata, sca_nside, inpsf_oversamp, extraargs=None, chrom = False):
         '''
         Example of a function used here that we can call from coadd_utils.get_all_data:
 
@@ -119,7 +184,12 @@ class GalSimInject:
             if angleTransient:
                 if (qp[n]+s)%2==1: continue
 
-            psf = inpsf((my_ra[n], my_dec[n]))  # now with PSF variation
+            if not chrom:
+                psf = inpsf((my_ra[n], my_dec[n]))  # now with PSF variation
+            else:
+                #psf = inpsf
+                psf = GalSimInject.get_psf_pos(inpsf, mywcs, (my_ra[n], my_dec[n]), inpsf_oversamp)
+                #psf = GalSimInject.get_psf_pos(inpsf_path, mywcs, idsca, (my_ra[n], my_dec[n]), inpsf_oversamp)
             psf_image = galsim.Image(psf, scale=0.11/inpsf_oversamp)
             # interp_psf = galsim.InterpolatedImage(psf_image, x_interpolant='lanczos32')
             # the first time, get the preferred stepk and maxk
@@ -223,7 +293,7 @@ class GalSimInject:
         return mydict
 
     @staticmethod
-    def galsim_extobj_grid(res, mywcs, inpsf, sca_nside, inpsf_oversamp, extraargs=[]):
+    def galsim_extobj_grid(res, mywcs, inpsf, sca_nside, inpsf_oversamp, extraargs=[], chrom = False):
         '''
         Example of a function used here that we can call from coadd_utils.get_all_data:
 
@@ -290,7 +360,10 @@ class GalSimInject:
         sca_image = galsim.ImageF(sca_nside+pad, sca_nside+pad, scale=refscale)
         t0 = time.time()
         for n in range(num_obj):
-            psf = inpsf((my_ra[n], my_dec[n]))  # now with PSF variation
+            if not chrom:
+                psf = inpsf((my_ra[n], my_dec[n]))  # now with PSF variation
+            else:
+                psf = GalSimInject.get_psf_pos(inpsf, mywcs, (my_ra[n], my_dec[n]), inpsf_oversamp)
             psf_image = galsim.Image(psf, scale=0.11/inpsf_oversamp)
             #interp_psf = galsim.InterpolatedImage(psf_image, x_interpolant='lanczos32')
             # the first time, get the preferred stepk and maxk
@@ -625,8 +698,8 @@ def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
 
     # for the ANL sims
     if format_ == 'anlsim':
-        out = path+'/simple/Roman_WAS_simple_model_{:s}_{:d}_{:d}.fits'.format(
-            Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+        out = path+'/simple/{:s}/{:d}/Roman_WAS_simple_model_{:s}_{:d}_{:d}.fits.gz'.format(
+            Stn.RomanFilters[obsdata['filter'][idsca[0]]],idsca[0],Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
 
         # insert ANL sim layers here
         if extraargs is not None:
@@ -811,6 +884,32 @@ def get_all_data(inimage: 'coadd.InImage'):
             inimage.indata[i, :, :] = GalSimInject.galsim_star_grid(
                 res, inwcs, inpsf, idsca, obsdata, Stn.sca_nside, inpsf_oversamp)
 
+        ### New Code
+        # galsim star grid
+        m = re.search(r'^gsstarchrom(\d+)', extrainput[i], re.IGNORECASE)
+        if m:
+            inpsfchrom_path = extrainput[i].split(',')[1]
+            psf_cube = GalSimInject.get_psf(inpsfchrom_path,idsca)
+            #tophatwidth_use = inpsf_oversamp
+            #fname = inpsfchrom_path + '/psf_{:d}.fits'.format(idsca[0])
+            #assert exists(fname), 'Error: input chromatic psf does not exist'
+            #with fitsio.FITS(fname) as fileh:
+            #    inpsfchrom = InImage.smooth_and_pad(
+            #        fileh[idsca[1]][:, :], tophatwidth=tophatwidth_use)
+            
+            res = int(m.group(1))
+            print('making chromatic grid using GalSim: ', res, idsca)
+            inimage.indata[i, :, :] = GalSimInject.galsim_star_grid(
+                res, inwcs, psf_cube, idsca, obsdata, Stn.sca_nside, inpsf_oversamp,  chrom = True)
+
+        m = re.search(r'^cstarchrom(\d+)$', extrainput[i], re.IGNORECASE)
+        if m:
+            res = int(m.group(1))
+            print('making grid using C routines: ', res, idsca)
+            inimage.indata[i, :, :] = GridInject.make_image_from_grid(
+                res, inpsfchrom, idsca, obsdata, inwcs, Stn.sca_nside, inpsf_oversamp)
+        ### New Code
+        
         # galsim angle-based transient star grid
         # (a test of what happens when a point source is present in one pass but not the other)
         m = re.search(r'^gstrstar(\d+)$', extrainput[i], re.IGNORECASE)
@@ -838,6 +937,17 @@ def get_all_data(inimage: 'coadd.InImage'):
             print('making grid using GalSim: ', res, idsca, 'extended object type:', extargs)
             inimage.indata[i, :, :] = GalSimInject.galsim_extobj_grid(
                 res, inwcs, inpsf, Stn.sca_nside, inpsf_oversamp, extraargs=extargs)
+
+        # galsim extobj grid
+        m = re.search(r'^gsextchrom(\d+)', extrainput[i], re.IGNORECASE)
+        if m:
+            inpsfchrom_path = extrainput[i].split(',')[1]
+            psf_cube = GalSimInject.get_psf(inpsfchrom_path,idsca)
+            res = int(m.group(1))
+            extargs = extrainput[i].split(',')[2:]
+            print('making chromatic grid using GalSim: ', res, idsca, 'extended object type:', extargs)
+            inimage.indata[i, :, :] = GalSimInject.galsim_extobj_grid(
+                res, inwcs, psf_cube, Stn.sca_nside, inpsf_oversamp, extraargs=extargs,  chrom = True)
 
         sys.stdout.flush()
 

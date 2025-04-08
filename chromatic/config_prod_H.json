@@ -1,0 +1,42 @@
+{
+    "OBSFILE": "./Roman_WAS_obseq_11_1_23.fits",
+    "INDATA": [
+        "../RomanWAS_preview/images",
+        "anlsim"
+    ],
+    "CTR": [
+	9.0,
+	-43.8
+    ],
+    "OUTSIZE": [
+        80,
+	32,
+	0.0390625
+    ],
+    "BLOCK": 36,
+    "FILTER": 2,
+    "LAKERNEL": "Cholesky",
+    "KAPPAC": [
+         6e-4
+    ],
+    "INPSF": [
+	"../RomanWAS_preview/input_psf/psf_flatsed",
+        "anlsim",
+        8
+    ],
+    "EXTRAINPUT": [
+        "whitenoise1", "gsstar14", "cstar14"
+    ],
+    "PADSIDES": "all",
+    "OUTMAPS": "USTN",
+    "OUT": "./output/rep/",
+    "INPAD": 1.240,
+    "NPIXPSF": 48,
+    "FADE": 3,
+    "PAD": 2,
+    "NOUT": 1,
+    "OUTPSF": "GAUSSIAN",
+    "EXTRASMOOTH": 0.934253980316821,
+    "CMASK": 0.00077,
+    "TEMPFILE": "./output/tmp/"
+}

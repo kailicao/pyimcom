@@ -464,7 +464,7 @@ class InImage:
 
         if self.blk.cfg.inpsf_format == 'dc2_imsim':
             if not hasattr(self, 'inpsf_arr'):
-                fname = self.blk.cfg.inpsf_path + '/dc2_psf_{:d}.fits'.format(self.idsca[0])
+                fname = self.blk.cfg.inpsf_path + '/psf_{:d}.fits'.format(self.idsca[0])
                 assert exists(fname), 'Error: input psf does not exist'
                 with fitsio.FITS(fname) as fileh:
                     self.inpsf_arr = InImage.smooth_and_pad(
