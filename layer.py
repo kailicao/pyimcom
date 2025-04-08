@@ -882,7 +882,6 @@ def get_all_data(inimage: 'coadd.InImage'):
             inimage.indata[i, :, :] = GalSimInject.galsim_star_grid(
                 res, inwcs, inpsf, idsca, obsdata, Stn.sca_nside, inpsf_oversamp)
 
-        ### New Code
         # galsim star grid
         m = re.search(r'^gsstarchrom(\d+)', extrainput[i], re.IGNORECASE)
         if m:
@@ -893,13 +892,6 @@ def get_all_data(inimage: 'coadd.InImage'):
             inimage.indata[i, :, :] = GalSimInject.galsim_star_grid(
                 res, inwcs, psf_cube, idsca, obsdata, Stn.sca_nside, inpsf_oversamp,  chrom = True)
 
-        m = re.search(r'^cstarchrom(\d+)$', extrainput[i], re.IGNORECASE)
-        if m:
-            res = int(m.group(1))
-            print('making grid using C routines: ', res, idsca)
-            inimage.indata[i, :, :] = GridInject.make_image_from_grid(
-                res, inpsfchrom, idsca, obsdata, inwcs, Stn.sca_nside, inpsf_oversamp)
-        ### New Code
         
         # galsim angle-based transient star grid
         # (a test of what happens when a point source is present in one pass but not the other)
