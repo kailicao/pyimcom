@@ -376,10 +376,14 @@ class Sca_img:
         new_mask = N_eff > N_eff_min
         this_interp = np.where(new_mask, this_interp / np.where(new_mask, N_eff, N_eff_min),
                                0)
-        if self.obsid == '670' and self.scaid == '10': print('this_interp / N_eff mean:', np.mean(this_interp))# only do the division where N_eff nonzero
+        if self.obsid == '670' and self.scaid == '10':
+            print('this_interp / N_eff mean:', np.mean(this_interp))# only do the division where N_eff nonzero
+            save_fits(this_interp, 'i1')
         header = self.w.to_header(relax=True)
         this_interp = np.divide(this_interp, self.g_eff)
-        if self.obsid == '670' and self.scaid == '10': print('this_interp / g_eff mean:', np.mean(this_interp))
+        if self.obsid == '670' and self.scaid == '10':
+            print('this_interp / g_eff mean:', np.mean(this_interp))
+            save_fits(this_interp, 'i2')
         save_fits(this_interp, self.obsid + '_' + self.scaid + '_interp', outpath + 'interpolations/', header=header)
         t_elapsed_a = time.time() - t_a_start
 
