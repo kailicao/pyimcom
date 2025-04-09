@@ -343,16 +343,10 @@ class Sca_img:
                 I_B = Sca_img(obsid_B, scaid_B)  # Initialize image B
                 # I_B.apply_noise() <-- redundant
 
-                if self.obsid == '670' and self.scaid == '10':
-                    print('Image B index:' + str(k))
-                    print('\nI_B: ', obsid_B, scaid_B, 'Pre-Param-Subtraction mean:', np.mean(I_B.image))
-
                 if params:
                     I_B.subtract_parameters(params, k)
-                    if self.obsid == '670' and self.scaid == '10': print('post-param sub I_B mean:', np.mean(I_B.image))
 
                 I_B.apply_all_mask()  # now I_B is masked
-                if self.obsid == '670' and self.scaid == '10': print('masked I_B mean:', np.mean(I_B.image))
                 B_interp = np.zeros_like(self.image)
                 interpolate_image_bilinear(I_B, self, B_interp)
 
@@ -368,7 +362,6 @@ class Sca_img:
                     save_fits(B_interp, '670_10_A' + obsid_B + '_' + scaid_B + '_interp', dir=test_image_dir)
 
                 this_interp += B_interp
-                if self.obsid == '670' and self.scaid == '10': print('this_interp mean:', np.mean(this_interp))
                 if make_Neff:
                     N_eff += B_mask_interp
 
@@ -376,14 +369,10 @@ class Sca_img:
         new_mask = N_eff > N_eff_min
         this_interp = np.where(new_mask, this_interp / np.where(new_mask, N_eff, N_eff_min),
                                0)
-        if self.obsid == '670' and self.scaid == '10':
-            print('this_interp / N_eff mean:', np.mean(this_interp))# only do the division where N_eff nonzero
-            save_fits(this_interp, 'i1')
+
         header = self.w.to_header(relax=True)
         this_interp = np.divide(this_interp, self.g_eff)
-        if self.obsid == '670' and self.scaid == '10':
-            print('this_interp / g_eff mean:', np.mean(this_interp))
-            save_fits(this_interp, 'i2')
+
         save_fits(this_interp, self.obsid + '_' + self.scaid + '_interp', outpath + 'interpolations/', header=header)
         t_elapsed_a = time.time() - t_a_start
 
@@ -802,6 +791,7 @@ def main():
             alpha_max = alpha_test * 10
 
         # Calculate f(alpha_max) and f(alpha_min), which need to be defined for secant update
+        write_to_file('### Calculating min and max epsilon and cost')
         max_params = p.params + alpha_max * direction
         max_p.params = max_params
         max_epsilon, max_psi = cost_function(max_p, f)
@@ -820,7 +810,7 @@ def main():
             t0_ls_iter = time.time()
 
             if k == 1:
-                write_to_file('Beginning linear search')
+                write_to_file('### Beginning linear search')
                 write_to_file(f"LS Direction: {direction}")
                 hdu = fits.PrimaryHDU(direction)
                 hdu.writeto(test_image_dir + 'LSdirection.fits', overwrite=True)
@@ -832,7 +822,7 @@ def main():
                 write_to_file(
                     'WARNING: Linear search did not converge!! This is going to break because best_p is not assigned.')
 
-            if (convergence_crit < 0.001) and (k!=1):
+            if (convergence_crit < 0.01) and (k!=1):
                 alpha_test = alpha_min - (
                             d_cost_min * (alpha_max - alpha_min) / (d_cost_max - d_cost_min))  # secant update
                 write_to_file(f"Secant update: alpha_test={alpha_test}")
@@ -927,19 +917,19 @@ def main():
         :param max_iter: int, number of iterations at which to force CG to stop
         :return p: params object, the best fit parameters for destriping the SCA images
         """
-        write_to_file('Starting conjugate gradient optimization')
+        write_to_file('### Starting conjugate gradient optimization')
 
         # Initialize variables
         grad_prev = None  # No previous gradient initially
         direction = None  # No initial direction
 
-        write_to_file('Starting initial cost function')
+        write_to_file('### Starting initial cost function')
         global test_image_dir
         psi = cost_function(p, f)[1]
         sys.stdout.flush()
 
         for i in range(max_iter):
-            write_to_file(f"CG Iteration: {i + 1}")
+            write_to_file(f"### CG Iteration: {i + 1}")
             if not os.path.exists(outpath + '/test_images/' + str(i + 1)):
                 os.makedirs(outpath + '/test_images/' + str(i + 1))
             test_image_dir = outpath + '/test_images/' + str(i + 1) + '/'
@@ -976,7 +966,7 @@ def main():
                 else: raise ValueError(f"Unknown method for CG direction update: {method}"
                                        f" (Options are: {CG_models})")
 
-                write_to_file(f"Current Beta: {beta}")
+                write_to_file(f"Current Beta: {beta} (using method: {method})")
 
                 direction = -grad + beta * direction_prev
 
