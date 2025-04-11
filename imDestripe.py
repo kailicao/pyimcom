@@ -5,6 +5,9 @@ Program to remove correlated noise stripes from RST images.
 import os
 import glob
 import time
+import cProfile
+import pstats
+import io
 import numpy as np
 from astropy.io import fits
 from astropy import wcs
@@ -1033,4 +1036,13 @@ def main():
 
 
 if __name__ == '__main__':
+    profiler = cProfile.Profile()
+    profiler.enable()
     main()
+    profiler.disable()
+    stream=io.StringIO()
+    stats = pstats.Stats(profiler, stream=stream)
+    stats.sort_stats('cumulative')
+    stats.print_stats()
+    with open(outpath+'profile_results.txt', 'w') as f:
+        f.write(stream.getvalue())
