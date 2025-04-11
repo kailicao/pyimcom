@@ -5,6 +5,10 @@ Program to remove correlated noise stripes from RST images.
 import os
 import glob
 import time
+import csv
+import cProfile
+import pstats
+import io
 import numpy as np
 from astropy.io import fits
 from astropy import wcs
@@ -35,9 +39,9 @@ t_exp = 154  # sec
 CFG = Config(cfg_file='configs/config_destripe-H.json')
 filter_ = filters[CFG.use_filter]
 A_eff = areas[CFG.use_filter]
-obsfile = CFG.obsfile #location and stem of input images. overwritten by temp input dir
+obsfile = CFG.ds_obsfile #location and stem of input images. overwritten by temp input dir
 outpath =  CFG.ds_outpath #path to put outputs, /fs/scratch/PCON0003/klaliotis/imdestripe/
-labnoise_prefix = CFG.inpath #path to lab noise frames,  /fs/scratch/PCON0003/cond0007/anl-run-in-prod/labnoise/slope_
+labnoise_prefix = CFG.ds_indata #path to lab noise frames,  /fs/scratch/PCON0003/cond0007/anl-run-in-prod/labnoise/slope_
 use_model = CFG.ds_model
 permanent_mask = CFG.permanent_mask
 cg_model = CFG.cg_model
@@ -210,6 +214,7 @@ class Sca_img:
 
         self.shape = np.shape(self.image)
         self.w = wcs.WCS(file[image_hdu].header)
+        self.header = file[image_hdu].header
         file.close()
 
         self.obsid = obsid
@@ -922,6 +927,13 @@ def main():
         # Initialize variables
         grad_prev = None  # No previous gradient initially
         direction = None  # No initial direction
+        log_file = os.path.join(outpath, 'cg_log.csv')
+
+        with open(log_file, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(['Iteration', 'Current Norm', 'Convergence Rate', 'Step Size', 'Gradient Magnitude',
+                             'LS Iterations', 'Final d_cost', 'Final Epsilon', 'Time (min)', 'LS time (min)',
+                             'MSE', 'Parameter Change', 'SNR'])
 
         write_to_file('### Starting initial cost function')
         global test_image_dir
@@ -930,9 +942,8 @@ def main():
 
         for i in range(max_iter):
             write_to_file(f"### CG Iteration: {i + 1}")
-            if not os.path.exists(outpath + '/test_images/' + str(i + 1)):
-                os.makedirs(outpath + '/test_images/' + str(i + 1))
-            test_image_dir = outpath + '/test_images/' + str(i + 1) + '/'
+            test_image_dir = os.path.join(outpath, 'test_images', str(i + 1))
+            os.makedirs(test_image_dir, exist_ok=True)
             t_start_CG_iter = time.time()
 
             # Compute the gradient
@@ -978,10 +989,25 @@ def main():
             t_start_LS = time.time()
             write_to_file(f"Initiating linear search in direction: {direction}")
             p_new, psi_new, grad_new = linear_search(p, direction, f, f_prime, grad)
-            write_to_file(f'Total time spent in linear search: {(time.time() - t_start_LS) / 60}')
+            ls_time = (time.time() - t_start_LS) / 60
+            write_to_file(f'Total time spent in linear search: {ls_time}')
             write_to_file(
                 f'Current norm: {current_norm}, Tol * Norm_0: {tol}, Difference (CN-TOL): {current_norm - tol}')
             write_to_file(f'Current best params: {p_new.params}')
+
+            # Calculate additional metrics
+            convergence_rate = (current_norm - np.linalg.norm(grad_new)) / current_norm
+            step_size = np.linalg.norm(p_new.params - p.params)
+            gradient_magnitude = np.linalg.norm(grad_new)
+            mse = np.mean(psi_new ** 2)
+            parameter_change = np.linalg.norm(p_new.params - p.params)
+            snr = np.mean(psi_new) / np.std(psi_new) if np.std(psi_new) != 0 else 0
+
+            with open(log_file, 'a', newline='') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow([i + 1, current_norm, convergence_rate, step_size, gradient_magnitude,
+                                 len(grad_new), np.sum(grad * direction), np.sum(psi),
+                                 (time.time() - t_start_CG_iter)/60, ls_time, mse, parameter_change, snr])
 
             # Update to current values
             p = p_new
@@ -1017,13 +1043,27 @@ def main():
         this_param_set = p.forward_par(i)
         ds_image = this_sca.image - this_param_set
 
-        header = this_sca.w
-        hdu = fits.PrimaryHDU(ds_image, header=header)
-        hdu.writeto(outpath + filter_ + '_DS_' + obsid + scaid + '.fits', overwrite=True)
+        hdu = fits.PrimaryHDU(ds_image, header=this_sca.header)
+        hdu.header['TYPE'] = 'DESTRIPED_IMAGE'
+        hdu2 = fits.ImageHDU(this_sca.image, header=this_sca.header)
+        hdu2.header['TYPE'] = 'SCA_IMAGE'
+        hdu3 = fits.ImageHDU(this_param_set, header=this_sca.header)
+        hdu3.header['TYPE'] = 'PARAMS_IMAGE'
+        hdulist = fits.HDUList([hdu, hdu2, hdu3])
+        hdulist.writeto(outpath + filter_ + '_DS_' + obsid + scaid + '.fits', overwrite=True)
 
     write_to_file(f'Destriped images saved to {outpath + filter_} _DS_*.fits')
     write_to_file(f'Total hours elapsed: {(time.time() - t0) / 3600}')
 
 
 if __name__ == '__main__':
+    profiler = cProfile.Profile()
+    profiler.enable()
     main()
+    profiler.disable()
+    stream=io.StringIO()
+    stats = pstats.Stats(profiler, stream=stream)
+    stats.sort_stats('cumulative')
+    stats.print_stats()
+    with open(outpath+'profile_results.txt', 'w') as f:
+        f.write(stream.getvalue())
