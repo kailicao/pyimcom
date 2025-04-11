@@ -5,6 +5,7 @@ Program to remove correlated noise stripes from RST images.
 import os
 import glob
 import time
+import csv
 import cProfile
 import pstats
 import io
@@ -926,6 +927,13 @@ def main():
         # Initialize variables
         grad_prev = None  # No previous gradient initially
         direction = None  # No initial direction
+        log_file = os.path.join(outpath, 'cg_log.csv')
+
+        with open(log_file, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(['Iteration', 'Current Norm', 'Convergence Rate', 'Step Size', 'Gradient Magnitude',
+                             'LS Iterations', 'Final d_cost', 'Final Epsilon', 'Time (min)', 'LS time (min)',
+                             'MSE', 'Parameter Change', 'SNR'])
 
         write_to_file('### Starting initial cost function')
         global test_image_dir
@@ -935,9 +943,8 @@ def main():
 
         for i in range(max_iter):
             write_to_file(f"### CG Iteration: {i + 1}")
-            if not os.path.exists(outpath + '/test_images/' + str(i + 1)):
-                os.makedirs(outpath + '/test_images/' + str(i + 1))
-            test_image_dir = outpath + '/test_images/' + str(i + 1) + '/'
+            test_image_dir = os.path.join(outpath, 'test_images', str(i + 1))
+            os.makedirs(test_image_dir, exist_ok=True)
             t_start_CG_iter = time.time()
 
             # Compute the gradient
@@ -983,10 +990,25 @@ def main():
             t_start_LS = time.time()
             write_to_file(f"Initiating linear search in direction: {direction}")
             p_new, psi_new, grad_new = linear_search(p, direction, f, f_prime, grad)
-            write_to_file(f'Total time spent in linear search: {(time.time() - t_start_LS) / 60}')
+            ls_time = (time.time() - t_start_LS) / 60
+            write_to_file(f'Total time spent in linear search: {ls_time}')
             write_to_file(
                 f'Current norm: {current_norm}, Tol * Norm_0: {tol}, Difference (CN-TOL): {current_norm - tol}')
             write_to_file(f'Current best params: {p_new.params}')
+
+            # Calculate additional metrics
+            convergence_rate = (current_norm - np.linalg.norm(grad_new)) / current_norm
+            step_size = np.linalg.norm(p_new.params - p.params)
+            gradient_magnitude = np.linalg.norm(grad_new)
+            mse = np.mean(psi_new ** 2)
+            parameter_change = np.linalg.norm(p_new.params - p.params)
+            snr = np.mean(psi_new) / np.std(psi_new) if np.std(psi_new) != 0 else 0
+
+            with open(log_file, 'a', newline='') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow([i + 1, current_norm, convergence_rate, step_size, gradient_magnitude,
+                                 len(grad_new), np.sum(grad * direction), np.sum(psi),
+                                 (time.time() - t_start_CG_iter)/60, ls_time, mse, parameter_change, snr])
 
             # Update to current values
             p = p_new
