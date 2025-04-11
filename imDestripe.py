@@ -35,9 +35,9 @@ t_exp = 154  # sec
 CFG = Config(cfg_file='configs/config_destripe-H.json')
 filter_ = filters[CFG.use_filter]
 A_eff = areas[CFG.use_filter]
-obsfile = CFG.obsfile #location and stem of input images. overwritten by temp input dir
+obsfile = CFG.ds_obsfile #location and stem of input images. overwritten by temp input dir
 outpath =  CFG.ds_outpath #path to put outputs, /fs/scratch/PCON0003/klaliotis/imdestripe/
-labnoise_prefix = CFG.inpath #path to lab noise frames,  /fs/scratch/PCON0003/cond0007/anl-run-in-prod/labnoise/slope_
+labnoise_prefix = CFG.ds_indata #path to lab noise frames,  /fs/scratch/PCON0003/cond0007/anl-run-in-prod/labnoise/slope_
 use_model = CFG.ds_model
 permanent_mask = CFG.permanent_mask
 cg_model = CFG.cg_model
@@ -210,6 +210,7 @@ class Sca_img:
 
         self.shape = np.shape(self.image)
         self.w = wcs.WCS(file[image_hdu].header)
+        self.header = file[image_hdu].header
         file.close()
 
         self.obsid = obsid
@@ -1018,9 +1019,14 @@ def main():
         this_param_set = p.forward_par(i)
         ds_image = this_sca.image - this_param_set
 
-        header = this_sca.w
-        hdu = fits.PrimaryHDU(ds_image, header=header)
-        hdu.writeto(outpath + filter_ + '_DS_' + obsid + scaid + '.fits', overwrite=True)
+        hdu = fits.PrimaryHDU(ds_image, header=this_sca.header)
+        hdu.header['TYPE'] = 'DESTRIPED_IMAGE'
+        hdu2 = fits.ImageHDU(this_sca.image, header=this_sca.header)
+        hdu2.header['TYPE'] = 'SCA_IMAGE'
+        hdu3 = fits.ImageHDU(this_param_set, header=this_sca.header)
+        hdu3.header['TYPE'] = 'PARAMS_IMAGE'
+        hdulist = fits.HDUList([hdu, hdu2, hdu3])
+        hdulist.writeto(outpath + filter_ + '_DS_' + obsid + scaid + '.fits', overwrite=True)
 
     write_to_file(f'Destriped images saved to {outpath + filter_} _DS_*.fits')
     write_to_file(f'Total hours elapsed: {(time.time() - t0) / 3600}')

@@ -189,7 +189,7 @@ class Config:
         'npixpsf', 'psf_circ', 'psf_norm', 'amp_penalty', 'flat_penalty', 'instamp_pad',  # SECTION VII
         'linear_algebra', 'iter_rtol', 'iter_max', 'no_qlt_ctrl',
         'kappaC_arr', 'uctarget', 'sigmamax',  # SECTION VIII
-        'ds_model', 'ds_outpath', 'ds_outstem', 'cg_model', 'cost_model',
+        'ds_model', 'ds_outpath', 'ds_outstem', 'cg_model', 'cost_model', 'ds_obsfile', 'ds_indata',
         'cost_prior', 'resid_model', 'hub_thresh', 'cg_maxiter', 'cg_tol'  # SECTION IX
     )
 
@@ -411,6 +411,8 @@ class Config:
         self.ds_outpath, self.ds_outstem = cfg_dict['DSOUT']
         self.cg_model, self.cg_maxiter, self.cg_tol = cfg_dict['CGMODEL']
         self.cost_model, self.cost_prior = cfg_dict['DSCOST']
+        self.ds_obsfile = cfg_dict.get('DSOBSFILE', None)
+        self.ds_indata = cfg_dict.get('DSINDATA', None)
 
         # Lagrange multiplier (kappa) information
         # list of kappa/C values, ascending order
