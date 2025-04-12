@@ -456,7 +456,7 @@ class InImage:
         # The tophat width: in use_shortrange, the psfsplit module has already included this,
         # so we set it to 0 so as to not double-count this contribution.
         tophatwidth_use = self.blk.cfg.inpsf_oversamp
-        if use_shortrange: tophatwidth_use = 0
+        if use_shortrange and self.blk.cfg.psfsplit: tophatwidth_use = 0
 
         # get the pixel location on the input image
         # (moved this up since some PSF models need it)
