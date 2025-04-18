@@ -46,14 +46,14 @@
     "DSMODEL": "constant",
     "DSOBSFILE": "/fs/scratch/PCON0003/cond0007/anl-run-in-prod/simple/Roman_WAS_simple_model_",
     "DSINDATA": "/fs/scratch/PCON0003/cond0007/anl-run-in-prod/labnoise/slope_",
-    "DSOUT": ["/fs/scratch/PCON0003/klaliotis/imdestripe/",
+    "DSOUT": ["/fs/scratch/PCON0003/klaliotis/imdestripe/hl_results/",
         "_ds_out.txt"
     ],
     "CGMODEL": ["PR",
         80,
         1e-3
         ],
-    "DSCOST": ["quadratic",
+    "DSCOST": ["huber_loss",
         0
         ]
 }

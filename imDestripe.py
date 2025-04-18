@@ -36,7 +36,7 @@ s_in = 0.11  # arcsec^2
 t_exp = 154  # sec
 
 # Import config file
-CFG = Config(cfg_file='configs/config_destripe-H.json')
+CFG = Config(cfg_file='configs/imdestripe_configs/config_destripe-H.json')
 filter_ = filters[CFG.use_filter]
 A_eff = areas[CFG.use_filter]
 obsfile = CFG.ds_obsfile #location and stem of input images. overwritten by temp input dir
@@ -141,11 +141,11 @@ def absolute(x):
     return np.abs(x)
 
 
-def huber_loss(x, x0, d):
-    if (x - x0) <= d:
-        return quadratic(x - x0)
+def huber_loss(x, d):
+    if np.abs(x) <= d:
+        return quadratic(x)
     else:
-        return absolute(x - x0)
+        return d**2+2*d(np.abs(x)-d)
 
 
 # Derivatives
@@ -157,11 +157,11 @@ def abs_prime(x):
     return np.sign(x)
 
 
-def huber_prime(x, x0, b):
-    if (x - x0) <= b:
-        return quad_prime(x - x0)
+def huber_prime(x, d):
+    if np.abs(x) <= d:
+        return quad_prime(x)
     else:
-        return abs_prime(x - x0)
+        return 2*d*x/np.abs(x)
 
 class Cost_models:
     """
@@ -943,7 +943,7 @@ def main():
 
         for i in range(max_iter):
             write_to_file(f"### CG Iteration: {i + 1}")
-            test_image_dir = os.path.join(outpath, 'test_images', str(i + 1))
+            test_image_dir = outpath + '/test_images/' + str(i+1) + '/'
             os.makedirs(test_image_dir, exist_ok=True)
             t_start_CG_iter = time.time()
 
