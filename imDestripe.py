@@ -50,6 +50,7 @@ cg_tol = CFG.cg_tol
 cost_model = CFG.cost_model
 resid_model = CFG.resid_model
 
+
 if use_model not in model_params.keys():
     raise ValueError(f"Model {use_model} not in model_params dictionary.")
 if outfile_Katherine_dir:
@@ -170,10 +171,17 @@ class Cost_models:
 
     def __init__(self, model):
 
-        self.model = model
-
         models = {"quadratic": (quadratic, quad_prime), "absolute": (absolute, abs_prime),
                   "huber_loss": (huber_loss, huber_prime)}
+
+        self.model = model
+
+        if model=='huber_loss':
+            self.thresh = CFG.hub_thresh
+            write_to_file(f"Cost model is Huber Loss with threshold: {self.thresh}")
+        else:
+            self.thresh=None
+
         self.f, self.f_prime = models[model]
 
 
@@ -594,7 +602,7 @@ else:
     write_to_file(f"Overlap matrix complete. Duration: {(time.time() - ovmat_t0) / 60} Minutes")
 
 
-def residual_function_single(k, sca_a, psi, f_prime):
+def residual_function_single(k, sca_a, psi, f_prime, thresh=None):
     # Go and get the WCS object for image A
     obsid_A, scaid_A = get_ids(sca_a)
     filepath = outpath + f'interpolations/{obsid_A}_{scaid_A}_interp.fits'
@@ -614,7 +622,7 @@ def residual_function_single(k, sca_a, psi, f_prime):
 
     # Calculate and then transpose the gradient of I_A-J_A
     if TIME: T = time.time()
-    gradient_interpolated = f_prime(psi[k, :, :])
+    gradient_interpolated = f_prime(psi[k, :, :], thresh)
 
     term_1 = transpose_par(gradient_interpolated)
 
@@ -652,7 +660,7 @@ def residual_function_single(k, sca_a, psi, f_prime):
     return k, term_1, term_2_list
 
 
-def cost_function_single(j, sca_a, p, f):
+def cost_function_single(j, sca_a, p, f, thresh=None):
     m = re.search(r'_(\d+)_(\d+)', sca_a)
     obsid_A, scaid_A = m.group(1), m.group(2)
 
@@ -671,7 +679,7 @@ def cost_function_single(j, sca_a, p, f):
     J_A_mask *= I_A.mask
 
     psi = np.where(J_A_mask, I_A.image - J_A_image, 0)
-    local_epsilon = np.sum(f(psi))
+    local_epsilon = np.sum(f(psi, thresh))
 
     if obsid_A == '670' and scaid_A == '10':
         hdu = fits.PrimaryHDU(J_A_image * J_A_mask)
@@ -684,7 +692,7 @@ def cost_function_single(j, sca_a, p, f):
         write_to_file(f'Image A mean, std: {np.mean(I_A.image)}, {np.std(I_A.image)}')
         write_to_file(f'Image B mean, std: {np.mean(J_A_image)}, {np.std(J_A_image)}')
         write_to_file(f'Psi mean, std: {np.mean(psi)}, {np.std(psi)}')
-        write_to_file(f'f(Psi) mean, std: {np.mean(f(psi))}, {np.std(f(psi))}')
+        write_to_file(f'f(Psi) mean, std: {np.mean(f(psi, thresh))}, {np.std(f(psi, thresh))}')
         write_to_file(f"Local epsilon for SCA {j}: {local_epsilon}")
 
     return j, psi, local_epsilon
@@ -692,7 +700,7 @@ def cost_function_single(j, sca_a, p, f):
 # Optimization Functions
 
 def main():
-    def cost_function(p, f):
+    def cost_function(p, f, thresh=None):
         """
         Calculate the cost function with the current de-striping parameters.
         :param p: parameters object, the current parameters for de-striping
@@ -706,7 +714,7 @@ def main():
         epsilon = 0
 
         with ProcessPoolExecutor() as executor:
-            futures = [executor.submit(cost_function_single, j, sca_a, p, f) for j, sca_a in enumerate(all_scas)]
+            futures = [executor.submit(cost_function_single, j, sca_a, p, f, thresh) for j, sca_a in enumerate(all_scas)]
 
         for future in as_completed(futures):
             j, psi_j, local_eps = future.result()
@@ -717,7 +725,7 @@ def main():
         write_to_file(f'Average time per cost function iteration: {(time.time() - t0_cost) / len(all_scas)} seconds')
         return epsilon, psi
 
-    def residual_function(psi, f_prime, extrareturn=False):
+    def residual_function(psi, f_prime, thresh=None, extrareturn=False):
         """
         Calculate the residual image, = grad(epsilon)
         :param psi: 3D np array, the image difference array (I_A - J_A) (N_SCA, 4088, 4088)
@@ -735,7 +743,7 @@ def main():
         t_r_0 = time.time()
 
         with ProcessPoolExecutor() as executor:
-            futures = [executor.submit(residual_function_single, k, sca_a, psi, f_prime) for k, sca_a in
+            futures = [executor.submit(residual_function_single, k, sca_a, psi, f_prime, thresh) for k, sca_a in
                        enumerate(all_scas)]
 
         for future in as_completed(futures):
@@ -755,7 +763,7 @@ def main():
         if extrareturn: return resids, resids1, resids2
         return resids
 
-    def linear_search(p, direction, f, f_prime, grad_current, n_iter=100, tol=10 ** -4):
+    def linear_search(p, direction, f, f_prime, grad_current, thresh=None, n_iter=100, tol=10 ** -4):
         """
         Linear search via combination bisection and secant methods for parameters that minimize the function
          d_epsilon/d_alpha in the given direction . Note alpha = depth of step in direction
@@ -769,7 +777,7 @@ def main():
         :return best_p: parameters object, containing the best parameters found via search
         :return best_psi: 3D numpy array, the difference images made from images with the best_p params subtracted off
         """
-        best_epsilon, best_psi = cost_function(p, f)
+        best_epsilon, best_psi = cost_function(p, f, thresh)
         best_p = copy.deepcopy(p)
 
         # Simple linear search
@@ -799,14 +807,14 @@ def main():
         write_to_file('### Calculating min and max epsilon and cost')
         max_params = p.params + alpha_max * direction
         max_p.params = max_params
-        max_epsilon, max_psi = cost_function(max_p, f)
-        max_resids = residual_function(max_psi, f_prime)
+        max_epsilon, max_psi = cost_function(max_p, f, thresh)
+        max_resids = residual_function(max_psi, f_prime, thresh)
         d_cost_max = np.sum(max_resids * direction)
         
         min_params = p.params + alpha_min * direction
         min_p.params = min_params
-        min_epsilon, min_psi = cost_function(min_p, f)
-        min_resids = residual_function(min_psi, f_prime)
+        min_epsilon, min_psi = cost_function(min_p, f, thresh)
+        min_resids = residual_function(min_psi, f_prime, thresh)
         d_cost_min = np.sum(min_resids * direction)
         
         conv_params = []
@@ -844,8 +852,8 @@ def main():
             working_params = p.params + alpha_test * direction
             working_p.params = working_params
 
-            working_epsilon, working_psi = cost_function(working_p, f)
-            working_resids = residual_function(working_psi, f_prime)
+            working_epsilon, working_psi = cost_function(working_p, f, thresh)
+            working_resids = residual_function(working_psi, f_prime, thresh)
             d_cost = np.sum(working_resids * direction)
             convergence_crit = (alpha_max - alpha_min)
             conv_params.append([working_epsilon, alpha_test, d_cost])
@@ -909,7 +917,7 @@ def main():
 
         return best_p, best_psi
 
-    def conjugate_gradient(p, f, f_prime, method='FR', tol=1e-5, max_iter=100):
+    def conjugate_gradient(p, f, f_prime, method='FR', tol=1e-5, max_iter=100, thresh=None):
         """
         Algorithm to use conjugate gradient descent to optimize the parameters for destriping.
         Direction is updated using Fletcher-Reeves method
@@ -938,7 +946,7 @@ def main():
         write_to_file('### Starting initial cost function')
         global test_image_dir
         test_image_dir = outpath + '/test_images/' + str(0) + '/'
-        psi = cost_function(p, f)[1]
+        psi = cost_function(p, f, thresh)[1]
         sys.stdout.flush()
 
         for i in range(max_iter):
@@ -949,7 +957,7 @@ def main():
 
             # Compute the gradient
             if i==0:
-                grad, gr_term1, gr_term2 = residual_function(psi, f_prime, extrareturn=True)
+                grad, gr_term1, gr_term2 = residual_function(psi, f_prime, thresh, extrareturn=True)
                 # if i==0:
                 #    hdu_ = fits.PrimaryHDU(np.stack((grad,gr_term1,gr_term2)))
                 #    hdu_.writeto('grterms.fits', overwrite=True)
@@ -1033,7 +1041,7 @@ def main():
 
     # Do it
     p = conjugate_gradient(p0, Cost_models(cost_model).f, Cost_models(cost_model).f_prime,
-                           cg_model, cg_tol, cg_maxiter)
+                           cg_model, cg_tol, cg_maxiter, thresh=Cost_models(cost_model).thresh)
     hdu = fits.PrimaryHDU(p.params)
     hdu.writeto(outpath + 'final_params.fits', overwrite=True)
     print(outpath + 'final_params.fits created \n')
