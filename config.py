@@ -287,7 +287,7 @@ class Config:
                 self.resid_model = 'abs_prime'
             elif self.cost_model=='huber_loss':
                 self.resid_model = 'hub_prime'
-                self.hub_thresh = 0.0001
+                self.hub_thresh = 0.01
             #stuff
 
 
