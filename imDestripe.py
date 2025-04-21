@@ -945,12 +945,8 @@ def main():
 
         write_to_file('### Starting initial cost function')
         global test_image_dir
-<<<<<<< HEAD
-        psi = cost_function(p, f)[1]
-=======
         test_image_dir = outpath + '/test_images/' + str(0) + '/'
         psi = cost_function(p, f, thresh)[1]
->>>>>>> b36af13e19939a35d9e9e238b60a0b13d0ab9e15
         sys.stdout.flush()
 
         for i in range(max_iter):
