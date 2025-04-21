@@ -143,10 +143,14 @@ def absolute(x):
 
 
 def huber_loss(x, d):
-    if np.abs(x) <= d:
-        return quadratic(x)
-    else:
-        return d**2+2*d(np.abs(x)-d)
+    """
+    KL NOTE this is not going to work at the moment because it's confused about x=psi not being a number
+    I need to convert this to do a numpy where, giving the two different conditions
+    this is still not going to work actually becasue it was np abs that was unhappy
+    so i need to fix that
+
+    """
+    return np.where(np.abs(x) <= d, quadratic(x), d**2+2*d*(np.abs(x)-d))
 
 
 # Derivatives
@@ -159,10 +163,7 @@ def abs_prime(x):
 
 
 def huber_prime(x, d):
-    if np.abs(x) <= d:
-        return quad_prime(x)
-    else:
-        return 2*d*x/np.abs(x)
+    return np.where(np.abs(x) <= d, quad_prime(x), 2*d*x/np.abs(x))
 
 class Cost_models:
     """
