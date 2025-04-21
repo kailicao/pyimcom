@@ -163,7 +163,7 @@ def abs_prime(x):
 
 
 def huber_prime(x, d):
-    return np.where(np.abs(x) <= d, quad_prime(x), 2*d*x/np.abs(x))
+    return np.where(np.abs(x) <= d, quad_prime(x), 2*d*np.sign(x))
 
 class Cost_models:
     """
@@ -1003,7 +1003,7 @@ def main():
             # Perform linear search
             t_start_LS = time.time()
             write_to_file(f"Initiating linear search in direction: {direction}")
-            p_new, psi_new, grad_new = linear_search(p, direction, f, f_prime, grad)
+            p_new, psi_new, grad_new = linear_search(p, direction, f, f_prime, grad, thresh)
             ls_time = (time.time() - t_start_LS) / 60
             write_to_file(f'Total time spent in linear search: {ls_time}')
             write_to_file(
