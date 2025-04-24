@@ -809,19 +809,20 @@ def main():
             alpha_max = alpha_test * 10
 
         # Calculate f(alpha_max) and f(alpha_min), which need to be defined for secant update
-        write_to_file('### Calculating min and max epsilon and cost')
-        max_params = p.params + alpha_max * direction
-        max_p.params = max_params
-        max_epsilon, max_psi = cost_function(max_p, f, thresh)
-        max_resids = residual_function(max_psi, f_prime, thresh)
-        d_cost_max = np.sum(max_resids * direction)
-        
-        min_params = p.params + alpha_min * direction
-        min_p.params = min_params
-        min_epsilon, min_psi = cost_function(min_p, f, thresh)
-        min_resids = residual_function(min_psi, f_prime, thresh)
-        d_cost_min = np.sum(min_resids * direction)
-        
+        if thresh is not None:
+            write_to_file('### Calculating min and max epsilon and cost')
+            max_params = p.params + alpha_max * direction
+            max_p.params = max_params
+            max_epsilon, max_psi = cost_function(max_p, f, thresh)
+            max_resids = residual_function(max_psi, f_prime, thresh)
+            d_cost_max = np.sum(max_resids * direction)
+
+            min_params = p.params + alpha_min * direction
+            min_p.params = min_params
+            min_epsilon, min_psi = cost_function(min_p, f, thresh)
+            min_resids = residual_function(min_psi, f_prime, thresh)
+            d_cost_min = np.sum(min_resids * direction)
+
         conv_params = []
 
         for k in range(1, n_iter):
