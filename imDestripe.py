@@ -809,7 +809,7 @@ def main():
             alpha_max = alpha_test * 10
 
         # Calculate f(alpha_max) and f(alpha_min), which need to be defined for secant update
-        if thresh is not None:
+        if thresh is None:
             write_to_file('### Calculating min and max epsilon and cost')
             max_params = p.params + alpha_max * direction
             max_p.params = max_params
