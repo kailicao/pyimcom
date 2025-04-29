@@ -709,8 +709,6 @@ def main():
         :return epsilon: int, the total cost function summed over all images
         :return psi: 3D np array, the difference images I_A-J_A
         """
-        print(f'CF Thresh: {thresh}')
-        print(f'CF Thresh: {thresh}')
         write_to_file('Initializing cost function')
         t0_cost = time.time()
         psi = np.zeros((len(all_scas), 4088, 4088))
@@ -738,7 +736,6 @@ def main():
                 in addition to full residuals. returns resids, resids1, resids2
         :return resids: 2D np array, with one row per SCA and one col per parameter
         """
-        print(f'resids Thresh: {thresh}')
         resids = Parameters(use_model, 4088).params
         if extrareturn:
             resids1 = np.zeros_like(resids)
@@ -781,7 +778,6 @@ def main():
         :return best_p: parameters object, containing the best parameters found via search
         :return best_psi: 3D numpy array, the difference images made from images with the best_p params subtracted off
         """
-        print(f'LS Thresh: {thresh}')
         best_epsilon, best_psi = cost_function(p, f, thresh)
         best_p = copy.deepcopy(p)
 
@@ -937,7 +933,7 @@ def main():
         :return p: params object, the best fit parameters for destriping the SCA images
         """
         write_to_file('### Starting conjugate gradient optimization')
-        print(f'Thresh: {thresh}')
+        print(f'HL Threshold (None if other cost fn): {thresh}')
 
         # Initialize variables
         grad_prev = None  # No previous gradient initially
