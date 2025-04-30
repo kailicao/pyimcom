@@ -794,6 +794,7 @@ def main():
         # else:
         #     alpha_max = 1 / np.max(p.params)
         eta = 0.1
+        if thresh is not None: tol=10**-6
         alpha_test = -eta * (np.sum(grad_current*direction))/(np.sum(direction*direction)+1e-12)
         if alpha_test <= 0:
             # Not a descent direction — fallback
