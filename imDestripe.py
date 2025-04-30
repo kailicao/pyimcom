@@ -21,6 +21,8 @@ import copy
 import pyimcom_croutines
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from filelock import Timeout, FileLock
+from scipy.ndimage import binary_dilation
+
 
 outfile_Katherine_dir = True
 TIME = True
@@ -112,26 +114,30 @@ def save_fits(image, filename, dir=outpath, overwrite=True, s=False, header=None
 
 
 # C.H. wanted to define this before any use of sca_img so moved it up.
-def apply_object_mask(image, mask=None):
+def apply_object_mask(image, mask=None, threshold_factor=2.0, inplace=False):
     """
     Apply a bright object mask to an image.
+
     :param image: 2D numpy array, the image to be masked.
-    :param mask: optional: 2D numpy array, the pre-existing object mask you wish to use
-    :return: the image with bright objects (flux>2*median; could modify later) masked out
+    :param mask: optional 2D boolean array, the pre-existing object mask.
+    :param: factor to multiply with the median for thresholding.
+    :param inplace: whether to modify the input image directly.
+    :return image_out: the masked image.
+    :return neighbor_mask: the mask applied.
     """
     if mask is not None and isinstance(mask, np.ndarray):
         neighbor_mask = mask
     else:
-        # Create a binary mask for high-value pixels (KL: could modify later)
-        high_value_mask = image >= 2 * np.median(image)
+        median_val = np.median(image)
+        high_value_mask = image >= threshold_factor * median_val
+        neighbor_mask = binary_dilation(high_value_mask, structure=np.ones((5, 5), dtype=bool))
 
-        # Convolve the binary mask with a 5x5 kernel to include neighbors
-        kernel = np.ones((5, 5), dtype=int)
-        neighbor_mask = convolve2d(high_value_mask, kernel, mode='same') > 0
-
-    # Set the target pixels and their neighbors to zero
-    image = np.where(neighbor_mask, 0, image)
-    return image, neighbor_mask
+    if inplace:
+        image[neighbor_mask] = 0
+        return image, neighbor_mask
+    else:
+        image_out = np.where(neighbor_mask, 0, image)
+        return image_out, neighbor_mask
 
 
 def quadratic(x):
@@ -653,10 +659,10 @@ def residual_function_single(k, sca_a, psi, f_prime, thresh=None):
             term_2 = transpose_par(gradient_original)
             term_2_list.append((j, term_2))
 
-            if obsid_A == '670' and scaid_A == '10':
-                write_to_file('670_10 sample stats:')
-                write_to_file(f'Terms 1 and 2 means: {np.mean(term_1)}, {np.mean(term_2)}')
-                write_to_file(f'G_eff_a, G_eff_b means: {np.mean(g_eff_A)}, {np.mean(I_B.g_eff)}')
+            # if obsid_A == '670' and scaid_A == '10':
+            #     write_to_file('670_10 sample stats:')
+            #     write_to_file(f'Terms 1 and 2 means: {np.mean(term_1)}, {np.mean(term_2)}')
+            #     write_to_file(f'G_eff_a, G_eff_b means: {np.mean(g_eff_A)}, {np.mean(I_B.g_eff)}')
 
     return k, term_1, term_2_list
 
@@ -690,10 +696,10 @@ def cost_function_single(j, sca_a, p, f, thresh=None):
         hdu.writeto(test_image_dir + '670_10_Psi.fits', overwrite=True)
 
         write_to_file('Sample stats for SCA 670_10:')
-        write_to_file(f'Image A mean, std: {np.mean(I_A.image)}, {np.std(I_A.image)}')
-        write_to_file(f'Image B mean, std: {np.mean(J_A_image)}, {np.std(J_A_image)}')
-        write_to_file(f'Psi mean, std: {np.mean(psi)}, {np.std(psi)}')
-        write_to_file(f'f(Psi) mean, std: {np.mean(f(psi, thresh))}, {np.std(f(psi, thresh))}')
+        write_to_file(f'Image A mean: {np.mean(I_A.image)}')
+        write_to_file(f'Image B mean: {np.mean(J_A_image)}')
+        write_to_file(f'Psi mean: {np.mean(psi)}')
+        write_to_file(f'f(Psi) mean: {np.mean(f(psi, thresh))}')
         write_to_file(f"Local epsilon for SCA {j}: {local_epsilon}")
 
     return j, psi, local_epsilon
@@ -809,19 +815,18 @@ def main():
             tol = 1e-6
 
         # Calculate f(alpha_max) and f(alpha_min), which need to be defined for secant update
-        if thresh is None:
-            write_to_file('### Calculating min and max epsilon and cost')
-            max_params = p.params + alpha_max * direction
-            max_p.params = max_params
-            max_epsilon, max_psi = cost_function(max_p, f, thresh)
-            max_resids = residual_function(max_psi, f_prime, thresh)
-            d_cost_max = np.sum(max_resids * direction)
+        write_to_file('### Calculating min and max epsilon and cost')
+        max_params = p.params + alpha_max * direction
+        max_p.params = max_params
+        max_epsilon, max_psi = cost_function(max_p, f, thresh)
+        max_resids = residual_function(max_psi, f_prime, thresh)
+        d_cost_max = np.sum(max_resids * direction)
 
-            min_params = p.params + alpha_min * direction
-            min_p.params = min_params
-            min_epsilon, min_psi = cost_function(min_p, f, thresh)
-            min_resids = residual_function(min_psi, f_prime, thresh)
-            d_cost_min = np.sum(min_resids * direction)
+        min_params = p.params + alpha_min * direction
+        min_p.params = min_params
+        min_epsilon, min_psi = cost_function(min_p, f, thresh)
+        min_resids = residual_function(min_psi, f_prime, thresh)
+        d_cost_min = np.sum(min_resids * direction)
 
         conv_params = []
 
@@ -948,7 +953,7 @@ def main():
             writer = csv.writer(csvfile)
             writer.writerow(['Iteration', 'Current Norm', 'Convergence Rate', 'Step Size', 'Gradient Magnitude',
                              'LS Iterations', 'Final d_cost', 'Final Epsilon', 'Time (min)', 'LS time (min)',
-                             'MSE', 'Parameter Change', 'SNR'])
+                             'MSE', 'Parameter Change'])
 
         write_to_file('### Starting initial cost function')
         global test_image_dir
@@ -965,10 +970,6 @@ def main():
             # Compute the gradient
             if i==0:
                 grad, gr_term1, gr_term2 = residual_function(psi, f_prime, thresh, extrareturn=True)
-                # if i==0:
-                #    hdu_ = fits.PrimaryHDU(np.stack((grad,gr_term1,gr_term2)))
-                #    hdu_.writeto('grterms.fits', overwrite=True)
-                #    del hdu_
                 del gr_term1, gr_term2
                 write_to_file(f"Minutes spent in initial residual function: {(time.time() - t_start_CG_iter) / 60}")
                 sys.stdout.flush()
@@ -1017,13 +1018,12 @@ def main():
             gradient_magnitude = np.linalg.norm(grad_new)
             mse = np.mean(psi_new ** 2)
             parameter_change = np.linalg.norm(p_new.params - p.params)
-            snr = np.mean(psi_new) / np.std(psi_new) if np.std(psi_new) != 0 else 0
 
             with open(log_file, 'a', newline='') as csvfile:
                 writer = csv.writer(csvfile)
                 writer.writerow([i + 1, current_norm, convergence_rate, step_size, gradient_magnitude,
                                  len(grad_new), np.sum(grad * direction), np.sum(psi),
-                                 (time.time() - t_start_CG_iter)/60, ls_time, mse, parameter_change, snr])
+                                 (time.time() - t_start_CG_iter)/60, ls_time, mse, parameter_change])
 
             # Update to current values
             p = p_new
