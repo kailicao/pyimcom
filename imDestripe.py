@@ -21,6 +21,8 @@ import copy
 import pyimcom_croutines
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from filelock import Timeout, FileLock
+from scipy.ndimage import binary_dilation
+
 
 outfile_Katherine_dir = True
 TIME = True
@@ -112,26 +114,30 @@ def save_fits(image, filename, dir=outpath, overwrite=True, s=False, header=None
 
 
 # C.H. wanted to define this before any use of sca_img so moved it up.
-def apply_object_mask(image, mask=None):
+def apply_object_mask(image, mask=None, threshold_factor=2.0, inplace=False):
     """
     Apply a bright object mask to an image.
+
     :param image: 2D numpy array, the image to be masked.
-    :param mask: optional: 2D numpy array, the pre-existing object mask you wish to use
-    :return: the image with bright objects (flux>2*median; could modify later) masked out
+    :param mask: optional 2D boolean array, the pre-existing object mask.
+    :param: factor to multiply with the median for thresholding.
+    :param inplace: whether to modify the input image directly.
+    :return image_out: the masked image.
+    :return neighbor_mask: the mask applied.
     """
     if mask is not None and isinstance(mask, np.ndarray):
         neighbor_mask = mask
     else:
-        # Create a binary mask for high-value pixels (KL: could modify later)
-        high_value_mask = image >= 2 * np.median(image)
+        median_val = np.median(image)
+        high_value_mask = image >= threshold_factor * median_val
+        neighbor_mask = binary_dilation(high_value_mask, structure=np.ones((5, 5), dtype=bool))
 
-        # Convolve the binary mask with a 5x5 kernel to include neighbors
-        kernel = np.ones((5, 5), dtype=int)
-        neighbor_mask = convolve2d(high_value_mask, kernel, mode='same') > 0
-
-    # Set the target pixels and their neighbors to zero
-    image = np.where(neighbor_mask, 0, image)
-    return image, neighbor_mask
+    if inplace:
+        image[neighbor_mask] = 0
+        return image, neighbor_mask
+    else:
+        image_out = np.where(neighbor_mask, 0, image)
+        return image_out, neighbor_mask
 
 
 def quadratic(x):
