@@ -760,7 +760,7 @@ def main():
                     resids2[j, :] += term_2
 
         write_to_file(f'Residuals calculation finished in {(time.time() - t_r_0) / 60} minutes.')
-        write_to_file((f"Average time making resids per sca: {(time.time() - t_r_0) / len(all_scas)} seconds"))
+        write_to_file(f"Average time making resids per sca: {(time.time() - t_r_0) / len(all_scas)} seconds")
         if extrareturn: return resids, resids1, resids2
         return resids
 
@@ -789,21 +789,24 @@ def main():
         convergence_crit = 99.
         method = 'bisection'
 
-        # if not np.any(p.params):
-        #     alpha_max = 1
-        # else:
-        #     alpha_max = 1 / np.max(p.params)
         eta = 0.1
-        if thresh is not None: tol=10**-6
-        alpha_test = -eta * (np.sum(grad_current*direction))/(np.sum(direction*direction)+1e-12)
-        if alpha_test <= 0:
-            # Not a descent direction — fallback
-            alpha_min = -0.9
-            alpha_max = 1.0
-        else:
-            # Curvature-based search window
-            alpha_min = alpha_test * 1e-4
-            alpha_max = alpha_test * 10
+
+        if cost_model=='quadratic':
+            alpha_test = -eta * (np.sum(grad_current*direction))/(np.sum(direction*direction)+1e-12)
+            if alpha_test <= 0:
+                # Not a descent direction — fallback
+                alpha_min = -0.9
+                alpha_max = 1.0
+            else:
+                # Curvature-based search window
+                alpha_min = alpha_test * 1e-4
+                alpha_max = alpha_test * 10
+
+        elif cost_model=='huber_loss':
+            alpha_test = 1.
+            alpha_min = 1e-4
+            alpha_max = 10
+            tol = 1e-6
 
         # Calculate f(alpha_max) and f(alpha_min), which need to be defined for secant update
         if thresh is None:
