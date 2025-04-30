@@ -696,10 +696,10 @@ def cost_function_single(j, sca_a, p, f, thresh=None):
         hdu.writeto(test_image_dir + '670_10_Psi.fits', overwrite=True)
 
         write_to_file('Sample stats for SCA 670_10:')
-        write_to_file(f'Image A mean, std: {np.mean(I_A.image)}, {np.std(I_A.image)}')
-        write_to_file(f'Image B mean, std: {np.mean(J_A_image)}, {np.std(J_A_image)}')
-        write_to_file(f'Psi mean, std: {np.mean(psi)}, {np.std(psi)}')
-        write_to_file(f'f(Psi) mean, std: {np.mean(f(psi, thresh))}, {np.std(f(psi, thresh))}')
+        write_to_file(f'Image A mean: {np.mean(I_A.image)}')
+        write_to_file(f'Image B mean: {np.mean(J_A_image)}')
+        write_to_file(f'Psi mean: {np.mean(psi)}')
+        write_to_file(f'f(Psi) mean: {np.mean(f(psi, thresh))}')
         write_to_file(f"Local epsilon for SCA {j}: {local_epsilon}")
 
     return j, psi, local_epsilon
