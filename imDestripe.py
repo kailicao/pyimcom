@@ -659,10 +659,10 @@ def residual_function_single(k, sca_a, psi, f_prime, thresh=None):
             term_2 = transpose_par(gradient_original)
             term_2_list.append((j, term_2))
 
-            if obsid_A == '670' and scaid_A == '10':
-                write_to_file('670_10 sample stats:')
-                write_to_file(f'Terms 1 and 2 means: {np.mean(term_1)}, {np.mean(term_2)}')
-                write_to_file(f'G_eff_a, G_eff_b means: {np.mean(g_eff_A)}, {np.mean(I_B.g_eff)}')
+            # if obsid_A == '670' and scaid_A == '10':
+            #     write_to_file('670_10 sample stats:')
+            #     write_to_file(f'Terms 1 and 2 means: {np.mean(term_1)}, {np.mean(term_2)}')
+            #     write_to_file(f'G_eff_a, G_eff_b means: {np.mean(g_eff_A)}, {np.mean(I_B.g_eff)}')
 
     return k, term_1, term_2_list
 
@@ -954,7 +954,7 @@ def main():
             writer = csv.writer(csvfile)
             writer.writerow(['Iteration', 'Current Norm', 'Convergence Rate', 'Step Size', 'Gradient Magnitude',
                              'LS Iterations', 'Final d_cost', 'Final Epsilon', 'Time (min)', 'LS time (min)',
-                             'MSE', 'Parameter Change', 'SNR'])
+                             'MSE', 'Parameter Change'])
 
         write_to_file('### Starting initial cost function')
         global test_image_dir
@@ -971,10 +971,6 @@ def main():
             # Compute the gradient
             if i==0:
                 grad, gr_term1, gr_term2 = residual_function(psi, f_prime, thresh, extrareturn=True)
-                # if i==0:
-                #    hdu_ = fits.PrimaryHDU(np.stack((grad,gr_term1,gr_term2)))
-                #    hdu_.writeto('grterms.fits', overwrite=True)
-                #    del hdu_
                 del gr_term1, gr_term2
                 write_to_file(f"Minutes spent in initial residual function: {(time.time() - t_start_CG_iter) / 60}")
                 sys.stdout.flush()
@@ -1023,13 +1019,12 @@ def main():
             gradient_magnitude = np.linalg.norm(grad_new)
             mse = np.mean(psi_new ** 2)
             parameter_change = np.linalg.norm(p_new.params - p.params)
-            snr = np.mean(psi_new) / np.std(psi_new) if np.std(psi_new) != 0 else 0
 
             with open(log_file, 'a', newline='') as csvfile:
                 writer = csv.writer(csvfile)
                 writer.writerow([i + 1, current_norm, convergence_rate, step_size, gradient_magnitude,
                                  len(grad_new), np.sum(grad * direction), np.sum(psi),
-                                 (time.time() - t_start_CG_iter)/60, ls_time, mse, parameter_change, snr])
+                                 (time.time() - t_start_CG_iter)/60, ls_time, mse, parameter_change])
 
             # Update to current values
             p = p_new
