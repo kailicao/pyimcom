@@ -289,6 +289,16 @@ class Sca_img:
         self.image *= pm
         self.mask *= pm
 
+    def get_permanent_mask(self):
+        """
+        Apply permanent pixel mask. Updates self.image and self.mask
+        :return:
+        """
+        pm = fits.open(permanent_mask)[0].data[int(self.scaid) - 1]
+        pm_array = np.copy(pm)
+        pm.close()
+        return pm_array
+
     def apply_all_mask(self):
         """
         Apply permanent pixel mask. Updates self.image in-place
@@ -1054,17 +1064,20 @@ def main():
 
     for i, sca in enumerate(all_scas):
         obsid, scaid = get_ids(sca)
-        this_sca = Sca_img(obsid, scaid)
+        this_sca = Sca_img(obsid, scaid, add_objmask=False)
         this_param_set = p.forward_par(i)
         ds_image = this_sca.image - this_param_set
+        pm = this_sca.get_permanent_mask()
 
         hdu = fits.PrimaryHDU(ds_image, header=this_sca.header)
         hdu.header['TYPE'] = 'DESTRIPED_IMAGE'
         hdu2 = fits.ImageHDU(this_sca.image, header=this_sca.header)
         hdu2.header['TYPE'] = 'SCA_IMAGE'
-        hdu3 = fits.ImageHDU(this_param_set, header=this_sca.header)
-        hdu3.header['TYPE'] = 'PARAMS_IMAGE'
-        hdulist = fits.HDUList([hdu, hdu2, hdu3])
+        hdu3 = fits.ImageHDU(pm, header=this_sca.header)
+        hdu3.header['TYPE'] = 'PERMANENT_MASk'
+        hdu4 = fits.ImageHDU(this_param_set, header=this_sca.header)
+        hdu4.header['TYPE'] = 'PARAMS_IMAGE'
+        hdulist = fits.HDUList([hdu, hdu2, hdu3, hdu4])
         hdulist.writeto(outpath + filter_ + '_DS_' + obsid + scaid + '.fits', overwrite=True)
 
     write_to_file(f'Destriped images saved to {outpath + filter_} _DS_*.fits')
