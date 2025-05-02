@@ -812,7 +812,6 @@ def main():
             alpha_test = 1.
             alpha_min = 1e-4
             alpha_max = 10
-            tol = 1e-6
 
         # Calculate f(alpha_max) and f(alpha_min), which need to be defined for secant update
         write_to_file('### Calculating min and max epsilon and cost')
@@ -952,7 +951,7 @@ def main():
         with open(log_file, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow(['Iteration', 'Current Norm', 'Convergence Rate', 'Step Size', 'Gradient Magnitude',
-                             'LS Iterations', 'Final d_cost', 'Final Epsilon', 'Time (min)', 'LS time (min)',
+                              'Final d_cost', 'Final Epsilon', 'Time (min)', 'LS time (min)',
                              'MSE', 'Parameter Change'])
 
         write_to_file('### Starting initial cost function')
@@ -1022,7 +1021,7 @@ def main():
             with open(log_file, 'a', newline='') as csvfile:
                 writer = csv.writer(csvfile)
                 writer.writerow([i + 1, current_norm, convergence_rate, step_size, gradient_magnitude,
-                                 len(grad_new), np.sum(grad * direction), np.sum(psi),
+                                  np.sum(grad * direction), np.sum(psi),
                                  (time.time() - t_start_CG_iter)/60, ls_time, mse, parameter_change])
 
             # Update to current values
