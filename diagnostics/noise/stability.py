@@ -4,6 +4,7 @@ import re
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
+from matplotlib.offsetbox import bbox_artist
 from sklearn.decomposition import PCA
 import pandas as pd
 
@@ -61,7 +62,7 @@ def plot_row_stability_summary(row_profiles):
     ax2.legend()
 
     plt.tight_layout()
-    plt.show()
+    plt.savefig(f"plots/row_stability_summary_{SCA}.png", bbox_inches='tight')
 
 
 
