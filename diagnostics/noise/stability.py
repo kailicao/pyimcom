@@ -19,11 +19,15 @@ def process_fits_files(directory, name_pattern):
 
     """
     file_pattern = re.compile(name_pattern)
+    x_range=None
+    all_y_vals=[]
 
     means = []
     std_devs = []
 
-    for filename in os.listdir(directory):
+    plt.figure(figsize=(10,6))
+
+    for filename in sorted(os.listdir(directory)):
         if m:=file_pattern.match(filename):
             file_path = os.path.join(directory, filename)
             obs=m.group(1)
@@ -32,7 +36,6 @@ def process_fits_files(directory, name_pattern):
                 noise_data = hdul["PRIMARY"].data
 
             row_medians = np.median(noise_data, axis=1)
-
             row_median_mean = np.mean(row_medians)
             row_median_std = np.std(row_medians)
 
@@ -40,18 +43,33 @@ def process_fits_files(directory, name_pattern):
             std_devs.append(row_median_std)
 
             # Plot Gaussian using mean and standard deviation
-            x = np.linspace(row_median_mean - 4 * row_median_std, row_median_mean + 4 * row_median_std, 100)
+            if x_range is None:
+                x = np.linspace(row_median_mean - 4 * row_median_std, row_median_mean + 4 * row_median_std, 100)
             y = (1 / (row_median_std * np.sqrt(2 * np.pi))) * np.exp(
                 -0.5 * ((x - row_median_mean) / row_median_std) ** 2)
+            all_y_vals.append(y)
 
-            plt.plot(x, y, label=f'Obs {obs} (mean={row_median_mean:.2f}, std={row_median_std:.2f})',
+            plt.plot(x_range, y, label=f'Obs {obs} (mean={row_median_mean:.2f}, std={row_median_std:.2f})',
                      )
 
     # Show the plot
-    plt.legend()
+    all_y_values = np.array(all_y_vals)
+    y_max = np.max(all_y_values, axis=0)
+    y_min = np.min(all_y_values, axis=0)
+    y_diff = y_max - y_min
+    max_difference = np.max(y_diff)
+
+    # Plot the envelope of the curves
+    plt.fill_between(x_range, y_min, y_max, color='gray', alpha=0.3, label='Envelope (max-min)')
+    plt.text(0.02, 0.95, f'Max y-difference: {max_difference:.3e}', transform=plt.gca().transAxes,
+             verticalalignment='top', fontsize=10, bbox=dict(facecolor='white', alpha=0.8))
+
+    # Move legend below the plot
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.25), ncol=4, fontsize=8)
     plt.xlabel('Median Value')
     plt.ylabel('Probability Density')
     plt.title(f'Gaussian Distribution of Row Medians for Each Observation: SCA {SCA}')
+    plt.tight_layout(rect=[0, 0.1, 1, 1])  # Leave space at the bottom for legend
     plt.savefig(f'./plots/stability_{SCA}.png', bbox_inches='tight')
 
 
