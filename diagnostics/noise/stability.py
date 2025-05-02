@@ -4,9 +4,8 @@ import re
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
-from matplotlib.offsetbox import bbox_artist
-from sklearn.decomposition import PCA
-import pandas as pd
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 
 def load_row_profiles(directory, name_pattern):
     file_pattern = re.compile(name_pattern)
@@ -28,6 +27,10 @@ def load_row_profiles(directory, name_pattern):
 
     return np.array(row_profiles), obsnames
 
+import matplotlib.pyplot as plt
+import numpy as np
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 def plot_row_stability_summary(row_profiles):
     n_images, n_rows = row_profiles.shape
 
@@ -41,35 +44,40 @@ def plot_row_stability_summary(row_profiles):
     )
 
     # Top: Heatmap of row median profiles
-    im = ax1.imshow(row_profiles, aspect='auto', cmap='viridis', origin='lower',
-                    vmin=np.percentile(row_profiles, 10), vmax=np.percentile(row_profiles, 90))
+    im = ax1.imshow(
+        row_profiles, aspect='auto', cmap='viridis', origin='lower',
+        vmin=np.percentile(row_profiles, 10),
+        vmax=np.percentile(row_profiles, 90)
+    )
     ax1.set_ylabel("Image Index")
     ax1.set_title("Row Median Profiles Across Images")
-    plt.colorbar(im, ax=ax1, label='Row Median (DN/fr))')
+
+    # Use make_axes_locatable to keep colorbar from shifting the axis
+    divider = make_axes_locatable(ax1)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    plt.colorbar(im, cax=cax, label='Row Median (DN/fr)')
 
     # Bottom: Mean ± std profile
     x = np.arange(n_rows)
 
-    # Shade regions (1-sigma and 2-sigma)
-    ax2.fill_between(x, mean_profile - std_profile, mean_profile + std_profile,
-                     color='yellowgreen', label='±1 Sigma', alpha=0.8)
-    ax2.fill_between(x, mean_profile - 2 * std_profile, mean_profile + 2 * std_profile,
-                     color='yellowgreen', label='±2 Sigma', alpha=0.4)
+    ax2.fill_between(
+        x, mean_profile - std_profile, mean_profile + std_profile,
+        color='yellowgreen', label='±1 Sigma', alpha=0.6
+    )
+    ax2.fill_between(
+        x, mean_profile - 2 * std_profile, mean_profile + 2 * std_profile,
+        color='yellowgreen', label='±2 Sigma', alpha=0.2
+    )
 
-    # Plot the mean as a line
     ax2.plot(x, mean_profile, color='black', label='Mean Profile', linewidth=1)
 
-    # q1, q99 = np.percentile(mean_profile, [1, 99])
     ax2.set_ylim(-0.06, 0.06)
-    # Set symlog scale on y-axis
-    # ax2.set_yscale('symlog')  # Adjust `linthreshy` as necessary
-
+    # ax2.set_yscale('symlog')  # Optional symlog toggle
     ax2.set_ylabel("Median Value")
     ax2.set_xlabel("Row Index")
     ax2.set_title("Row-wise Mean ± Std (Symlog Scale)")
 
     ax2.legend()
-    plt.tight_layout()
     plt.tight_layout()
     plt.savefig(f"plots/row_stability_summary_{SCA}.png", bbox_inches='tight')
 
