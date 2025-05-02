@@ -51,13 +51,10 @@ def plot_row_stability_summary(row_profiles):
 
     # Bottom: Mean ± std profile
     x = np.arange(n_rows)
-    ax2.plot(x, mean_profile, color='black', label='Mean')
-    ax2.fill_between(x, mean_profile - std_profile, mean_profile + std_profile,
-                     color='gray', alpha=0.4, label='±1 Std Dev')
-    ax2.fill_between(x, mean_profile - 2*std_profile, mean_profile + 2*std_profile,
-                     color='gray', alpha=0.2, label='±1 Std Dev')
+    ax2.errorbar(x, mean_profile, yerr=std_profile, fmt='o', ms=3, elinewidth=1, capsize=2, color='darkblue', ecolor='royalblue')
     ax2.set_ylabel("Median Value")
     ax2.set_xlabel("Row Index")
+    ax2.set_yscale('log')
     ax2.set_title("Row-wise Mean ± Std Over Images")
     ax2.legend()
 
