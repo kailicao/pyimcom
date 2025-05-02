@@ -49,8 +49,8 @@ def plot_row_stability_summary(row_profiles, SCA):
         vmin=np.percentile(row_profiles, 10),
         vmax=np.percentile(row_profiles, 90)
     )
-    ax1.set_ylabel("Image Index")
-    ax1.set_title("Row Median Profiles Across Images")
+    ax1.set_ylabel("Observation Index")
+    ax1.set_title(f"Row Median Profiles Across Images: SCA {SCA}")
 
     # Use make_axes_locatable to keep colorbar from shifting the axis
     divider = make_axes_locatable(ax1)
@@ -69,13 +69,13 @@ def plot_row_stability_summary(row_profiles, SCA):
         color='yellowgreen', label='±2 Sigma', alpha=0.2
     )
 
-    ax2.plot(x, mean_profile, color='black', label='Mean Profile', linewidth=1)
+    ax2.plot(x, mean_profile, color='black', label='Mean', linewidth=1)
 
     ax2.set_ylim(-0.06, 0.06)
     # ax2.set_yscale('symlog')  # Optional symlog toggle
-    ax2.set_ylabel("Median Value")
+    ax2.set_ylabel("Median Value (DN/fr)")
     ax2.set_xlabel("Row Index")
-    ax2.set_title("Row-wise Mean ± Std (Symlog Scale)")
+    ax2.set_title("Row-wise Mean ± Std")
 
     ax2.legend()
     plt.tight_layout()
