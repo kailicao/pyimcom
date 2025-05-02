@@ -54,10 +54,7 @@ def plot_row_stability_summary(row_profiles):
     ax2.errorbar(x, mean_profile, yerr=std_profile, fmt='o', ms=3, elinewidth=1, capsize=2, color='darkblue', ecolor='royalblue')
     ax2.set_ylabel("Median Value")
     ax2.set_xlabel("Row Index")
-    ax2.set_yscale('log')
     ax2.set_title("Row-wise Mean ± Std Over Images")
-    ax2.legend()
-
     plt.tight_layout()
     plt.savefig(f"plots/row_stability_summary_{SCA}.png", bbox_inches='tight')
 
