@@ -49,7 +49,7 @@ def process_fits_files(directory, name_pattern):
                 -0.5 * ((x_range - row_median_mean) / row_median_std) ** 2)
             all_y_vals.append(y)
 
-            plt.plot(x_range, y, label=f'Obs {obs} (mean={row_median_mean:.2f}, std={row_median_std:.2f})',
+            plt.plot(x_range, y, label=f'Obs {obs} (mean={row_median_mean:.5f}, std={row_median_std:.5f})',
                      )
 
     # Show the plot
