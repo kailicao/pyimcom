@@ -5,79 +5,104 @@ import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
 
-def process_fits_files(directory, name_pattern):
-    """
-    Check the stability of the noise in the images by calculating the mean and standard deviation of the row median
-    values for a single SCA.
-    Parameters
-    ----------
-    directory
-    name_pattern
+import os
+import re
+import numpy as np
+import matplotlib.pyplot as plt
+from astropy.io import fits
+from sklearn.decomposition import PCA
+import pandas as pd
 
-    Returns
-    -------
-
-    """
+def load_row_profiles(directory, name_pattern):
     file_pattern = re.compile(name_pattern)
-    x_range=None
-    all_y_vals=[]
-
-    means = []
-    std_devs = []
-
-    plt.figure(figsize=(9,9))
+    row_profiles = []
+    filenames = []
 
     for filename in sorted(os.listdir(directory)):
         if m:=file_pattern.match(filename):
-            file_path = os.path.join(directory, filename)
-            obs=m.group(1)
+            obs = m.group(1)
+            with fits.open(os.path.join(directory, filename)) as hdul:
+                image = hdul[0].data
+            row_medians = np.median(image, axis=1)
+            row_profiles.append(row_medians)
+            filenames.append(filename)
 
-            with fits.open(file_path) as hdul:
-                noise_data = hdul["PRIMARY"].data
+    return np.array(row_profiles), filenames
 
-            row_medians = np.median(noise_data, axis=1)
-            row_median_mean = np.mean(row_medians)
-            row_median_std = np.std(row_medians)
+def analyze_stripe_stability(row_profiles, filenames, output_csv, save_csv=False):
+    n_images, n_rows = row_profiles.shape
 
-            means.append(row_median_mean)
-            std_devs.append(row_median_std)
+    # Mean and std across images for each row
+    row_mean = np.mean(row_profiles, axis=0)
+    row_std = np.std(row_profiles, axis=0)
+    frac_std = row_std / np.maximum(np.abs(row_mean), 1e-6)
 
-            # Plot Gaussian using mean and standard deviation
-            if x_range is None:
-                x_range = np.linspace(-.2, .2, 100)
-            y = (1 / (row_median_std * np.sqrt(2 * np.pi))) * np.exp(
-                -0.5 * ((x_range - row_median_mean) / row_median_std) ** 2)
-            all_y_vals.append(y)
+    # PCA
+    pca = PCA()
+    pca.fit(row_profiles)
+    pc1 = pca.components_[0]
+    coeffs = pca.transform(row_profiles)[:, 0]
+    explained_var = pca.explained_variance_ratio_[0]
+    coeff_std = np.std(coeffs)
 
-            plt.plot(x_range, y, label=f'Obs {obs} (mean={row_median_mean:.5f}, std={row_median_std:.5f})',
-                     )
+    # Pairwise correlation matrix
+    corr_matrix = np.corrcoef(row_profiles)
+    mean_corrs = [np.mean(np.delete(corr_matrix[i], i)) for i in range(n_images)]
 
-    # Show the plot
-    all_y_values = np.array(all_y_vals)
-    y_max = np.max(all_y_values, axis=0)
-    y_min = np.min(all_y_values, axis=0)
-    y_diff = y_max - y_min
-    max_difference = np.max(y_diff)
+    # Total power of each profile
+    profile_power = np.sum((row_profiles - row_profiles.mean(axis=1, keepdims=True))**2, axis=1)
 
-    # Plot the envelope of the curves
-    # plt.fill_between(x_range, y_min, y_max, color='gray', alpha=0.3, label='Envelope (max-min)')
-    plt.text(0.02, 0.95, f'Max y-difference: {max_difference:.3e}', transform=plt.gca().transAxes,
-             verticalalignment='top', fontsize=10, bbox=dict(facecolor='white', alpha=0.8))
+    # CSV output
+    if save_csv:
+        df = pd.DataFrame({
+            'filename': filenames,
+            'pc1_coeff': coeffs,
+            'mean_corr': mean_corrs,
+            'profile_power': profile_power
+        })
+        df.to_csv(output_csv, index=False)
 
-    # Move legend below the plot
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.25), ncol=4, fontsize=8)
-    plt.xlabel('Median Value')
-    plt.ylabel('Probability Density')
-    plt.title(f'Gaussian Distribution of Row Medians for Each Observation: SCA {SCA}')
-    plt.tight_layout(rect=[0, 0.1, 1, 1])  # Leave space at the bottom for legend
-    plt.savefig(f'./plots/stability_{SCA}.png', bbox_inches='tight')
+        print(f"Saved analysis to {output_csv}")
+    print(f"Fraction of variance explained by PC1: {explained_var:.3f}")
+    print(f"Std of PC1 coefficients: {coeff_std:.3e}")
 
+    return pc1, coeffs, explained_var, row_profiles
 
-# Example usage
-directory=sys.argv[1]
+def plot_diagnostics(pc1, row_profiles, coeffs, filenames):
+    plt.figure(figsize=(10, 4))
+    plt.imshow(row_profiles, aspect='auto', cmap='viridis', origin='lower')
+    plt.colorbar(label='Row Median')
+    plt.title("Row Median Profiles Across Images")
+    plt.xlabel("Row Index")
+    plt.ylabel("Image Index")
+    plt.tight_layout()
+    plt.savefig(f'row_medians_{SCA}.png', bbox_inches='tight')
+
+    plt.figure(figsize=(8, 4))
+    plt.plot(pc1)
+    plt.title("First Principal Component (Stripe Pattern)")
+    plt.xlabel("Row Index")
+    plt.ylabel("Amplitude")
+    plt.tight_layout()
+    plt.savefig(f'pc1_{SCA}.png', bbox_inches='tight')
+
+    plt.figure(figsize=(10, 4))
+    plt.plot(coeffs, marker='o')
+    plt.xticks(ticks=np.arange(len(filenames)), labels=filenames, rotation=90, fontsize=6)
+    plt.title("PC1 Coefficients (Stripe Pattern Expression per Image)")
+    plt.ylabel("PC1 Coefficient")
+    plt.tight_layout()
+    plt.savefig(f'pc1_coefs_{SCA}.png', bbox_inches='tight')
+
+# --- Configuration ---
+directory = sys.argv[1]  # Set this
 SCA = str(sys.argv[2])
 name_pattern = 'slope_(\d*)_('+SCA+').fits'
-if not os.path.exists('./plots'):
-    os.makedirs('./plots')
+output_csv = "stripe_stability.csv"
 
-process_fits_files(directory, name_pattern)
+# --- Run Analysis ---
+row_profiles, filenames = load_row_profiles(directory, name_pattern)
+pc1, coeffs, explained_var, row_profiles = analyze_stripe_stability(row_profiles, filenames, output_csv)
+plot_diagnostics(pc1, row_profiles, coeffs, filenames)
+
+
