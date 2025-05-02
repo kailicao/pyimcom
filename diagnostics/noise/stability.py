@@ -25,7 +25,7 @@ def process_fits_files(directory, name_pattern):
     means = []
     std_devs = []
 
-    plt.figure(figsize=(10,8))
+    plt.figure(figsize=(9,9))
 
     for filename in sorted(os.listdir(directory)):
         if m:=file_pattern.match(filename):
@@ -49,7 +49,7 @@ def process_fits_files(directory, name_pattern):
                 -0.5 * ((x_range - row_median_mean) / row_median_std) ** 2)
             all_y_vals.append(y)
 
-            plt.plot(x_range, y, label=f'Obs {obs} (mean={row_median_mean:.2f}, std={row_median_std:.2f})',
+            plt.plot(x_range, y, label=f'Obs {obs} (mean={row_median_mean:.5f}, std={row_median_std:.5f})',
                      )
 
     # Show the plot
@@ -60,7 +60,7 @@ def process_fits_files(directory, name_pattern):
     max_difference = np.max(y_diff)
 
     # Plot the envelope of the curves
-    plt.fill_between(x_range, y_min, y_max, color='gray', alpha=0.3, label='Envelope (max-min)')
+    # plt.fill_between(x_range, y_min, y_max, color='gray', alpha=0.3, label='Envelope (max-min)')
     plt.text(0.02, 0.95, f'Max y-difference: {max_difference:.3e}', transform=plt.gca().transAxes,
              verticalalignment='top', fontsize=10, bbox=dict(facecolor='white', alpha=0.8))
 
@@ -68,7 +68,6 @@ def process_fits_files(directory, name_pattern):
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.25), ncol=4, fontsize=8)
     plt.xlabel('Median Value')
     plt.ylabel('Probability Density')
-    plt.yscale('log')
     plt.title(f'Gaussian Distribution of Row Medians for Each Observation: SCA {SCA}')
     plt.tight_layout(rect=[0, 0.1, 1, 1])  # Leave space at the bottom for legend
     plt.savefig(f'./plots/stability_{SCA}.png', bbox_inches='tight')
