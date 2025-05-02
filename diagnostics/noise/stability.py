@@ -48,26 +48,26 @@ def plot_row_stability_summary(row_profiles):
     plt.colorbar(im, ax=ax1, label='Row Median (DN/fr))')
 
     # Bottom: Mean ± std profile
-    # Bottom: Scatter with error bars (log y scale)
     x = np.arange(n_rows)
 
-    # Absolute value for the log scale, tracking original sign
-    original_sign = np.sign(mean_profile)  # Capture the original signs (1 or -1)
-    abs_mean_profile = np.abs(mean_profile)
+    # Shade regions (1-sigma and 2-sigma)
+    ax2.fill_between(x, mean_profile - std_profile, mean_profile + std_profile,
+                     color='yellowgreen', label='±1 Sigma', alpha=0.5)
+    ax2.fill_between(x, mean_profile - 2 * std_profile, mean_profile + 2 * std_profile,
+                     color='yellowgreen', label='±2 Sigma', alpha=0.2)
 
-    # Use different markers for positive vs negative rows (based on original sign)
-    pos_mask = original_sign > 0
-    neg_mask = original_sign < 0
+    # Plot the mean as a line
+    ax2.plot(x, mean_profile, color='black', label='Mean Profile', linewidth=1)
 
-    ax2.errorbar(x[pos_mask], abs_mean_profile[pos_mask], yerr=std_profile[pos_mask], fmt='o',
-                 ms=2, elinewidth=1, capsize=1, color='darkblue', ecolor='cornflowerblue', alpha=0.8)
-    ax2.errorbar(x[neg_mask], abs_mean_profile[neg_mask], yerr=std_profile[neg_mask], fmt='s',
-                 ms=2, elinewidth=1, capsize=1, color='green', ecolor='yellowgreen', alpha=0.8)
+    # Set symlog scale on y-axis
+    ax2.set_yscale('symlog', linthreshy=0.03)  # Adjust `linthreshy` as necessary
 
-    ax2.set_yscale('log')
-    ax2.set_ylabel("Median Value (Log Scale)")
+    ax2.set_ylabel("Median Value (Symlog Scale)")
     ax2.set_xlabel("Row Index")
-    ax2.set_title("Row-wise Mean ± Std (Log Scale)")
+    ax2.set_title("Row-wise Mean ± Std (Symlog Scale)")
+
+    ax2.legend()
+    plt.tight_layout()
     plt.tight_layout()
     plt.savefig(f"plots/row_stability_summary_{SCA}.png", bbox_inches='tight')
 
