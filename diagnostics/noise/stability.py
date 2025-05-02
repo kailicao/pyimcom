@@ -60,9 +60,9 @@ def plot_row_stability_summary(row_profiles):
     neg_mask = original_sign < 0
 
     ax2.errorbar(x[pos_mask], abs_mean_profile[pos_mask], yerr=std_profile[pos_mask], fmt='o',
-                 ms=6, elinewidth=1, capsize=2, color='darkblue', ecolor='cornflowerblue', alpha=0.6)
+                 ms=2, elinewidth=1, capsize=1, color='darkblue', ecolor='cornflowerblue', alpha=0.8)
     ax2.errorbar(x[neg_mask], abs_mean_profile[neg_mask], yerr=std_profile[neg_mask], fmt='s',
-                 ms=6, elinewidth=1, capsize=2, color='green', ecolor='yellowgreen', alpha=0.6)
+                 ms=2, elinewidth=1, capsize=1, color='green', ecolor='yellowgreen', alpha=0.8)
 
     ax2.set_yscale('log')
     ax2.set_ylabel("Median Value (Log Scale)")
