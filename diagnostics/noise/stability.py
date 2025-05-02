@@ -7,7 +7,7 @@ from astropy.io import fits
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
-def load_row_profiles(directory, name_pattern):
+def load_row_profiles(directory, name_pattern, SCA):
     file_pattern = re.compile(name_pattern)
     row_profiles = []
     obsnames = []
@@ -31,7 +31,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-def plot_row_stability_summary(row_profiles):
+def plot_row_stability_summary(row_profiles, SCA):
     n_images, n_rows = row_profiles.shape
 
     # Compute per-row statistics
@@ -85,13 +85,14 @@ def plot_row_stability_summary(row_profiles):
 
 # --- Configuration ---
 directory = sys.argv[1]  # Set this
-SCA = str(sys.argv[2])
-name_pattern = 'slope_(\d*)_('+SCA+').fits'
 output_csv = "stripe_stability.csv"
 
 # --- Run Analysis ---
-row_profiles, filenames = load_row_profiles(directory, name_pattern)
-plot_row_stability_summary( row_profiles)
+for i in range(18):
+    SCA=str(i+1)
+    name_pattern = 'slope_(\d*)_(' + SCA + ').fits'
+    row_profiles, filenames = load_row_profiles(directory, name_pattern, SCA=SCA)
+    plot_row_stability_summary(row_profiles, SCA=SCA)
 
 
 
