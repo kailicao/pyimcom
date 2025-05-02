@@ -25,7 +25,7 @@ def process_fits_files(directory, name_pattern):
     means = []
     std_devs = []
 
-    plt.figure(figsize=(10,6))
+    plt.figure(figsize=(10,8))
 
     for filename in sorted(os.listdir(directory)):
         if m:=file_pattern.match(filename):
@@ -44,9 +44,9 @@ def process_fits_files(directory, name_pattern):
 
             # Plot Gaussian using mean and standard deviation
             if x_range is None:
-                x = np.linspace(row_median_mean - 4 * row_median_std, row_median_mean + 4 * row_median_std, 100)
+                x_range = np.linspace(-.2, .2, 100)
             y = (1 / (row_median_std * np.sqrt(2 * np.pi))) * np.exp(
-                -0.5 * ((x - row_median_mean) / row_median_std) ** 2)
+                -0.5 * ((x_range - row_median_mean) / row_median_std) ** 2)
             all_y_vals.append(y)
 
             plt.plot(x_range, y, label=f'Obs {obs} (mean={row_median_mean:.2f}, std={row_median_std:.2f})',
@@ -68,6 +68,7 @@ def process_fits_files(directory, name_pattern):
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.25), ncol=4, fontsize=8)
     plt.xlabel('Median Value')
     plt.ylabel('Probability Density')
+    plt.yscale('log')
     plt.title(f'Gaussian Distribution of Row Medians for Each Observation: SCA {SCA}')
     plt.tight_layout(rect=[0, 0.1, 1, 1])  # Leave space at the bottom for legend
     plt.savefig(f'./plots/stability_{SCA}.png', bbox_inches='tight')
