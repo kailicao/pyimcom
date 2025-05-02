@@ -10,7 +10,7 @@ import pandas as pd
 def load_row_profiles(directory, name_pattern):
     file_pattern = re.compile(name_pattern)
     row_profiles = []
-    filenames = []
+    obsnames = []
 
     for filename in sorted(os.listdir(directory)):
         if m:=file_pattern.match(filename):
@@ -19,79 +19,51 @@ def load_row_profiles(directory, name_pattern):
                 image = hdul[0].data
             row_medians = np.median(image, axis=1)
             row_profiles.append(row_medians)
-            filenames.append(filename)
+            obsnames.append(obs)
 
     per_image_row_std = np.std(row_profiles, axis=1)
     print(f"Mean per-image row std: {np.mean(per_image_row_std):.4f}")
     print(f"Max per-image row std: {np.max(per_image_row_std):.4f}")
 
-    return np.array(row_profiles), filenames
+    return np.array(row_profiles), obsnames
 
-def analyze_stripe_stability(row_profiles, filenames, output_csv, save_csv=False):
+import matplotlib.pyplot as plt
+
+def plot_row_stability_summary(row_profiles):
     n_images, n_rows = row_profiles.shape
 
-    # Mean and std across images for each row
-    row_mean = np.mean(row_profiles, axis=0)
-    row_std = np.std(row_profiles, axis=0)
-    frac_std = row_std / np.maximum(np.abs(row_mean), 1e-6)
+    # Compute per-row statistics
+    mean_profile = np.mean(row_profiles, axis=0)
+    std_profile = np.std(row_profiles, axis=0)
 
-    # PCA
-    pca = PCA()
-    pca.fit(row_profiles)
-    pc1 = pca.components_[0]
-    coeffs = pca.transform(row_profiles)[:, 0]
-    explained_var = pca.explained_variance_ratio_[0]
-    coeff_std = np.std(coeffs)
+    fig, (ax1, ax2) = plt.subplots(
+        2, 1, figsize=(10, 6), sharex=True,
+        gridspec_kw={'height_ratios': [3, 1]}
+    )
 
-    # Pairwise correlation matrix
-    corr_matrix = np.corrcoef(row_profiles)
-    mean_corrs = [np.mean(np.delete(corr_matrix[i], i)) for i in range(n_images)]
+    # Top: Heatmap of row median profiles
+    im = ax1.imshow(row_profiles, aspect='auto', cmap='viridis', origin='lower',
+                    vmin=np.percentile(row_profiles, 10), vmax=np.percentile(row_profiles, 90))
+    ax1.set_ylabel("Image Index")
+    ax1.set_title("Row Median Profiles Across Images")
+    plt.colorbar(im, ax=ax1, label='Row Median (DN/fr))')
 
-    # Total power of each profile
-    profile_power = np.sum((row_profiles - row_profiles.mean(axis=1, keepdims=True))**2, axis=1)
+    # Bottom: Mean ± std profile
+    x = np.arange(n_rows)
+    ax2.plot(x, mean_profile, color='black', label='Mean')
+    ax2.fill_between(x, mean_profile - std_profile, mean_profile + std_profile,
+                     color='gray', alpha=0.4, label='±1 Std Dev')
+    ax2.fill_between(x, mean_profile - 2*std_profile, mean_profile + 2*std_profile,
+                     color='gray', alpha=0.2, label='±1 Std Dev')
+    ax2.set_ylabel("Median Value")
+    ax2.set_xlabel("Row Index")
+    ax2.set_title("Row-wise Mean ± Std Over Images")
+    ax2.legend()
 
-    # CSV output
-    if save_csv:
-        df = pd.DataFrame({
-            'filename': filenames,
-            'pc1_coeff': coeffs,
-            'mean_corr': mean_corrs,
-            'profile_power': profile_power
-        })
-        df.to_csv(output_csv, index=False)
-
-        print(f"Saved analysis to {output_csv}")
-    print(f"Fraction of variance explained by PC1: {explained_var:.3f}")
-    print(f"Std of PC1 coefficients: {coeff_std:.3e}")
-
-    return pc1, coeffs, explained_var, row_profiles
-
-def plot_diagnostics(pc1, row_profiles, coeffs, filenames):
-    plt.figure(figsize=(10, 4))
-    plt.imshow(row_profiles, aspect='auto', cmap='viridis', origin='lower',
-               vmin=np.percentile(row_profiles, 10), vmax=np.percentile(row_profiles, 90))
-    plt.colorbar(label='Row Median')
-    plt.title("Row Median Profiles Across Images")
-    plt.xlabel("Row Index")
-    plt.ylabel("Image Index")
     plt.tight_layout()
-    plt.savefig(f'row_medians_{SCA}.png', bbox_inches='tight')
+    plt.show()
 
-    plt.figure(figsize=(8, 4))
-    plt.plot(pc1)
-    plt.title("First Principal Component (Stripe Pattern)")
-    plt.xlabel("Row Index")
-    plt.ylabel("Amplitude")
-    plt.tight_layout()
-    plt.savefig(f'pc1_{SCA}.png', bbox_inches='tight')
 
-    plt.figure(figsize=(10, 4))
-    plt.plot(coeffs, marker='o')
-    plt.xticks(ticks=np.arange(len(filenames)), labels=filenames, rotation=90, fontsize=6)
-    plt.title("PC1 Coefficients (Stripe Pattern Expression per Image)")
-    plt.ylabel("PC1 Coefficient")
-    plt.tight_layout()
-    plt.savefig(f'pc1_coefs_{SCA}.png', bbox_inches='tight')
 
 # --- Configuration ---
 directory = sys.argv[1]  # Set this
@@ -101,8 +73,7 @@ output_csv = "stripe_stability.csv"
 
 # --- Run Analysis ---
 row_profiles, filenames = load_row_profiles(directory, name_pattern)
-pc1, coeffs, explained_var, row_profiles = analyze_stripe_stability(row_profiles, filenames, output_csv)
-plot_diagnostics(pc1, row_profiles, coeffs, filenames)
+plot_row_stability_summary( row_profiles)
 
 
 
