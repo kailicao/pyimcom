@@ -1,10 +1,4 @@
-import os
-import re
 import sys
-import numpy as np
-import matplotlib.pyplot as plt
-from astropy.io import fits
-
 import os
 import re
 import numpy as np
@@ -26,6 +20,10 @@ def load_row_profiles(directory, name_pattern):
             row_medians = np.median(image, axis=1)
             row_profiles.append(row_medians)
             filenames.append(filename)
+
+    per_image_row_std = np.std(row_profiles, axis=1)
+    print(f"Mean per-image row std: {np.mean(per_image_row_std):.4f}")
+    print(f"Max per-image row std: {np.max(per_image_row_std):.4f}")
 
     return np.array(row_profiles), filenames
 
@@ -70,7 +68,8 @@ def analyze_stripe_stability(row_profiles, filenames, output_csv, save_csv=False
 
 def plot_diagnostics(pc1, row_profiles, coeffs, filenames):
     plt.figure(figsize=(10, 4))
-    plt.imshow(row_profiles, aspect='auto', cmap='viridis', origin='lower')
+    plt.imshow(row_profiles, aspect='auto', cmap='viridis', origin='lower',
+               vmin=np.percentile(row_profiles, 10), vmax=np.percentile(row_profiles, 90))
     plt.colorbar(label='Row Median')
     plt.title("Row Median Profiles Across Images")
     plt.xlabel("Row Index")
@@ -104,5 +103,6 @@ output_csv = "stripe_stability.csv"
 row_profiles, filenames = load_row_profiles(directory, name_pattern)
 pc1, coeffs, explained_var, row_profiles = analyze_stripe_stability(row_profiles, filenames, output_csv)
 plot_diagnostics(pc1, row_profiles, coeffs, filenames)
+
 
 
