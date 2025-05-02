@@ -60,7 +60,7 @@ def plot_row_stability_summary(row_profiles):
     ax2.plot(x, mean_profile, color='black', label='Mean Profile', linewidth=1)
 
     # Set symlog scale on y-axis
-    ax2.set_yscale('symlog', linthreshy=0.03)  # Adjust `linthreshy` as necessary
+    ax2.set_yscale('symlog')  # Adjust `linthreshy` as necessary
 
     ax2.set_ylabel("Median Value (Symlog Scale)")
     ax2.set_xlabel("Row Index")
