@@ -287,7 +287,6 @@ class Config:
                 self.resid_model = 'abs_prime'
             elif self.cost_model=='huber_loss':
                 self.resid_model = 'hub_prime'
-                self.hub_thresh = 0.01
             #stuff
 
 
@@ -410,7 +409,7 @@ class Config:
         self.ds_model = cfg_dict.get('DSMODEL', False)
         self.ds_outpath, self.ds_outstem = cfg_dict['DSOUT']
         self.cg_model, self.cg_maxiter, self.cg_tol = cfg_dict['CGMODEL']
-        self.cost_model, self.cost_prior = cfg_dict['DSCOST']
+        self.cost_model, self.cost_prior, self.hub_thresh = cfg_dict['DSCOST']
         self.ds_obsfile = cfg_dict.get('DSOBSFILE', None)
         self.ds_indata = cfg_dict.get('DSINDATA', None)
 
