@@ -23,12 +23,10 @@ def load_row_profiles(directory, name_pattern):
             obsnames.append(obs)
 
     per_image_row_std = np.std(row_profiles, axis=1)
-    print(f"Mean per-image row std: {np.mean(per_image_row_std):.4f}")
-    print(f"Max per-image row std: {np.max(per_image_row_std):.4f}")
+    # print(f"Mean per-image row std: {np.mean(per_image_row_std):.4f}")
+    # print(f"Max per-image row std: {np.max(per_image_row_std):.4f}")
 
     return np.array(row_profiles), obsnames
-
-import matplotlib.pyplot as plt
 
 def plot_row_stability_summary(row_profiles):
     n_images, n_rows = row_profiles.shape
@@ -50,11 +48,26 @@ def plot_row_stability_summary(row_profiles):
     plt.colorbar(im, ax=ax1, label='Row Median (DN/fr))')
 
     # Bottom: Mean ± std profile
+    # Bottom: Scatter with error bars (log y scale)
     x = np.arange(n_rows)
-    ax2.errorbar(x, mean_profile, yerr=std_profile, fmt='o', ms=3, elinewidth=1, capsize=2, color='darkblue', ecolor='royalblue')
-    ax2.set_ylabel("Median Value")
+
+    # Absolute value for the log scale, tracking original sign
+    original_sign = np.sign(mean_profile)  # Capture the original signs (1 or -1)
+    abs_mean_profile = np.abs(mean_profile)
+
+    # Use different markers for positive vs negative rows (based on original sign)
+    pos_mask = original_sign > 0
+    neg_mask = original_sign < 0
+
+    ax2.errorbar(x[pos_mask], abs_mean_profile[pos_mask], yerr=std_profile[pos_mask], fmt='o',
+                 ms=6, elinewidth=1, capsize=2, color='darkblue', ecolor='cornflowerblue', alpha=0.6)
+    ax2.errorbar(x[neg_mask], abs_mean_profile[neg_mask], yerr=std_profile[neg_mask], fmt='s',
+                 ms=6, elinewidth=1, capsize=2, color='green', ecolor='yellowgreen', alpha=0.6)
+
+    ax2.set_yscale('log')
+    ax2.set_ylabel("Median Value (Log Scale)")
     ax2.set_xlabel("Row Index")
-    ax2.set_title("Row-wise Mean ± Std Over Images")
+    ax2.set_title("Row-wise Mean ± Std (Log Scale)")
     plt.tight_layout()
     plt.savefig(f"plots/row_stability_summary_{SCA}.png", bbox_inches='tight')
 
