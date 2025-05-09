@@ -807,7 +807,7 @@ def main():
 
         eta = 0.1
         d_cost_init = np.sum(grad_current * direction)
-        d_cost_tol = d_cost_init * 1*10**-3
+        d_cost_tol = np.abs(d_cost_init * 1*10**-3)
 
         if cost_model=='quadratic':
             alpha_test = -eta * (np.sum(grad_current*direction))/(np.sum(direction*direction)+1e-12)
