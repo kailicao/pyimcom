@@ -806,6 +806,8 @@ def main():
         method = 'bisection'
 
         eta = 0.1
+        d_cost_init = np.sum(grad_current * direction)
+        d_cost_tol = d_cost_init * 1*10**-3
 
         if cost_model=='quadratic':
             alpha_test = -eta * (np.sum(grad_current*direction))/(np.sum(direction*direction)+1e-12)
@@ -849,6 +851,7 @@ def main():
                 hdu.writeto(test_image_dir + 'LSdirection.fits', overwrite=True)
                 write_to_file(f"Initial params: {p.params}")
                 write_to_file(f"Initial epsilon: {best_epsilon}")
+                write_to_file(f"Initial d_cost: {d_cost_init}, d_cost tol: {d_cost_tol}")
                 write_to_file(f"Initial alpha range (min, test, max): {print(alpha_min, alpha_test, alpha_max)}")
 
             if k == n_iter - 1:
@@ -891,35 +894,36 @@ def main():
             if TIME:  write_to_file(f"Time spent in this LS iteration: {(time.time() - t0_ls_iter) / 60} minutes.")
 
             # Convergence and update criteria and checks
-            if (working_epsilon < best_epsilon + tol * alpha_test * d_cost) and (np.abs(alpha_test)>=1e-6):
+            if ((working_epsilon < best_epsilon + tol * alpha_test * d_cost)
+                    and (np.abs(alpha_test)>=1e-6) and (np.abs(d_cost) < d_cost_tol )):
                 best_epsilon = working_epsilon
                 best_p = copy.deepcopy(working_p)
                 best_psi = working_psi
                 best_resids = working_resids
-                write_to_file(f"Linear search convergence via Armijo condition in {k} iterations")
+                write_to_file(f"Linear search convergence in {k} iterations")
                 save_fits(best_p.params, 'best_p', dir=test_image_dir, overwrite=True)
                 save_fits(np.array(conv_params), 'conv_params', dir=test_image_dir, overwrite=True)
                 return best_p, best_psi ,best_resids
 
-            if np.abs(d_cost) < tol:
-                write_to_file(f"Linear search convergence via |d_cost|< {tol} in {k} iterations")
-                write_to_file("I think this is bad because nothing has actually been updated if I exit this way... \n"
-                              "so I'm going to let this break the program bc best_resids isn't defined")
-                hdu = fits.PrimaryHDU(best_p.params)
-                hdu.writeto(test_image_dir + 'best_p.fits', overwrite=True)
-                hdu = fits.PrimaryHDU(np.array(conv_params))
-                hdu.writeto(test_image_dir + 'conv_params.fits', overwrite=True)
-                return best_p, best_psi, best_resids
-
-            if convergence_crit < (0.01 / current_norm):
-                write_to_file(f"Linear search convergence via crit<{0.01 / current_norm} in {k} iterations")
-                write_to_file("I think this is bad because nothing has actually been updated if I exit this way... \n"
-                              "so I'm going to let this break the program bc best_resids isn't defined")
-                hdu = fits.PrimaryHDU(best_p.params)
-                hdu.writeto(test_image_dir + 'best_p.fits', overwrite=True)
-                hdu = fits.PrimaryHDU(np.array(conv_params))
-                hdu.writeto(test_image_dir + 'conv_params.fits', overwrite=True)
-                return best_p, best_psi, best_resids
+            # if np.abs(d_cost) < tol:
+            #     write_to_file(f"Linear search convergence via |d_cost|< {tol} in {k} iterations")
+            #     write_to_file("I think this is bad because nothing has actually been updated if I exit this way... \n"
+            #                   "so I'm going to let this break the program bc best_resids isn't defined")
+            #     hdu = fits.PrimaryHDU(best_p.params)
+            #     hdu.writeto(test_image_dir + 'best_p.fits', overwrite=True)
+            #     hdu = fits.PrimaryHDU(np.array(conv_params))
+            #     hdu.writeto(test_image_dir + 'conv_params.fits', overwrite=True)
+            #     return best_p, best_psi, best_resids
+            #
+            # if convergence_crit < (0.01 / current_norm):
+            #     write_to_file(f"Linear search convergence via crit<{0.01 / current_norm} in {k} iterations")
+            #     write_to_file("I think this is bad because nothing has actually been updated if I exit this way... \n"
+            #                   "so I'm going to let this break the program bc best_resids isn't defined")
+            #     hdu = fits.PrimaryHDU(best_p.params)
+            #     hdu.writeto(test_image_dir + 'best_p.fits', overwrite=True)
+            #     hdu = fits.PrimaryHDU(np.array(conv_params))
+            #     hdu.writeto(test_image_dir + 'conv_params.fits', overwrite=True)
+            #     return best_p, best_psi, best_resids
 
             # Updates for next iteration, if convergence isn't yet reached
             if d_cost > tol and method == 'bisection':
