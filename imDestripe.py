@@ -25,6 +25,7 @@ from scipy.ndimage import binary_dilation
 
 
 TIME = True
+testing=True
 global outfile
 global outpath
 
@@ -597,7 +598,7 @@ def get_ids(sca):
 all_scas, all_wcs = get_scas(filter_, obsfile)
 write_to_file(f"{len(all_scas)} SCAs in this mosaic")
 
-if outfile_Katherine_dir:
+if testing:
     if os.path.isfile(outpath + 'ovmat.npy'):
         ov_mat = np.load(outpath + 'ovmat.npy')
     else:
