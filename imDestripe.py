@@ -24,7 +24,6 @@ from filelock import Timeout, FileLock
 from scipy.ndimage import binary_dilation
 
 
-outfile_Katherine_dir = True
 TIME = True
 global outfile
 global outpath
@@ -55,9 +54,6 @@ resid_model = CFG.resid_model
 
 if use_model not in model_params.keys():
     raise ValueError(f"Model {use_model} not in model_params dictionary.")
-if outfile_Katherine_dir:
-    obsfile = '/fs/scratch/PCON0003/klaliotis/destripe/inputs/Roman_WAS_simple_model_'
-    test_image_dir = '/fs/scratch/PCON0003/klaliotis/imdestripe/test_images/'
 if CFG.cost_prior != 0:
     cost_prior = CFG.cost_prior
 if cg_model not in CG_models:
