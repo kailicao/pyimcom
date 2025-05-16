@@ -696,7 +696,8 @@ def cost_function_single(j, sca_a, p, f, thresh=None):
     J_A_mask *= I_A.mask
 
     psi = np.where(J_A_mask, I_A.image - J_A_image, 0)
-    local_epsilon = np.sum(f(psi, thresh))
+    result = f(psi, thresh) if thresh is not None else f(psi)
+    local_epsilon = np.sum(result)
 
     if obsid_A == '670' and scaid_A == '10':
         hdu = fits.PrimaryHDU(J_A_image * J_A_mask)
