@@ -710,7 +710,7 @@ def cost_function_single(j, sca_a, p, f, thresh=None):
         write_to_file(f'Image A mean: {np.mean(I_A.image)}')
         write_to_file(f'Image B mean: {np.mean(J_A_image)}')
         write_to_file(f'Psi mean: {np.mean(psi)}')
-        write_to_file(f'f(Psi) mean: {np.mean(f(psi, thresh))}')
+        write_to_file(f'f(Psi) mean: {np.mean(result)}')
         write_to_file(f"Local epsilon for SCA {j}: {local_epsilon}")
 
     return j, psi, local_epsilon
