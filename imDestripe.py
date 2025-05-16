@@ -38,7 +38,7 @@ s_in = 0.11  # arcsec^2
 t_exp = 154  # sec
 
 # Import config file
-CFG = Config(cfg_file='configs/imdestripe_configs/config_destripe_HL.json')
+CFG = Config(cfg_file='configs/imdestripe_configs/config_destripe-H.json')
 filter_ = filters[CFG.use_filter]
 A_eff = areas[CFG.use_filter]
 obsfile = CFG.ds_obsfile #location and stem of input images. overwritten by temp input dir
@@ -696,7 +696,8 @@ def cost_function_single(j, sca_a, p, f, thresh=None):
     J_A_mask *= I_A.mask
 
     psi = np.where(J_A_mask, I_A.image - J_A_image, 0)
-    local_epsilon = np.sum(f(psi, thresh))
+    result = f(psi, thresh) if thresh is not None else f(psi)
+    local_epsilon = np.sum(result)
 
     if obsid_A == '670' and scaid_A == '10':
         hdu = fits.PrimaryHDU(J_A_image * J_A_mask)
@@ -709,7 +710,7 @@ def cost_function_single(j, sca_a, p, f, thresh=None):
         write_to_file(f'Image A mean: {np.mean(I_A.image)}')
         write_to_file(f'Image B mean: {np.mean(J_A_image)}')
         write_to_file(f'Psi mean: {np.mean(psi)}')
-        write_to_file(f'f(Psi) mean: {np.mean(f(psi, thresh))}')
+        write_to_file(f'f(Psi) mean: {np.mean(result)}')
         write_to_file(f"Local epsilon for SCA {j}: {local_epsilon}")
 
     return j, psi, local_epsilon
@@ -894,8 +895,7 @@ def main():
             if TIME:  write_to_file(f"Time spent in this LS iteration: {(time.time() - t0_ls_iter) / 60} minutes.")
 
             # Convergence and update criteria and checks
-            if ((working_epsilon < best_epsilon + tol * alpha_test * d_cost)
-                    and (np.abs(alpha_test)>=1e-6) and (np.abs(d_cost) < d_cost_tol )):
+            if ((working_epsilon < best_epsilon + tol * alpha_test * d_cost) and (np.abs(alpha_test)>=1e-6)):
                 best_epsilon = working_epsilon
                 best_p = copy.deepcopy(working_p)
                 best_psi = working_psi
