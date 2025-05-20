@@ -636,7 +636,7 @@ def residual_function_single(k, sca_a, psi, f_prime, thresh=None):
 
     # Calculate and then transpose the gradient of I_A-J_A
     if TIME: T = time.time()
-    gradient_interpolated = f_prime(psi[k, :, :], thresh)
+    gradient_interpolated = f_prime(psi[k, :, :], thresh) if thresh is not None else f_prime(psi[k,:,:])
 
     term_1 = transpose_par(gradient_interpolated)
 
