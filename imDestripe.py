@@ -856,7 +856,7 @@ def main():
                 write_to_file(
                     'WARNING: Linear search did not converge!! This is going to break because best_p is not assigned.')
 
-            if (convergence_crit < 0.01) and (k!=1):
+            if k!=1:
                 alpha_test = alpha_min - (
                             d_cost_min * (alpha_max - alpha_min) / (d_cost_max - d_cost_min))  # secant update
                 write_to_file(f"Secant update: alpha_test={alpha_test}")
@@ -866,8 +866,8 @@ def main():
                     alpha_test = .5 * (alpha_min + alpha_max)  # bisection update
                     write_to_file(f"Bisection update: alpha_test={alpha_test}")
                     method = 'bisection'
-            else:
-                if k!=1: alpha_test = .5 * (alpha_min + alpha_max)  # bisection update
+            elif k==1:
+                alpha_test = .5 * (alpha_min + alpha_max)  # bisection update
                 write_to_file(f"Bisection update: alpha_test={alpha_test}")
 
             working_params = p.params + alpha_test * direction
