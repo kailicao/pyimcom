@@ -236,7 +236,7 @@ class Sca_img:
         self.params_subtracted = False
 
         # Calculate effecive gain
-        if not os.path.isfile(outpath + obsid + '_' + scaid + '_geff.dat'):
+        if not os.path.isfile(tempdir + obsid + '_' + scaid + '_geff.dat'):
             g0 = time.time()
             g_eff = np.memmap(tempdir + obsid + '_' + scaid + '_geff.dat', dtype='float32', mode='w+',
                               shape=self.shape)
