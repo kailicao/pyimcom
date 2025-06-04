@@ -24,7 +24,7 @@ from filelock import Timeout, FileLock
 from scipy.ndimage import binary_dilation
 
 
-TIME = True
+TIME = False
 testing=True
 global outfile
 global outpath
@@ -43,6 +43,7 @@ filter_ = filters[CFG.use_filter]
 A_eff = areas[CFG.use_filter]
 obsfile = CFG.ds_obsfile #location and stem of input images. overwritten by temp input dir
 outpath =  CFG.ds_outpath #path to put outputs, /fs/scratch/PCON0003/klaliotis/imdestripe/
+tempdir = os.getenv('TMPDIR') + '/temp_imdestripe/'
 labnoise_prefix = CFG.ds_indata #path to lab noise frames,  /fs/scratch/PCON0003/cond0007/anl-run-in-prod/labnoise/slope_
 use_model = CFG.ds_model
 permanent_mask = CFG.permanent_mask
@@ -237,7 +238,7 @@ class Sca_img:
         # Calculate effecive gain
         if not os.path.isfile(outpath + obsid + '_' + scaid + '_geff.dat'):
             g0 = time.time()
-            g_eff = np.memmap(outpath + obsid + '_' + scaid + '_geff.dat', dtype='float32', mode='w+',
+            g_eff = np.memmap(tempdir + obsid + '_' + scaid + '_geff.dat', dtype='float32', mode='w+',
                               shape=self.shape)
             ra, dec = self.get_coordinates(pad=2.)
             ra = ra.reshape((4090, 4090))
@@ -251,7 +252,7 @@ class Sca_img:
             write_to_file(f'G_eff calc duration: {time.time() - g0}')
             del g_eff
 
-        self.g_eff = np.memmap(outpath + obsid + '_' + scaid + '_geff.dat', dtype='float32', mode='r',
+        self.g_eff = np.memmap(tempdir + obsid + '_' + scaid + '_geff.dat', dtype='float32', mode='r',
                                shape=self.shape)
 
         # Add a noise frame, if requested
@@ -347,12 +348,12 @@ class Sca_img:
         """
         this_interp = np.zeros(self.shape)
 
-        if not os.path.isfile(outpath + self.obsid + '_' + self.scaid + '_Neff.dat'):
-            N_eff = np.memmap(outpath + self.obsid + '_' + self.scaid + '_Neff.dat', dtype='float32', mode='w+',
+        if not os.path.isfile(tempdir + self.obsid + '_' + self.scaid + '_Neff.dat'):
+            N_eff = np.memmap(tempdir + self.obsid + '_' + self.scaid + '_Neff.dat', dtype='float32', mode='w+',
                               shape=self.shape)
             make_Neff = True
         else:
-            N_eff = np.memmap(outpath + self.obsid + '_' + self.scaid + '_Neff.dat', dtype='float32', mode='r',
+            N_eff = np.memmap(tempdir + self.obsid + '_' + self.scaid + '_Neff.dat', dtype='float32', mode='r',
                               shape=self.shape)
             make_Neff = False
 
@@ -575,8 +576,8 @@ def get_effective_gain(sca):
     m = re.search(r'_(\d+)_(\d+)', sca)
     obsid = m.group(1)
     scaid = m.group(2)
-    g_eff = np.memmap(outpath + obsid + '_' + scaid + '_geff.dat', dtype='float32', mode='r', shape=(4088, 4088))
-    N_eff = np.memmap(outpath + obsid + '_' + scaid + '_Neff.dat', dtype='float32', mode='r', shape=(4088, 4088))
+    g_eff = np.memmap(tempdir + obsid + '_' + scaid + '_geff.dat', dtype='float32', mode='r', shape=(4088, 4088))
+    N_eff = np.memmap(tempdir + obsid + '_' + scaid + '_Neff.dat', dtype='float32', mode='r', shape=(4088, 4088))
     return g_eff, N_eff
 
 
@@ -856,7 +857,7 @@ def main():
                 write_to_file(
                     'WARNING: Linear search did not converge!! This is going to break because best_p is not assigned.')
 
-            if (convergence_crit < 0.01) and (k!=1):
+            if k!=1:
                 alpha_test = alpha_min - (
                             d_cost_min * (alpha_max - alpha_min) / (d_cost_max - d_cost_min))  # secant update
                 write_to_file(f"Secant update: alpha_test={alpha_test}")
@@ -866,8 +867,8 @@ def main():
                     alpha_test = .5 * (alpha_min + alpha_max)  # bisection update
                     write_to_file(f"Bisection update: alpha_test={alpha_test}")
                     method = 'bisection'
-            else:
-                if k!=1: alpha_test = .5 * (alpha_min + alpha_max)  # bisection update
+            elif k==1:
+                alpha_test = .5 * (alpha_min + alpha_max)  # bisection update
                 write_to_file(f"Bisection update: alpha_test={alpha_test}")
 
             working_params = p.params + alpha_test * direction
