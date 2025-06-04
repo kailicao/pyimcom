@@ -24,7 +24,7 @@ from filelock import Timeout, FileLock
 from scipy.ndimage import binary_dilation
 
 
-TIME = True
+TIME = False
 testing=True
 global outfile
 global outpath
