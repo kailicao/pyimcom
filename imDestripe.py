@@ -84,31 +84,58 @@ def write_to_file(text, filename=outfile):
     print(text)
 
 
-def save_fits(image, filename, dir=outpath, overwrite=True, s=False, header=None):
+import os
+import uuid
+import time
+import random
+from astropy.io import fits
+from filelock import FileLock, Timeout
+
+def save_fits(image, filename, dir=outpath, overwrite=True, s=False, header=None, retries=3):
     """
-    Function to save an image to .fits.
-    :param image: 2D np array; the image
-    :param filename: str; the filename
-    :param dir: str, where to save the image
-    :param overwrite: bool; if True, overwrite existing file
-    :param s: bool; if True, print a message to the screen
-    :param header: optional: the header to use for the fits file. If None, default header only
-    :return: None
+    Save a 2D image to a FITS file with locking, retries, and atomic rename.
+    Parameters
+    ----------
+    image : np.ndarray, 2D array to write.
+    filename : str, Output filename without extension.
+    dir : str, Directory to save into.
+    overwrite : bool, Whether to overwrite the final target file.
+    s : bool,  Whether to print status messages.
+    header : fits.Header or None, Optional FITS header.
+    retries : int, Number of write retry attempts if write fails.
     """
-    filepath = dir + filename + '.fits'
+    filepath = os.path.join(dir, filename + '.fits')
     lockpath = filepath + '.lock'
     lock = FileLock(lockpath)
 
-    try:
-        with lock.acquire(timeout=30):
-            if header is not None:
-                hdu = fits.PrimaryHDU(image, header=header)
+    for attempt in range(retries):
+        try:
+            with lock.acquire(timeout=30):
+                tmp_filepath = filepath + f".{uuid.uuid4().hex}.tmp"
+                if header is not None:
+                    hdu = fits.PrimaryHDU(image, header=header)
+                else:
+                    hdu = fits.PrimaryHDU(image)
+
+                hdu.writeto(tmp_filepath, overwrite=True)
+                os.replace(tmp_filepath, filepath)  # Atomic move to final path
+
+                if s:
+                    write_to_file(f"Array {filename} written out to {filepath}")
+                return  # Success
+
+        except Timeout:
+            write_to_file(f"Failed to write {filename}; lock acquire timeout")
+            return
+
+        except OSError as e:
+            if attempt < retries - 1:
+                wait_time = 1 + random.random()
+                print(f"Write failed for {filepath} (attempt {attempt + 1}): {e}. Retrying in {wait_time:.2f}s...")
+                time.sleep(wait_time)
             else:
-                hdu = fits.PrimaryHDU(image)
-            hdu.writeto(filepath, overwrite=overwrite)
-            if s: write_to_file(f"Array {filename} written out to {dir + filename + '.fits'}")
-    except Timeout:
-        write_to_file(f" Failed to write {filename}; lock acquire timeout")
+                raise RuntimeError(f"Failed to write {filepath} after {retries} attempts. Last error: {e}")
+
 
 
 # C.H. wanted to define this before any use of sca_img so moved it up.
@@ -851,7 +878,7 @@ def main():
                 write_to_file(f"Initial params: {p.params}")
                 write_to_file(f"Initial epsilon: {best_epsilon}")
                 write_to_file(f"Initial d_cost: {d_cost_init}, d_cost tol: {d_cost_tol}")
-                write_to_file(f"Initial alpha range (min, test, max): {print(alpha_min, alpha_test, alpha_max)}")
+                write_to_file(f"Initial alpha range (min, test, max): ({alpha_min}, {alpha_test}, {alpha_max})")
 
             if k == n_iter - 1:
                 write_to_file(
