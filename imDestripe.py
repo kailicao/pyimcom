@@ -284,7 +284,8 @@ class Sca_img:
             self.mask *= np.logical_not(
                 object_mask)  # self.mask = True for good pixels, so set object_mask'ed pixels to False
             if not os.path.exists(outpath + self.obsid + '_' + self.scaid + '_mask.fits'):
-                save_fits(self.mask, self.obsid + '_' + self.scaid + '_mask', dir=outpath, overwrite=True)
+                mask_img= self.mask.astype('uint8')
+                save_fits(mask_img, self.obsid + '_' + self.scaid + '_mask', dir=outpath, overwrite=True)
 
     def apply_noise(self):
         """
