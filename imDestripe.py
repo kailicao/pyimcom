@@ -174,13 +174,6 @@ def absolute(x):
 
 
 def huber_loss(x, d):
-    """
-    KL NOTE this is not going to work at the moment because it's confused about x=psi not being a number
-    I need to convert this to do a numpy where, giving the two different conditions
-    this is still not going to work actually becasue it was np abs that was unhappy
-    so i need to fix that
-
-    """
     return np.where(np.abs(x) <= d, quadratic(x), d**2+2*d*(np.abs(x)-d))
 
 
@@ -290,6 +283,8 @@ class Sca_img:
             self.apply_permanent_mask()
             self.mask *= np.logical_not(
                 object_mask)  # self.mask = True for good pixels, so set object_mask'ed pixels to False
+            if not os.path.exists(outpath + self.obsid + '_' + self.scaid + '_mask.fits'):
+                save_fits(self.mask, self.obsid + '_' + self.scaid + '_mask', dir=outpath, overwrite=True)
 
     def apply_noise(self):
         """
@@ -1022,6 +1017,12 @@ def main():
                 write_to_file(f'Initial norm: {norm_0}')
                 tol = tol * norm_0
                 direction = -grad
+
+            elif i%10 == 0 :
+                beta = 0
+                write_to_file(f"Current Beta: {beta} (using method: {method})")
+                direction = -grad + beta * direction_prev
+
             else:
                 # Calculate beta (direction scaling) depending on method
                 if method=='FR': beta = np.sum(np.square(grad)) / np.sum(np.square(grad_prev))
