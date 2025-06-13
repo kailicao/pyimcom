@@ -262,7 +262,7 @@ class Sca_img:
         # Calculate effecive gain
         if not os.path.isfile(tempdir + obsid + '_' + scaid + '_geff.dat'):
             g0 = time.time()
-            g_eff = np.memmap(tempdir + obsid + '_' + scaid + '_geff.dat', dtype='float32', mode='w+',
+            g_eff = np.memmap(tempdir + obsid + '_' + scaid + '_geff.dat', dtype='float64', mode='w+',
                               shape=self.shape)
             ra, dec = self.get_coordinates(pad=2.)
             ra = ra.reshape((4090, 4090))
@@ -276,7 +276,7 @@ class Sca_img:
             write_to_file(f'G_eff calc duration: {time.time() - g0}')
             del g_eff
 
-        self.g_eff = np.memmap(tempdir + obsid + '_' + scaid + '_geff.dat', dtype='float32', mode='r',
+        self.g_eff = np.memmap(tempdir + obsid + '_' + scaid + '_geff.dat', dtype='float64', mode='r',
                                shape=self.shape)
 
         # Add a noise frame, if requested
@@ -602,7 +602,7 @@ def get_effective_gain(sca):
     m = re.search(r'_(\d+)_(\d+)', sca)
     obsid = m.group(1)
     scaid = m.group(2)
-    g_eff = np.memmap(tempdir + obsid + '_' + scaid + '_geff.dat', dtype='float32', mode='r', shape=(4088, 4088))
+    g_eff = np.memmap(tempdir + obsid + '_' + scaid + '_geff.dat', dtype='float64', mode='r', shape=(4088, 4088))
     N_eff = np.memmap(tempdir + obsid + '_' + scaid + '_Neff.dat', dtype='float32', mode='r', shape=(4088, 4088))
     return g_eff, N_eff
 
