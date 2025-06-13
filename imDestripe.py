@@ -26,6 +26,9 @@ from scipy.ndimage import binary_dilation
 
 TIME = False
 testing=True
+use_cg_float=np.float64
+use_output_float=np.float32
+
 global outfile
 global outpath
 
@@ -139,12 +142,13 @@ def save_fits(image, filename, dir=outpath, overwrite=True, s=False, header=None
 
 
 # C.H. wanted to define this before any use of sca_img so moved it up.
-def apply_object_mask(image, mask=None, threshold_factor=2.0, inplace=False):
+def apply_object_mask(image, mask=None, threshold_factor=2.5, inplace=False):
     """
     Apply a bright object mask to an image.
 
     :param image: 2D numpy array, the image to be masked.
     :param mask: optional 2D boolean array, the pre-existing object mask.
+    :param threshold_factor: float, threshold for masking a pixel
     :param: factor to multiply with the median for thresholding.
     :param inplace: whether to modify the input image directly.
     :return image_out: the masked image.
@@ -243,7 +247,7 @@ class Sca_img:
         else:
             file = fits.open(obsfile + filter_ + '_' + obsid + '_' + scaid + '.fits')
             image_hdu = 'SCI'
-        self.image = np.copy(file[image_hdu].data).astype(np.float32)
+        self.image = np.copy(file[image_hdu].data).astype(use_cg_float)
 
         self.shape = np.shape(self.image)
         self.w = wcs.WCS(file[image_hdu].header)
@@ -258,7 +262,7 @@ class Sca_img:
         # Calculate effecive gain
         if not os.path.isfile(tempdir + obsid + '_' + scaid + '_geff.dat'):
             g0 = time.time()
-            g_eff = np.memmap(tempdir + obsid + '_' + scaid + '_geff.dat', dtype='float32', mode='w+',
+            g_eff = np.memmap(tempdir + obsid + '_' + scaid + '_geff.dat', dtype='float64', mode='w+',
                               shape=self.shape)
             ra, dec = self.get_coordinates(pad=2.)
             ra = ra.reshape((4090, 4090))
@@ -272,7 +276,7 @@ class Sca_img:
             write_to_file(f'G_eff calc duration: {time.time() - g0}')
             del g_eff
 
-        self.g_eff = np.memmap(tempdir + obsid + '_' + scaid + '_geff.dat', dtype='float32', mode='r',
+        self.g_eff = np.memmap(tempdir + obsid + '_' + scaid + '_geff.dat', dtype='float64', mode='r',
                                shape=self.shape)
 
         # Add a noise frame, if requested
@@ -392,7 +396,6 @@ class Sca_img:
             if obsid_B != self.obsid and ov_mat[ind, k] != 0:  # Check if this sca_b overlaps sca_a
                 N_BinA += 1
                 I_B = Sca_img(obsid_B, scaid_B)  # Initialize image B
-                # I_B.apply_noise() <-- redundant
 
                 if params:
                     I_B.subtract_parameters(params, k)
@@ -416,7 +419,7 @@ class Sca_img:
                 if make_Neff:
                     N_eff += B_mask_interp
 
-        write_to_file(f'Interpolation done. Number of contributing SCAs: {N_BinA}')
+        write_to_file(f'Interpolation of {self.obsid}_{self.scaid} done. Number of contributing SCAs: {N_BinA}')
         new_mask = N_eff > N_eff_min
         this_interp = np.where(new_mask, this_interp / np.where(new_mask, N_eff, N_eff_min),
                                0)
@@ -455,7 +458,7 @@ class Parameters:
         self.model = model
         self.n_rows = n_rows
         self.params_per_row = model_params[model]
-        self.params = np.zeros((len(all_scas), self.n_rows * self.params_per_row))
+        self.params = np.zeros((len(all_scas), self.n_rows * self.params_per_row)) #default here is float64
         self.current_shape = '2D'
 
     def params_2_images(self):
@@ -599,7 +602,7 @@ def get_effective_gain(sca):
     m = re.search(r'_(\d+)_(\d+)', sca)
     obsid = m.group(1)
     scaid = m.group(2)
-    g_eff = np.memmap(tempdir + obsid + '_' + scaid + '_geff.dat', dtype='float32', mode='r', shape=(4088, 4088))
+    g_eff = np.memmap(tempdir + obsid + '_' + scaid + '_geff.dat', dtype='float64', mode='r', shape=(4088, 4088))
     N_eff = np.memmap(tempdir + obsid + '_' + scaid + '_Neff.dat', dtype='float32', mode='r', shape=(4088, 4088))
     return g_eff, N_eff
 
