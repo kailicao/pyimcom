@@ -2,7 +2,6 @@ import numpy as np
 import sys
 from astropy.wcs import WCS
 from utils import compareutils
-#import json
 import os
 import re
 from astropy.io import fits
@@ -15,15 +14,14 @@ config_file = sys.argv[1]
 cfgdata = Config(config_file)
 
 info = cfgdata.inlayercache
-ra = cfgdata.ra
-dec = cfgdata.dec
+ra = cfgdata.ra * (np.pi/180) # convert to radians
+dec = cfgdata.dec * (np.pi/180) # convert to radians
 lonpole = cfgdata.lonpole
 nblock = cfgdata.nblock
 n1 = cfgdata.n1
 n2 = cfgdata.n2
-dtheta_deg = cfgdata.dtheta 
-blocksize_deg = n1*n2*dtheta_deg
-blocksize_rad = blocksize_deg * (np.pi)/180
+dtheta_deg = cfgdata.dtheta  
+blocksize_rad = n1*n2*dtheta_deg * (np.pi)/180 # convert to radians
 
 # separate the path from the inlayercache info 
 m = re.search(r'^(.*)\/(.*)', info)
@@ -96,5 +94,7 @@ for exp in exps:
     block_coords_blocks = block_coords / blocksize_rad
 
     # find the center of SCA relative to the bottom left of the mosaic
+    SCA_coords = block_coords_blocks.copy()
+    SCA_coords[:2] += (nblock/2)
     
 
