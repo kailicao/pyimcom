@@ -242,10 +242,10 @@ class Sca_img:
     def __init__(self, obsid, scaid, interpolated=False, add_noise=True, add_objmask=True):
 
         if interpolated:
-            file = fits.open(outpath + 'interpolations/' + obsid + '_' + scaid + '_interp.fits')
+            file = fits.open(outpath + 'interpolations/' + obsid + '_' + scaid + '_interp.fits', memmap=True)
             image_hdu = 'PRIMARY'
         else:
-            file = fits.open(obsfile + filter_ + '_' + obsid + '_' + scaid + '.fits')
+            file = fits.open(obsfile + filter_ + '_' + obsid + '_' + scaid + '.fits', memmap=True)
             image_hdu = 'SCI'
         self.image = np.copy(file[image_hdu].data).astype(use_cg_float)
 
@@ -505,7 +505,7 @@ def get_scas(filter, obsfile):
         if m:
             this_obsfile = str(m.group(0))
             all_scas.append(this_obsfile)
-            this_file = fits.open(f)
+            this_file = fits.open(f, memmap=True)
             this_wcs = wcs.WCS(this_file['SCI'].header)
             all_wcs.append(this_wcs)
             this_file.close()
