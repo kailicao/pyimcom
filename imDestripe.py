@@ -24,7 +24,7 @@ from filelock import Timeout, FileLock
 from scipy.ndimage import binary_dilation
 
 
-TIME = False
+TIME = True
 testing=True
 use_cg_float=np.float64
 use_output_float=np.float32
@@ -289,7 +289,7 @@ class Sca_img:
                 object_mask)  # self.mask = True for good pixels, so set object_mask'ed pixels to False
             if not os.path.exists(outpath + self.obsid + '_' + self.scaid + '_mask.fits'):
                 mask_img= self.mask.astype('uint8')
-                save_fits(mask_img, self.obsid + '_' + self.scaid + '_mask', dir=outpath, overwrite=True)
+                save_fits(mask_img, self.obsid + '_' + self.scaid + '_mask', dir=outpath+'masks/', overwrite=True)
 
     def apply_noise(self):
         """
