@@ -37,8 +37,6 @@ exps = []
 # find all the fits files and add them to the list
 for roots, dirs, files in os.walk(path):
     for file in files:
-        m2 = re.search(r'(\w*)_(\d*)_(\d*).fits', file)
-        if m2: sca = m2.group()
         if file.startswith(exp) and file.endswith('.fits') and file[-6].isdigit():
             exps.append(file)
 print('list of files:', exps)
@@ -48,12 +46,33 @@ os.chdir(path)
 
 # loop over the list of observation pair files (for each SCA)
 for exp in exps:
-    hdulist = fits.open(exp)
-    data = np.copy(hdulist[0].data)
+    # get SCA and obsid
+    m2 = re.search(r'(\w*)_0*(\d*)_(\d*).fits', exp)
+    if m2: 
+        obsid = int(m2.group(2))
+        sca = int(m2.group(3))
+    print(obsid, sca)
     
+    # inlayercache data
+    hdul = fits.open(exp)
+
+    # read in the input image, I
+    I = np.copy(hdul[0].data) # this is I
+
     # get wcs information from fits file
-    mywcs = WCS(hdulist['SCIWCS'].header)
-    hdulist.close()
+    mywcs = WCS(hdul['SCIWCS'].header)
+    hdul.close()
+
+    # results from splitpsf
+    # read in the kernel
+    hdul2 = fits.open('{}.psf/psf_{:d}.fits'.format(info,obsid))
+    K = np.copy(hdul2[sca+hdul2[0].header['KERSKIP']].data)
+    # get the number of pixels on the axis
+    axis_num = K.shape[1]
+    print(axis_num)
+    # get the oversampling factor
+    oversamp = hdul2[0].header['OVSAMP']
+    hdul2.close()
 
     # define pad
     pad = 0
@@ -85,7 +104,9 @@ for exp in exps:
     eta = block_coords[1]
 
     # find theta in original coordinates, convert to block coordinates
-    theta = 2 * np.arctan(np.sqrt(p/(2-p))) # + blocksize_rad/np.sqrt(2) + np.sqrt(2)*pad + ker_size/np.sqrt(2)) * coeff
+    s_in_rad = 0.11 * np.pi/(180*3600) # convert arcsec to radians
+    ker_size = axis_num/oversamp * s_in_rad 
+    theta = (2 * np.arctan(np.sqrt(p/(2-p))) + blocksize_rad/np.sqrt(2) + np.sqrt(2)*pad + ker_size/np.sqrt(2)) * coeff
     theta_block = theta / blocksize_rad
     # sigma = (nblock*blocksize_rad)/np.sqrt(2)    # I don't think I need these for the grid method
     # theta_max = theta * (1+(sigma**2)/4)
@@ -106,7 +127,7 @@ for exp in exps:
     distance = np.hypot(xx - SCA_coords[0], yy - SCA_coords[1])
     in_SCA = np.where(distance <= theta_block)
     block_list = np.stack((in_SCA[1], in_SCA[0]), axis = -1)
-    print(SCA_coords, block_list)
+    # print(SCA_coords, block_list)
     # print('>', blocksize_rad, xi, eta, v)
 
 
