@@ -14,6 +14,7 @@ config_file = sys.argv[1]
 cfgdata = Config(config_file)
 
 info = cfgdata.inlayercache
+block_path = cfgdata.outstem
 ra = cfgdata.ra * (np.pi/180) # convert to radians
 dec = cfgdata.dec * (np.pi/180) # convert to radians
 lonpole = cfgdata.lonpole * (np.pi/180) # convert to radians
@@ -69,7 +70,6 @@ for exp in exps:
     K = np.copy(hdul2[sca+hdul2[0].header['KERSKIP']].data)
     # get the number of pixels on the axis
     axis_num = K.shape[1]
-    print(axis_num)
     # get the oversampling factor
     oversamp = hdul2[0].header['OVSAMP']
     hdul2.close()
@@ -130,4 +130,8 @@ for exp in exps:
     # print(SCA_coords, block_list)
     # print('>', blocksize_rad, xi, eta, v)
 
-
+    # loop over the blocks in the list
+    for ix,iy in block_list:
+        print(block_path+'_{:02d}_{:02d}.fits'.format(ix,iy))
+        hdul3 = fits.open(block_path+'_{:02d}_{:02d}.fits'.format(ix,iy))
+        block_data = np.copy(hdul3[0].data)
