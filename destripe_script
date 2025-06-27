@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=500G
-#SBATCH --time=48:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=96
+#SBATCH --mem=420G
+#SBATCH --time=140:00:00
 #SBATCH --job-name=imdestripe_H_test_mosaic
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=laliotis.2@osu.edu
@@ -17,7 +17,7 @@ source /users/PCON0003/klaliotis/.conda/envs/
 source activate local
 
 # Explicitly set the number of OpenMP threads
-export OMP_NUM_THREADS=16
+export OMP_NUM_THREADS=8
 
 # Verify the environment variables
 echo "OMP_NUM_THREADS: $OMP_NUM_THREADS"
