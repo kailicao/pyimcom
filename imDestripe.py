@@ -24,7 +24,7 @@ from filelock import Timeout, FileLock
 from scipy.ndimage import binary_dilation
 
 
-TIME = True
+TIME = False
 testing=True
 use_cg_float=np.float64
 use_output_float=np.float32
@@ -742,6 +742,9 @@ def cost_function_single(j, sca_a, p, f, thresh=None):
 # Optimization Functions
 
 def main():
+
+    workers = os.process_cpu_count() // os.environ['OMP_NUM_THREADS'] if 'OMP_NUM_THREADS' in os.environ else 12
+
     def cost_function(p, f, thresh=None):
         """
         Calculate the cost function with the current de-striping parameters.
@@ -755,7 +758,7 @@ def main():
         psi = np.zeros((len(all_scas), 4088, 4088))
         epsilon = 0
 
-        with ProcessPoolExecutor() as executor:
+        with ProcessPoolExecutor(max_workers=workers) as executor:
             futures = [executor.submit(cost_function_single, j, sca_a, p, f, thresh) for j, sca_a in enumerate(all_scas)]
 
         for future in as_completed(futures):
@@ -784,7 +787,7 @@ def main():
         write_to_file('Residual calculation started')
         t_r_0 = time.time()
 
-        with ProcessPoolExecutor() as executor:
+        with ProcessPoolExecutor(max_workers=workers) as executor:
             futures = [executor.submit(residual_function_single, k, sca_a, psi, f_prime, thresh) for k, sca_a in
                        enumerate(all_scas)]
 
@@ -1121,7 +1124,13 @@ def main():
 if __name__ == '__main__':
     profiler = cProfile.Profile()
     profiler.enable()
-    main()
+    
+    try:
+        main()
+    except Exception:
+        print("main() failed with exception:")
+        traceback.print_exc()  # Show full traceback in stdout
+
     profiler.disable()
     stream=io.StringIO()
     stats = pstats.Stats(profiler, stream=stream)
