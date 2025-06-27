@@ -1,0 +1,28 @@
+#!/bin/bash
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=500G
+#SBATCH --time=48:00:00
+#SBATCH --job-name=imdestripe_H_test_mosaic
+#SBATCH --mail-type=BEGIN,END,FAIL
+#SBATCH --mail-user=laliotis.2@osu.edu
+#SBATCH --output=/fs/scratch/PCON0003/klaliotis/imdestripe/mosaic_test/imdestripe_test.out.%j
+#SBATCH --account=PCON0003
+
+#Set echo
+set -x
+
+#Activate Conda Environment
+source /users/PCON0003/klaliotis/.conda/envs/
+source activate local
+
+# Explicitly set the number of OpenMP threads
+export OMP_NUM_THREADS=16
+
+# Verify the environment variables
+echo "OMP_NUM_THREADS: $OMP_NUM_THREADS"
+
+#Run programs
+cd /fs/scratch/PCON0003/klaliotis/pyimcom/
+
+python3 imDestripe.py
