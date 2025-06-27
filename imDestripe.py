@@ -743,7 +743,8 @@ def cost_function_single(j, sca_a, p, f, thresh=None):
 
 def main():
 
-    workers = os.process_cpu_count() // os.environ['OMP_NUM_THREADS'] if 'OMP_NUM_THREADS' in os.environ else 12
+    workers = os.cpu_count() // int(os.environ['OMP_NUM_THREADS']) if 'OMP_NUM_THREADS' in os.environ else 12
+    write_to_file(f"## Using {workers} workers for parallel processing.")
 
     def cost_function(p, f, thresh=None):
         """
