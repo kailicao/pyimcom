@@ -6,7 +6,11 @@ import os
 import re
 from astropy.io import fits
 from config import Config
+from scipy.signal.windows import tukey
+import time
+import matplotlib.pyplot as plt
 
+start = time.time()
 # get the json file
 config_file = sys.argv[1]
 
@@ -19,8 +23,9 @@ ra = cfgdata.ra * (np.pi/180) # convert to radians
 dec = cfgdata.dec * (np.pi/180) # convert to radians
 lonpole = cfgdata.lonpole * (np.pi/180) # convert to radians
 nblock = cfgdata.nblock
-n1 = cfgdata.n1
-n2 = cfgdata.n2
+n1 = cfgdata.n1 # number of postage stamps
+n2 = cfgdata.n2 # size of single run  
+postage_pad = cfgdata.postage_pad # postage stamp padding
 dtheta_deg = cfgdata.dtheta 
 blocksize_rad = n1*n2*dtheta_deg * (np.pi)/180 # convert to radians
 # print(ra, dec, lonpole, nblock, n1, n2, dtheta_deg)
@@ -30,7 +35,7 @@ m = re.search(r'^(.*)\/(.*)', info)
 if m:
     path = m.group(1)
     exp = m.group(2)
-print(path, exp)
+# print(path, exp)
 
 # create empty list of exposures
 exps = []
@@ -52,7 +57,7 @@ for exp in exps:
     if m2: 
         obsid = int(m2.group(2))
         sca = int(m2.group(3))
-    print(obsid, sca)
+    print("OBSID: ", obsid, "SCA: ", sca)
     
     # inlayercache data
     hdul = fits.open(exp)
@@ -74,8 +79,13 @@ for exp in exps:
     oversamp = hdul2[0].header['OVSAMP']
     hdul2.close()
 
+    #get the kernel size
+    s_in_rad = 0.11 * np.pi/(180*3600) # convert arcsec to radians
+    ker_size = axis_num/oversamp * s_in_rad 
+    print("kernel size: ", ker_size)
+
     # define pad
-    pad = 0
+    pad = ker_size/2 # at least half of the kernel size in native pixels
     # convert to x, y, z using wcs coords (center of SCA)
     x, y, z, p = compareutils.getfootprint(mywcs, pad)
     v = np.array([x,y,z])
@@ -104,10 +114,9 @@ for exp in exps:
     eta = block_coords[1]
 
     # find theta in original coordinates, convert to block coordinates
-    s_in_rad = 0.11 * np.pi/(180*3600) # convert arcsec to radians
-    ker_size = axis_num/oversamp * s_in_rad 
     theta = (2 * np.arctan(np.sqrt(p/(2-p))) + blocksize_rad/np.sqrt(2) + np.sqrt(2)*pad + ker_size/np.sqrt(2)) * coeff
     theta_block = theta / blocksize_rad
+    print("theta in units of blocks: ", theta_block)
     # sigma = (nblock*blocksize_rad)/np.sqrt(2)    # I don't think I need these for the grid method
     # theta_max = theta * (1+(sigma**2)/4)
      
@@ -119,9 +128,9 @@ for exp in exps:
 
     # find the center of SCA relative to the bottom left of the mosaic
     SCA_coords = block_coords_blocks.copy()
-    SCA_coords[:2] += (nblock/2) # take only the xi and eta coordinates
+    SCA_coords[:2] += (nblock/2) # take only the xi and eta directions
 
-    # find the blocks the SCA covers in block units
+    # find the blocks the SCA covers
     side = np.arange(nblock)+0.5
     xx, yy = np.meshgrid(side, side)
     distance = np.hypot(xx - SCA_coords[0], yy - SCA_coords[1])
@@ -129,9 +138,43 @@ for exp in exps:
     block_list = np.stack((in_SCA[1], in_SCA[0]), axis = -1)
     # print(SCA_coords, block_list)
     # print('>', blocksize_rad, xi, eta, v)
+    print("list of blocks: \n", block_list)
 
     # loop over the blocks in the list
+    count = 0
     for ix,iy in block_list:
-        print(block_path+'_{:02d}_{:02d}.fits'.format(ix,iy))
+        print("BLOCK: ", ix, iy)
+
+        # open the block info
         hdul3 = fits.open(block_path+'_{:02d}_{:02d}.fits'.format(ix,iy))
         block_data = np.copy(hdul3[0].data)
+        hdul3.close()
+
+        # determine the length of one axis of the block
+        block_length = block_data.shape[-1] # length in output pixels
+        overlap = n2*postage_pad # size of one overlap region due to postage stamp
+        a1 = 4*overlap / block_length # percentage of region to have window function taper
+        window = tukey(block_length, alpha = a1)
+        # apply window function to block data
+        block = block_data[0] * window
+
+        # check the window function
+        plt.plot(np.arange(len(window)), window, color = 'indigo')
+        plt.axvline(block_length-1, c = 'mediumpurple')
+        plt.axvline(block_length-overlap-1, c = 'mediumpurple')
+        plt.axvline(block_length-2*overlap-1, c = 'mediumpurple')
+        plt.xlim(block_length-3*overlap, block_length + overlap)
+        plt.plot(block_length - 2, window[block_length - 2], c = 'darkmagenta', marker = 'o')
+        plt.plot(block_length - 2*overlap, window[block_length - 2*overlap], c = 'darkmagenta', marker = 'o')
+        plt.plot(block_length - overlap, window[block_length - overlap], c = 'blueviolet', marker = 'o')
+        plt.plot(block_length - overlap-2, window[block_length - overlap-2], c = 'blueviolet', marker = 'o')
+        plt.show()
+        print(window[block_length - 2], window[block_length - 2*overlap], window[block_length - 2] + window[block_length - 2*overlap])
+        print(window[block_length - overlap],window[block_length - overlap-2], window[block_length - overlap]+window[block_length - overlap-2])
+
+        # find the 'Bounding Box'
+        
+
+end = time.time()
+elapsed = end - start
+print(f"Execution time: {elapsed:.4f} seconds.")
