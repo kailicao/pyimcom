@@ -1,6 +1,7 @@
 import sys
 import numpy as np
 from astropy.io import fits
+import asdf
 import scipy
 import scipy.signal
 from scipy.ndimage import gaussian_filter
@@ -11,6 +12,7 @@ import json
 import os
 
 from ..config import Settings
+from ..wcsutil import PyIMCOM_WCS, local_partial_pixel_derivatives2
 
 class SplitPSF:
 
@@ -226,9 +228,8 @@ class SplitPSF:
          else:
             compute_point_pix = [self.nside/2.*(1+xg[i]), self.nside/2.*(1+yg[i])]
             globalpos = self.wcs_.all_pix2world(np.array([compute_point_pix]), 0)[0]
-            jac = wcs.utils.local_partial_pixel_derivatives(self.wcs_, *compute_point_pix)
-            g = np.array([[np.cos(globalpos[1]*np.pi/180)**2,0],[0,1]]) # metric tensor
-            self.Cov[i,:,:] = var_ref * np.linalg.inv(jac.T@g@jac) * (self.ref_pixscale/3600)**2
+            jac = local_partial_pixel_derivatives2(self.wcs_, *compute_point_pix)
+            self.Cov[i,:,:] = var_ref * np.linalg.inv(jac.T@jac) * (self.ref_pixscale/3600)**2
 
          # get Legendre polynomial weights for this point (length self.npoly)
          lpw = np.outer(eval_legendre(range(self.lorder+1),yg[i]), eval_legendre(range(self.lorder+1),xg[i])).flatten()
@@ -296,8 +297,12 @@ def split_psf_to_fits(psf_file, wcs_format, pars, outfile):
    K2int = np.zeros((nsca,))
    for isca in range(1,nsca+1):
       try:
-         with fits.open(wcs_format.format(isca)) as f:
-            this_wcs_ = wcs.WCS(f['SCI'].header)
+         if wcs_format.format(isca)[-5:] == '.fits':
+             with fits.open(wcs_format.format(isca)) as f:
+                this_wcs_ = PyIMCOM_WCS(f['SCI'].header)
+         if wcs_format.format(isca)[-5:] == '.asdf':
+             with asdf.open(wcs_format.format(isca)) as f:
+                this_wcs_ = PyIMCOM_WCS(f['roman']['meta']['wcs'])
          prim.header['INWCS{:02d}'.format(isca)] = wcs_format.format(isca)
       except:
          prim.header['INWCS{:02d}'.format(isca)] = '/dev/null'
@@ -414,17 +419,17 @@ if __name__ == "__main__":
    for iobs in range(Nobs):
 
       # different file name options depending on the simulation type
-      if cfg_dict['INPSF'][1] == 'anlsim':
+      if cfg_dict['INPSF'][1] == 'anlsim' or cfg_dict['INPSF'][1] == 'L2_2506':
          psf_filename = '/psf_polyfit_{:d}.fits'.format(iobs)
       else:
-         raise "unrecognized input data type"
+         raise ValueError("unrecognized input data type")
       #
       # and for science data (just used here for WCS)
       #
-      if cfg_dict['INDATA'][1] == 'anlsim':
+      if cfg_dict['INPSF'][1] == 'anlsim' or cfg_dict['INPSF'][1] == 'L2_2506':
          sci_filename = cfg_dict['INDATA'][0] + '/simple/Roman_WAS_simple_model_{:s}_{:d}_'.format(filters_obs[iobs], iobs) + '{:d}.fits'
       else:
-         raise "unrecognized input data type"
+         raise ValueError("unrecognized input data type")
 
       psf_file = cfg_dict['INPSF'][0] + psf_filename
       if os.path.exists(psf_file) and filters_obs[iobs]==use_filter:
