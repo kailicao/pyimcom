@@ -389,7 +389,7 @@ if __name__ == "__main__":
    print(filters_obs)
 
    # extract oversampling factor
-   ovsamp = float(cfg_dict['INPSF'][2])
+   ovsamp = int(cfg_dict['INPSF'][2])
    print('Input PSFs are {:f}x oversampled'.format(ovsamp))
 
    # extract PSF splitting parameters
@@ -444,7 +444,8 @@ if __name__ == "__main__":
             'r_in': r1,
             'r_out': r2,
             'eps': epsilon,
-            'SAVEZETA': False
+            'SAVEZETA': False,
+            'oversamp': ovsamp
          }, outfile)
          # <-- 'SAVEZETA': True is for diagnostics/figures only. The zeta HDUs are not actually needed for the calculation,
          # and you might want to keep it off to save space.
