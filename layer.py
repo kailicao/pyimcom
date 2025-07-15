@@ -648,8 +648,8 @@ def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
                 if extraargs['type'] == 'labnoise':
                     out = path+'/labnoise/slope_{:d}_{:d}.fits'.format(idsca[0], idsca[1])
                 if extraargs['type'] == 'truth':
-                    out = path+'/truth/Roman_WAS_simple_model_{:s}_{:d}_{:d}.fits'.format(
-            Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+                    out = path+'/truth/Roman_WAS_truth_{:s}_{:d}_{:d}.fits'.format(
+                          Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
 
         return out
 
@@ -770,7 +770,7 @@ def get_all_data(inimage: 'coadd.InImage'):
             if exists(filename):
                 if filename[-5:]=='.fits':
                     with fits.open(filename) as f:
-                        inimage.indata[i, :, :] = f['SCI'].data
+                        inimage.indata[i, :, :] = f[0].data
                     if format_=='L2_2506':
                         # FITS truth files have to be flipped
                         if idsca[1]%3==0:
