@@ -1126,7 +1126,6 @@ def main():
 if __name__ == '__main__':
     profiler = cProfile.Profile()
     profiler.enable()
-<<<<<<< HEAD
     try:
         main()
     finally:
@@ -1137,19 +1136,3 @@ if __name__ == '__main__':
         stats.print_stats()
         with open(outpath+'profile_results.txt', 'w') as f:
             f.write(stream.getvalue())
-=======
-
-    try:
-        main()
-    except Exception:
-        print("main() failed with exception:")
-        traceback.print_exc()  # Show full traceback in stdout
-
-    profiler.disable()
-    stream=io.StringIO()
-    stats = pstats.Stats(profiler, stream=stream)
-    stats.sort_stats('cumulative')
-    stats.print_stats()
-    with open(outpath+'profile_results.txt', 'w') as f:
-        f.write(stream.getvalue())
->>>>>>> 232ea044cc8fed5c94bb7778871a5eb0678a5218
