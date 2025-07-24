@@ -12,7 +12,8 @@ import io
 import numpy as np
 from astropy.io import fits
 from astropy import wcs
-from scipy.signal import convolve2d, residue
+# from scipy.signal import convolve2d, residue
+from memory_profiler import profile
 from utils import compareutils
 from .config import Settings as Stn, Config
 import re
@@ -740,7 +741,7 @@ def cost_function_single(j, sca_a, p, f, thresh=None):
     return j, psi, local_epsilon
 
 # Optimization Functions
-
+@profile
 def main():
     def cost_function(p, f, thresh=None):
         """
@@ -1121,11 +1122,13 @@ def main():
 if __name__ == '__main__':
     profiler = cProfile.Profile()
     profiler.enable()
-    main()
-    profiler.disable()
-    stream=io.StringIO()
-    stats = pstats.Stats(profiler, stream=stream)
-    stats.sort_stats('cumulative')
-    stats.print_stats()
-    with open(outpath+'profile_results.txt', 'w') as f:
-        f.write(stream.getvalue())
+    try:
+        main()
+    finally:
+        profiler.disable()
+        stream=io.StringIO()
+        stats = pstats.Stats(profiler, stream=stream)
+        stats.sort_stats('cumulative')
+        stats.print_stats()
+        with open(outpath+'profile_results.txt', 'w') as f:
+            f.write(stream.getvalue())
