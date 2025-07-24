@@ -15,7 +15,7 @@ from astropy import wcs
 # from scipy.signal import convolve2d, residue
 from memory_profiler import profile
 from utils import compareutils
-from .config import Settings as Stn, Config
+from config import Settings as Stn, Config
 import re
 import sys
 import copy
@@ -243,10 +243,10 @@ class Sca_img:
     def __init__(self, obsid, scaid, interpolated=False, add_noise=True, add_objmask=True):
 
         if interpolated:
-            file = fits.open(outpath + 'interpolations/' + obsid + '_' + scaid + '_interp.fits')
+            file = fits.open(outpath + 'interpolations/' + obsid + '_' + scaid + '_interp.fits', memmap=True)
             image_hdu = 'PRIMARY'
         else:
-            file = fits.open(obsfile + filter_ + '_' + obsid + '_' + scaid + '.fits')
+            file = fits.open(obsfile + filter_ + '_' + obsid + '_' + scaid + '.fits', memmap=True)
             image_hdu = 'SCI'
         self.image = np.copy(file[image_hdu].data).astype(use_cg_float)
 
@@ -290,7 +290,7 @@ class Sca_img:
                 object_mask)  # self.mask = True for good pixels, so set object_mask'ed pixels to False
             if not os.path.exists(outpath + self.obsid + '_' + self.scaid + '_mask.fits'):
                 mask_img= self.mask.astype('uint8')
-                save_fits(mask_img, self.obsid + '_' + self.scaid + '_mask', dir=outpath, overwrite=True)
+                save_fits(mask_img, self.obsid + '_' + self.scaid + '_mask', dir=outpath+'masks/', overwrite=True)
 
     def apply_noise(self):
         """
@@ -506,7 +506,7 @@ def get_scas(filter, obsfile):
         if m:
             this_obsfile = str(m.group(0))
             all_scas.append(this_obsfile)
-            this_file = fits.open(f)
+            this_file = fits.open(f, memmap=True)
             this_wcs = wcs.WCS(this_file['SCI'].header)
             all_wcs.append(this_wcs)
             this_file.close()
@@ -743,6 +743,10 @@ def cost_function_single(j, sca_a, p, f, thresh=None):
 # Optimization Functions
 @profile
 def main():
+
+    workers = os.cpu_count() // int(os.environ['OMP_NUM_THREADS']) if 'OMP_NUM_THREADS' in os.environ else 12
+    write_to_file(f"## Using {workers} workers for parallel processing.")
+
     def cost_function(p, f, thresh=None):
         """
         Calculate the cost function with the current de-striping parameters.
@@ -756,7 +760,7 @@ def main():
         psi = np.zeros((len(all_scas), 4088, 4088))
         epsilon = 0
 
-        with ProcessPoolExecutor() as executor:
+        with ProcessPoolExecutor(max_workers=workers) as executor:
             futures = [executor.submit(cost_function_single, j, sca_a, p, f, thresh) for j, sca_a in enumerate(all_scas)]
 
         for future in as_completed(futures):
@@ -785,7 +789,7 @@ def main():
         write_to_file('Residual calculation started')
         t_r_0 = time.time()
 
-        with ProcessPoolExecutor() as executor:
+        with ProcessPoolExecutor(max_workers=workers) as executor:
             futures = [executor.submit(residual_function_single, k, sca_a, psi, f_prime, thresh) for k, sca_a in
                        enumerate(all_scas)]
 
@@ -1122,6 +1126,7 @@ def main():
 if __name__ == '__main__':
     profiler = cProfile.Profile()
     profiler.enable()
+<<<<<<< HEAD
     try:
         main()
     finally:
@@ -1132,3 +1137,19 @@ if __name__ == '__main__':
         stats.print_stats()
         with open(outpath+'profile_results.txt', 'w') as f:
             f.write(stream.getvalue())
+=======
+
+    try:
+        main()
+    except Exception:
+        print("main() failed with exception:")
+        traceback.print_exc()  # Show full traceback in stdout
+
+    profiler.disable()
+    stream=io.StringIO()
+    stats = pstats.Stats(profiler, stream=stream)
+    stats.sort_stats('cumulative')
+    stats.print_stats()
+    with open(outpath+'profile_results.txt', 'w') as f:
+        f.write(stream.getvalue())
+>>>>>>> 232ea044cc8fed5c94bb7778871a5eb0678a5218
