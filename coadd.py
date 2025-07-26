@@ -28,6 +28,7 @@ from scipy.special import legendre
 from astropy.io import fits
 from astropy import wcs
 import fitsio
+import asdf
 import matplotlib.pyplot as plt
 
 import importlib
@@ -36,7 +37,7 @@ from .config import Timer, Settings as Stn, Config, format_axis
 from .layer import check_if_idsca_exists, get_all_data, Mask
 from .psfutil import PSFGrp, PSFOvl, SysMatA, SysMatB
 from .lakernel import EigenKernel, CholKernel, IterKernel, EmpirKernel
-
+from .wcsutil import PyIMCOM_WCS
 
 class InImage:
     '''
@@ -81,9 +82,17 @@ class InImage:
 
         self.exists_, self.infile = check_if_idsca_exists(blk.cfg, blk.obsdata, idsca)
         if self.exists_:
-            with fits.open(self.infile) as f:
-                self.inwcs = wcs.WCS(f[Stn.hdu_with_wcs].header)
-                # print('read WCS:', self.infile, 'HDU', Stn.hdu_with_wcs)
+
+            # accept either a FITS Header or ASDF + GWCS
+
+            if self.infile[-5:]=='.fits':
+                with fits.open(self.infile) as f:
+                    self.inwcs = wcs.WCS(f[Stn.hdu_with_wcs].header)
+                    # print('read WCS:', self.infile, 'HDU', Stn.hdu_with_wcs)
+
+            if self.infile[-5:]=='.asdf':
+                with asdf.open(self.infile) as f:
+                    self.inwcs = PyIMCOM_WCS(f['roman']['meta']['wcs'])
 
     @staticmethod
     def generate_idx_grid(xs: np.array, ys: np.array) -> np.array:
@@ -246,6 +255,9 @@ class InImage:
         if cr_mask is not None:
             mask = np.logical_and(mask, cr_mask)
         del cr_mask
+
+        # extract mask from file
+        mask &= Mask.load_mask_from_maskfile(self.blk.cfg,self.blk.obsdata,self.idsca)
 
         # if there's already a mask, *REPLACE* it here
         # This is important in the iterative PSF approach because we may need to change the input
@@ -460,7 +472,8 @@ class InImage:
 
         # get the pixel location on the input image
         # (moved this up since some PSF models need it)
-        pixloc = self.inwcs.all_world2pix(np.array([[*psf_compute_point]]).astype(np.float64), 0)[0]
+        # pixloc = self.inwcs.all_world2pix(np.array([[*psf_compute_point]]).astype(np.float64), 0)[0]
+        pixloc = self.inwcs.all_world2pix(psf_compute_point[0], psf_compute_point[1], 0)
 
         if self.blk.cfg.inpsf_format == 'dc2_imsim':
             if not hasattr(self, 'inpsf_arr'):
@@ -472,7 +485,7 @@ class InImage:
 
             this_psf = self.inpsf_arr
 
-        elif self.blk.cfg.inpsf_format == 'anlsim':
+        elif self.blk.cfg.inpsf_format == 'anlsim' or self.blk.cfg.inpsf_format == 'L2_2506':
             if not hasattr(self, 'inpsf_cube'):
                 fname = self.blk.cfg.inpsf_path + '/psf_polyfit_{:d}.fits'.format(self.idsca[0])
                 sskip = 0
@@ -489,13 +502,21 @@ class InImage:
             # order = 1
             lpoly = InImage.LPolyArr(1, (pixloc[0]-2043.5)/2044., (pixloc[1]-2043.5)/2044.)
             # pixels are in C/Python convention since pixloc was set this way
-            this_psf = InImage.smooth_and_pad(
-                np.einsum('a,aij->ij', lpoly, self.inpsf_cube), tophatwidth=tophatwidth_use)/64
-            # divide by 64=8**2 since anlsim files are in fractional intensity per s_in**2 instead of per (s_in/8)**2
+            if self.blk.cfg.inpsf_format == 'anlsim':
+                this_psf = InImage.smooth_and_pad(
+                    np.einsum('a,aij->ij', lpoly, self.inpsf_cube), tophatwidth=tophatwidth_use)/64
+                # divide by 64=8**2 since anlsim files are in fractional intensity per s_in**2 instead of per (s_in/8)**2
+            else:
+                this_psf = InImage.smooth_and_pad(
+                    np.einsum('a,aij->ij', lpoly, self.inpsf_cube), tophatwidth=tophatwidth_use)
+                # L2_2506 and later are per (s_in/ovsamp)**2
 
         else:
             raise RuntimeError('Error: input psf does not exist')
 
+        # test of the astrometry, if requested
+        #if np.hypot(pixloc[0]-200, pixloc[1]-3000)<150:
+        #    print(':::', pixloc, psf_compute_point); sys.stdout.flush()
         return this_psf
 
         # when distort_matrice is not required
