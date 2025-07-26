@@ -20,6 +20,7 @@ from os.path import exists
 import re
 import sys
 import time
+import warnings
 from filelock import Timeout, FileLock
 
 import numpy as np
@@ -650,6 +651,9 @@ def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
                 if extraargs['type'] == 'truth':
                     out = path+'/truth/Roman_WAS_truth_{:s}_{:d}_{:d}.fits'.format(
                           Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+                if extraargs['type'] == 'noise':
+                    out = path+'/sim_L2_{:s}_{:d}_{:d}_noise.asdf'.format(
+                          Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
 
         return out
 
@@ -889,6 +893,32 @@ def get_all_data(inimage: 'coadd.InImage'):
             print('making grid using GalSim: ', res, idsca, 'extended object type:', extargs)
             inimage.indata[i, :, :] = GalSimInject.galsim_extobj_grid(
                 res, inwcs, inpsf, Stn.sca_nside, inpsf_oversamp, extraargs=extargs)
+
+        # noise realizations saved from romanimpreprocess
+        # supported in L2_2506 and later
+        m = re.search(r'^noise,(\S+)', extrainput[i], re.IGNORECASE)
+        if m:
+            noiselabel = str(m.group(1))
+            filename = _get_sca_imagefile(path, idsca, obsdata, format_, extraargs={'type': 'noise'})
+            print('extracting noise layer ' + noiselabel + ' from ' + filename)
+            if exists(filename):
+                with asdf.open(filename) as f:
+                    # figure out which noise slice to use
+                    noise_realizations = f['config']['NOISE']['LAYER']
+                    jn_use = -1
+                    for jn in range(len(noise_realizations)):
+                        if noise_realizations[jn]==noiselabel:
+                            if jn_use>=0:
+                                warnings.warn('label ' + noiselabel + ' repeated in ' + filename + ': using first instance')
+                                break
+                            jn_use = jn
+                    # now extract that slice
+                    if jn_use>=0:
+                        inimage.indata[i, :, :] = f['noise'][jn_use,:,:]
+                    else:
+                        warnings.warn('WARNING: cannot find slice ' + noiselabel + ' in ' + filename + ': continuing')
+            else:
+                warnings.warn('WARNING: cannot find noise file: ' + filename + ': continuing')
 
         sys.stdout.flush()
 
