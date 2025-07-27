@@ -299,6 +299,8 @@ class PyIMCOM_WCS:
         If noconvert is True, then does not try to convert a GWCS object into internal formats.
         """
 
+        self.array_shape = (Settings.sca_nside,Settings.sca_nside)
+
         if isinstance(inwcs, fits.Header):
             self.constructortype = 'FITSHEADER'
             self.type = 'ASTROPY'
