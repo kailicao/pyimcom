@@ -11,7 +11,9 @@ import copy
 import json
 import os
 
+from ..layer import _get_sca_imagefile
 from ..config import Settings
+from ..coadd import InImage
 from ..wcsutil import PyIMCOM_WCS, local_partial_pixel_derivatives2
 
 class SplitPSF:
@@ -419,19 +421,9 @@ if __name__ == "__main__":
    for iobs in range(Nobs):
 
       # different file name options depending on the simulation type
-      if cfg_dict['INPSF'][1] == 'anlsim' or cfg_dict['INPSF'][1] == 'L2_2506':
-         psf_filename = '/psf_polyfit_{:d}.fits'.format(iobs)
-      else:
-         raise ValueError("unrecognized input data type")
-      #
-      # and for science data (just used here for WCS)
-      #
-      if cfg_dict['INPSF'][1] == 'anlsim' or cfg_dict['INPSF'][1] == 'L2_2506':
-         sci_filename = cfg_dict['INDATA'][0] + '/simple/Roman_WAS_simple_model_{:s}_{:d}_'.format(filters_obs[iobs], iobs) + '{:d}.fits'
-      else:
-         raise ValueError("unrecognized input data type")
+      psf_file = cfg_dict['INPSF'][0] + '/' + InImage.psf_filename(cfg_dict['INPSF'][1], iobs)
+      sci_filename = _get_sca_imagefile(cfg_dict['INDATA'][0], (iobs,-1), filters_obs[iobs], cfg_dict['INPSF'][1])
 
-      psf_file = cfg_dict['INPSF'][0] + psf_filename
       if os.path.exists(psf_file) and filters_obs[iobs]==use_filter:
 
          # Need to transfer this file

@@ -55,7 +55,7 @@ The PSF format is specified in the ``'INPSF'`` configuration keyword. The file n
 
     The basis functions are 2D Legendre polynomials are defined in terms of the re-scaled SCA coordinates ``u=(x-2044.5)/2044, v=(y-2044.5)/2044``. There are Ncoef=(p+1)**2 coefficients, in the order ``P_0(u)P_0(v) ... P_p(u)P_0(v), P_0(u)P_1(v) ...P_p(u)P_1(v), ... P_0(u)P_p(v) ... P_p(u)P_p(v)``.
 
-Reading PSFs (including selecting the file name and format) occurs in the ``pyimcom.coadd.InImage.get_psf_pos`` function.
+Reading PSFs (including selecting the file name and format) occurs in the ``pyimcom.coadd.InImage.psf_filename`` static method.
 
 Laboratory noise realizations
 =================================

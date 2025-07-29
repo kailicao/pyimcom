@@ -23,6 +23,8 @@ Running PyIMCOM
 
 - `Input file formats <docs/input_README.rst>`_
 
+- `PSF splitting <psfsplit/README.rst>`_ (under development).
+
 - `How to compress PyIMCOM output files <compress/compress_README.rst>`_
 
 Post-processing of PyIMCOM outputs

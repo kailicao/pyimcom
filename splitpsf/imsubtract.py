@@ -196,7 +196,9 @@ def run_imsubtract(config_file, display=None):
             # determine the length of one axis of the block
             block_length = block_data.shape[-1] # length in output pixels
             overlap = n2*postage_pad # size of one overlap region due to postage stamp
-            a1 = 4*overlap / block_length # percentage of region to have window function taper
+            a1 = 4*overlap / (block_length-1) # percentage of region to have window function taper
+                # the '-1' is due to scipy's convention on alpha that the denominator is the distance from the
+                # first to the last point, so 1 less than the length
             window = tukey(block_length, alpha = a1)
             # apply window function to block data
             block = block_data[0] * window
