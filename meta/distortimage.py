@@ -125,6 +125,7 @@ class MetaMosaic:
         outwcs.wcs.cdelt = [-self.cfg.dtheta, self.cfg.dtheta]
         outwcs.wcs.ctype = ["RA---STG", "DEC--STG"]
         outwcs.wcs.crval = [self.cfg.ra, self.cfg.dec]
+        outwcs.wcs.lonpole = self.cfg.lonpole
 
         # make the HDUs
         primary = fits.PrimaryHDU(self.in_image, header=outwcs.to_header())
@@ -206,7 +207,8 @@ class MetaMosaic:
             'CD2_1':  J[1,0]*scale,
             'CD2_2':  J[1,1]*scale,
             'CRVAL1': self.cfg.ra,
-            'CRVAL2': self.cfg.dec
+            'CRVAL2': self.cfg.dec,
+            'LONPOLE': self.cfg.lonpole
         })
 
         #input mask

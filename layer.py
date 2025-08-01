@@ -775,7 +775,10 @@ def get_all_data(inimage: 'coadd.InImage'):
     for i in range(1, n_inframe):
         sys.stdout.flush()
         # truth image (no noise)
-        if extrainput[i].casefold() == 'truth'.casefold():
+        if extrainput[i].casefold() == 'truth'.casefold() or extrainput[i][:6].casefold() == 'truth,'.casefold():
+            rescale = 1.0
+            m = re.search(r'^truth,(.+)$', extrainput[i], re.IGNORECASE)
+            if m: rescale = float(m.group(1))
             filename = _get_sca_imagefile(path, idsca, obsdata, format_, extraargs={'type': 'truth'})
             if exists(filename):
                 if filename[-5:]=='.fits':
@@ -790,6 +793,8 @@ def get_all_data(inimage: 'coadd.InImage'):
                 if filename[-5:]=='.asdf':
                     with fits.open(filename) as f:
                         inimage.indata[i, :, :] = f['roman']['data']
+                # scaling
+                inimage.indata[i, :, :] *= rescale
 
         # white noise frames (generated from RNG, not file)
         m = re.search(r'^whitenoise(\d+)$', extrainput[i], re.IGNORECASE)
