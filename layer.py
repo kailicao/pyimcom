@@ -626,6 +626,7 @@ def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
     path = directory for the files
     idsca = tuple (obsid, sca) (sca in 1..18)
     obsdata = observation data table (information needed for some formats)
+        (the filter string can be given instead if the calling function doesn't have the full table)
     format = string describing type of file name
       Right now the valid formats are:
       dc2_imsim, anlsim, L2_2506
@@ -633,40 +634,48 @@ def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
 
     returns None if unrecognized format
 
+    If sca is -1, then returns a format string (i.e., '{:d}' or similar
+    instead of the number itself).
+
     '''
+
+    # all formats currently have no leading 0 on the SCA number
+    scastr = '{:d}'.format(idsca[1])
+    if idsca[1]==-1: scastr = '{:d}'
+
+    # get the filter
+    if isinstance(obsdata,str):
+        filter = obsdata
+    else:
+        filter = Stn.RomanFilters[obsdata['filter'][idsca[0]]]
 
     # for Level 2 summer 2025 format
     if format_ == 'L2_2506':
-        out = path+'/sim_L2_{:s}_{:d}_{:d}.asdf'.format(
-            Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+        out = path+'/sim_L2_{:s}_{:d}_{:s}.asdf'.format(filter, idsca[0], scastr)
 
         # insert sim layers here
         if extraargs is not None:
             if 'type' in extraargs:
                 if extraargs['type'] == 'mask':
-                    out = path+'/sim_L2_{:s}_{:d}_{:d}_mask.fits'.format(
-                          Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+                    out = path+'/sim_L2_{:s}_{:d}_{:s}_mask.fits'.format(filter, idsca[0], scastr)
                 if extraargs['type'] == 'labnoise':
-                    out = path+'/labnoise/slope_{:d}_{:d}.fits'.format(idsca[0], idsca[1])
+                    out = path+'/labnoise/slope_{:d}_{:s}.fits'.format(idsca[0], scastr)
                 if extraargs['type'] == 'truth':
-                    out = path+'/truth/Roman_WAS_truth_{:s}_{:d}_{:d}.fits'.format(
-                          Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+                    out = path+'/truth/Roman_WAS_truth_{:s}_{:d}_{:s}.fits'.format(filter, idsca[0], scastr)
                 if extraargs['type'] == 'noise':
-                    out = path+'/sim_L2_{:s}_{:d}_{:d}_noise.asdf'.format(
-                          Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+                    out = path+'/sim_L2_{:s}_{:d}_{:s}_noise.asdf'.format(filter, idsca[0], scastr)
 
         return out
 
     # for the ANL sims
     if format_ == 'anlsim':
-        out = path+'/simple/Roman_WAS_simple_model_{:s}_{:d}_{:d}.fits'.format(
-            Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+        out = path+'/simple/Roman_WAS_simple_model_{:s}_{:d}_{:s}.fits'.format(filter, idsca[0], scastr)
 
         # insert ANL sim layers here
         if extraargs is not None:
             if 'type' in extraargs:
                 if extraargs['type'] == 'labnoise':
-                    out = path+'/labnoise/slope_{:d}_{:d}.fits'.format(idsca[0], idsca[1])
+                    out = path+'/labnoise/slope_{:d}_{:s}.fits'.format(idsca[0], scastr)
 
         return out
 
@@ -674,19 +683,16 @@ def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
     if format_ != 'dc2_imsim':
         return None
 
-    out = path+'/simple/dc2_{:s}_{:d}_{:d}.fits'.format(
-        Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+    out = path+'/simple/dc2_{:s}_{:d}_{:s}.fits'.format(filter, idsca[0], scastr)
 
     if extraargs is not None:
         if 'type' in extraargs:
             if extraargs['type'] == 'truth':
-                out = path+'/truth/dc2_{:s}_{:d}_{:d}.fits'.format(
-                    Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+                out = path+'/truth/dc2_{:s}_{:d}_{:s}.fits'.format(filter, idsca[0], scastr)
             elif extraargs['type'] == 'labnoise':
-                out = path+'/labnoise/slope_{:d}_{:d}.fits'.format(idsca[0], idsca[1])
+                out = path+'/labnoise/slope_{:d}_{:s}.fits'.format(idsca[0], scastr)
             elif extraargs['type'] == 'skyerr':
-                out = path+'/simple/dc2_{:s}_{:d}_{:d}.fits'.format(
-                    Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+                out = path+'/simple/dc2_{:s}_{:d}_{:s}.fits'.format(filter, idsca[0], scastr)
 
     return out
 
@@ -769,7 +775,10 @@ def get_all_data(inimage: 'coadd.InImage'):
     for i in range(1, n_inframe):
         sys.stdout.flush()
         # truth image (no noise)
-        if extrainput[i].casefold() == 'truth'.casefold():
+        if extrainput[i].casefold() == 'truth'.casefold() or extrainput[i][:6].casefold() == 'truth,'.casefold():
+            rescale = 1.0
+            m = re.search(r'^truth,(.+)$', extrainput[i], re.IGNORECASE)
+            if m: rescale = float(m.group(1))
             filename = _get_sca_imagefile(path, idsca, obsdata, format_, extraargs={'type': 'truth'})
             if exists(filename):
                 if filename[-5:]=='.fits':
@@ -784,6 +793,8 @@ def get_all_data(inimage: 'coadd.InImage'):
                 if filename[-5:]=='.asdf':
                     with fits.open(filename) as f:
                         inimage.indata[i, :, :] = f['roman']['data']
+                # scaling
+                inimage.indata[i, :, :] *= rescale
 
         # white noise frames (generated from RNG, not file)
         m = re.search(r'^whitenoise(\d+)$', extrainput[i], re.IGNORECASE)

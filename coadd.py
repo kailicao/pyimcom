@@ -56,6 +56,7 @@ class InImage:
 
     smooth_and_pad (staticmethod) : Utility to smear a PSF with a tophat and a Gaussian.
     LPolyArr (staticmethod) : Utility to generate an array of Legendre polynomials.
+    psf_filename (staticmethod) : PSF file name broker.
     get_psf_pos : Get input PSF array at given position.
 
     '''
@@ -444,6 +445,17 @@ class InImage:
         arr = np.outer(va,ua).flatten()
         return arr
 
+    @staticmethod
+    def psf_filename(inpsf_format, obsid):
+        """PSF file name broker."""
+
+        if inpsf_format == 'dc2_imsim':
+            return 'dc2_psf_{:d}.fits'.format(obsid)
+        if inpsf_format in ['anlsim', 'L2_2506']:
+            return 'psf_polyfit_{:d}.fits'.format(obsid)
+
+        assert False, 'psf_filename: should not get here'
+
     def get_psf_pos(self, psf_compute_point: np.array, use_shortrange: bool = False) -> np.array:
         '''
         Get input PSF array at given position.
@@ -477,7 +489,7 @@ class InImage:
 
         if self.blk.cfg.inpsf_format == 'dc2_imsim':
             if not hasattr(self, 'inpsf_arr'):
-                fname = self.blk.cfg.inpsf_path + '/dc2_psf_{:d}.fits'.format(self.idsca[0])
+                fname = self.blk.cfg.inpsf_path + '/' + InImage.psf_filename(self.blk.cfg.inpsf_format, self.idsca[0])
                 assert exists(fname), 'Error: input psf does not exist'
                 with fitsio.FITS(fname) as fileh:
                     self.inpsf_arr = InImage.smooth_and_pad(
@@ -487,7 +499,7 @@ class InImage:
 
         elif self.blk.cfg.inpsf_format == 'anlsim' or self.blk.cfg.inpsf_format == 'L2_2506':
             if not hasattr(self, 'inpsf_cube'):
-                fname = self.blk.cfg.inpsf_path + '/psf_polyfit_{:d}.fits'.format(self.idsca[0])
+                fname = self.blk.cfg.inpsf_path + '/' + InImage.psf_filename(self.blk.cfg.inpsf_format, self.idsca[0])
                 sskip = 0
                 readskip = False
                 if use_shortrange and self.blk.cfg.psfsplit:

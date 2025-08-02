@@ -200,7 +200,7 @@ In this example, the "science" image (always present) is layer 0; "labnoise" is 
 
 The ``pyimcom.layers`` module contains instructions for building each of the different layers, and additional options will be added in the future. The currently supported options include:
 
-- ``truth`` : This layer is the true (no noise or saturation, but including PSF) image, if supported by that input format. Clearly this is only available for the simulations.
+- ``truth`` [,s] : This layer is the true (no noise or saturation, but including PSF) image, if supported by that input format. Clearly this is only available for the simulations. If s is given (e.g., ``truth,0.1``) then the input truth input is multiplied by that factor (this is useful if the truth image and processed images are in different units).
 
 - ``whitenoise`` n : This layer generates white noise. The trailing integer n controls the random number generator seed. If the same n is used in another mosaic, then each observation ID + SCA will produce the same noise realization. The normalization is mean 0 and variance 1 in each pixel; if you are interested in other normalizations, you can appropriately re-scale the output.
 
