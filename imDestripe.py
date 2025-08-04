@@ -95,7 +95,6 @@ import random
 from astropy.io import fits
 from filelock import FileLock, Timeout
 
-@profile
 def save_fits(image, filename, dir=outpath, overwrite=True, s=False, header=None, retries=3):
     """
     Save a 2D image to a FITS file with locking, retries, and atomic rename.
@@ -144,7 +143,6 @@ def save_fits(image, filename, dir=outpath, overwrite=True, s=False, header=None
 
 
 # C.H. wanted to define this before any use of sca_img so moved it up.
-@profile
 def apply_object_mask(image, mask=None, threshold_factor=2.5, inplace=False):
     """
     Apply a bright object mask to an image.
@@ -294,7 +292,7 @@ class Sca_img:
                 mask_img= self.mask.astype('uint8')
                 save_fits(mask_img, self.obsid + '_' + self.scaid + '_mask', dir=outpath+'masks/', overwrite=True)
 
-    @profile
+  
     def apply_noise(self):
         """
         Add detector noise to self.image
@@ -309,7 +307,7 @@ class Sca_img:
         if not os.path.exists(test_image_dir + filename + '.fits'):
             save_fits(self.image, filename, dir=test_image_dir, overwrite=True)
 
-    @profile
+
     def apply_permanent_mask(self):
         """
         Apply permanent pixel mask. Updates self.image and self.mask
@@ -319,7 +317,7 @@ class Sca_img:
         self.image *= pm
         self.mask *= pm
 
-    @profile
+
     def get_permanent_mask(self):
         """
         Apply permanent pixel mask. Updates self.image and self.mask
@@ -329,7 +327,7 @@ class Sca_img:
         pm_array = np.copy(pm)
         return pm_array
 
-    @profile
+
     def apply_all_mask(self):
         """
         Apply permanent pixel mask. Updates self.image in-place
@@ -337,7 +335,7 @@ class Sca_img:
         """
         self.image *= self.mask
 
-    @profile
+
     def subtract_parameters(self, p, j):
         """
         Subtract a set of parameters from the SCA image. Updates self.image and self.params_subtracted
@@ -370,7 +368,7 @@ class Sca_img:
         ra, dec = wcs.all_pix2world(x_flat, y_flat, 0)  # 0 is for the first frame (1-indexed)
         return ra, dec
 
-    @profile
+
     def make_interpolated(self, ind, params=None, N_eff_min=0.5):
         """
         Construct a version of this SCA interpolated from other, overlapping ones.
@@ -485,7 +483,7 @@ class Parameters:
     #     self.params = np.ravel(self.params)
     #     self.current_shape = '1D'
 
-    @profile
+
     def forward_par(self, sca_i):
         """
         Takes one SCA row (n_rows) from the params and casts it into 2D (n_rows x n_rows)
@@ -496,7 +494,7 @@ class Parameters:
             self.params_2_images()
         return np.array(self.params[sca_i, :])[:, np.newaxis] * np.ones((self.n_rows, self.n_rows))
 
-@profile
+
 def get_scas(filter, obsfile):
     """
     Function to get a list of all SCA images and their WCSs for this mosaic
@@ -524,7 +522,7 @@ def get_scas(filter, obsfile):
         write_to_file(f"SCA {i}: {s}", "SCA_list.txt")
     return all_scas, all_wcs
 
-@profile
+
 def interpolate_image_bilinear(image_B, image_A, interpolated_image, mask=None):
     """
     Interpolate values from a "reference" SCA image onto a "target" SCA coordinate grid
@@ -566,7 +564,7 @@ def interpolate_image_bilinear(image_B, image_A, interpolated_image, mask=None):
     sys.stdout.flush()
     sys.stderr.flush()
 
-@profile
+
 def transpose_interpolate(image_A, wcs_A, image_B, original_image):
     """
      Interpolate backwards from image_A to image_B space.
@@ -600,7 +598,7 @@ def transpose_par(I):
     """
     return np.sum(I, axis=1)
 
-@profile
+
 def get_effective_gain(sca):
     """
     retrieve the effective gain and n_eff of the image. valid only for already-interpolated images
