@@ -747,7 +747,7 @@ def cost_function_single(j, sca_a, p, f, thresh=None):
     return j, psi, local_epsilon
 
 # Optimization Functions
-@profile
+
 def main():
 
     workers = os.cpu_count() // int(os.environ['OMP_NUM_THREADS']) if 'OMP_NUM_THREADS' in os.environ else 12
@@ -816,7 +816,7 @@ def main():
         if extrareturn: return resids, resids1, resids2
         return resids
 
-    @profile
+    
     def linear_search(p, direction, f, f_prime, grad_current, thresh=None, n_iter=100, tol=10 ** -4):
         """
         Linear search via combination bisection and secant methods for parameters that minimize the function
