@@ -755,7 +755,6 @@ def main():
     workers = os.cpu_count() // int(os.environ['OMP_NUM_THREADS']) if 'OMP_NUM_THREADS' in os.environ else 12
     write_to_file(f"## Using {workers} workers for parallel processing.")
 
-    @profile
     def cost_function(p, f, thresh=None):
         """
         Calculate the cost function with the current de-striping parameters.
@@ -781,7 +780,6 @@ def main():
         write_to_file(f'Average time per cost function iteration: {(time.time() - t0_cost) / len(all_scas)} seconds')
         return epsilon, psi
 
-    @profile
     def residual_function(psi, f_prime, thresh=None, extrareturn=False):
         """
         Calculate the residual image, = grad(epsilon)
