@@ -13,7 +13,7 @@ import numpy as np
 from astropy.io import fits
 from astropy import wcs
 # from scipy.signal import convolve2d, residue
-from memory_profiler import profile
+from memory_profiler import profile, memory_usage
 from utils import compareutils
 from config import Settings as Stn, Config
 import re
@@ -753,7 +753,6 @@ def main():
     workers = os.cpu_count() // int(os.environ['OMP_NUM_THREADS']) if 'OMP_NUM_THREADS' in os.environ else 12
     write_to_file(f"## Using {workers} workers for parallel processing.")
 
-    @profile
     def cost_function(p, f, thresh=None):
         """
         Calculate the cost function with the current de-striping parameters.
@@ -779,7 +778,6 @@ def main():
         write_to_file(f'Average time per cost function iteration: {(time.time() - t0_cost) / len(all_scas)} seconds')
         return epsilon, psi
 
-    @profile
     def residual_function(psi, f_prime, thresh=None, extrareturn=False):
         """
         Calculate the residual image, = grad(epsilon)
@@ -1136,8 +1134,9 @@ def main():
 if __name__ == '__main__':
     profiler = cProfile.Profile()
     profiler.enable()
+    mem_usage = None
     try:
-        main()
+        mem_usage = memory_usage(main, interval=1800, retval=False)
     finally:
         profiler.disable()
         stream=io.StringIO()
@@ -1146,3 +1145,7 @@ if __name__ == '__main__':
         stats.print_stats()
         with open(outpath+'profile_results.txt', 'w') as f:
             f.write(stream.getvalue())
+        if mem_usage is not None:
+            with open(outpath + 'memory_profile_results.txt', 'w') as f:
+                for i, mem in enumerate(mem_usage):
+                    f.write(f"{i}\t{mem:.2f} MiB\n")
