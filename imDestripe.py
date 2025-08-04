@@ -651,7 +651,6 @@ else:
                                              verbose=True)  # an N_wcs x N_wcs matrix containing fractional overlap
     write_to_file(f"Overlap matrix complete. Duration: {(time.time() - ovmat_t0) / 60} Minutes")
 
-@profile
 def residual_function_single(k, sca_a, psi, f_prime, thresh=None):
     # Go and get the WCS object for image A
     obsid_A, scaid_A = get_ids(sca_a)
@@ -709,7 +708,6 @@ def residual_function_single(k, sca_a, psi, f_prime, thresh=None):
 
     return k, term_1, term_2_list
 
-@profile
 def cost_function_single(j, sca_a, p, f, thresh=None):
     m = re.search(r'_(\d+)_(\d+)', sca_a)
     obsid_A, scaid_A = m.group(1), m.group(2)
@@ -755,6 +753,7 @@ def main():
     workers = os.cpu_count() // int(os.environ['OMP_NUM_THREADS']) if 'OMP_NUM_THREADS' in os.environ else 12
     write_to_file(f"## Using {workers} workers for parallel processing.")
 
+    @profile
     def cost_function(p, f, thresh=None):
         """
         Calculate the cost function with the current de-striping parameters.
@@ -780,6 +779,7 @@ def main():
         write_to_file(f'Average time per cost function iteration: {(time.time() - t0_cost) / len(all_scas)} seconds')
         return epsilon, psi
 
+    @profile
     def residual_function(psi, f_prime, thresh=None, extrareturn=False):
         """
         Calculate the residual image, = grad(epsilon)
@@ -979,7 +979,7 @@ def main():
 
         return best_p, best_psi
 
-    @profile
+    
     def conjugate_gradient(p, f, f_prime, method='FR', tol=1e-5, max_iter=100, thresh=None):
         """
         Algorithm to use conjugate gradient descent to optimize the parameters for destriping.
