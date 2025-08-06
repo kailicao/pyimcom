@@ -20,12 +20,14 @@ from os.path import exists
 import re
 import sys
 import time
+import warnings
 from filelock import Timeout, FileLock
 
 import numpy as np
 import scipy.linalg
 from scipy.ndimage import convolve
 
+import asdf
 from astropy.io import fits
 from astropy import wcs
 
@@ -37,6 +39,8 @@ try:
     from pyimcom_croutines import iD5512C
 except:
     from .routine import iD5512C
+
+from .wcsutil import local_partial_pixel_derivatives2, PyIMCOM_WCS
 
 class GalSimInject:
     '''
@@ -303,9 +307,7 @@ class GalSimInject:
             interp_psf = galsim._InterpolatedImage(psf_image, x_interpolant=galsim.interpolant.Lanczos(32), force_stepk=stepk, force_maxk=maxk)
 
             # Jacobian
-            Jac = wcs.utils.local_partial_pixel_derivatives(
-                mywcs, x_sca[n], y_sca[n])
-            Jac[0, :] *= -np.cos(my_dec[n]*np.pi/180.)
+            Jac = local_partial_pixel_derivatives2(mywcs, x_sca[n], y_sca[n])
             # convert to reference pixel size
             Jac /= refscale / 3600.
             # now we have d(X,Y)|_{zweibein: X=E,Y=N} / d(X,Y)|_{pixel coords}
@@ -585,6 +587,16 @@ class Mask:
         return permanent_mask
 
     @staticmethod
+    def load_mask_from_maskfile(cfg,obsdata,idsca):
+        without_maskfiles = ['dc2_sim', 'anlsim'] # old formats without input masks
+        if cfg.informat not in without_maskfiles:
+            filename = _get_sca_imagefile(cfg.inpath, idsca, obsdata, cfg.informat, extraargs={'type':'mask'})
+            with fits.open(filename) as f:
+                return f['MASK'].data==0
+        # default return all good
+        return np.ones((Stn.sca_nside, Stn.sca_nside), dtype=bool)
+
+    @staticmethod
     def load_cr_mask(inimage: 'coadd.InImage'):
         config = inimage.blk.cfg  # shortcut
 
@@ -614,25 +626,56 @@ def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
     path = directory for the files
     idsca = tuple (obsid, sca) (sca in 1..18)
     obsdata = observation data table (information needed for some formats)
+        (the filter string can be given instead if the calling function doesn't have the full table)
     format = string describing type of file name
       Right now the valid formats are:
-      dc2_imsim, anlsim
+      dc2_imsim, anlsim, L2_2506
     extraargs = dictionary of extra arguments
 
     returns None if unrecognized format
 
+    If sca is -1, then returns a format string (i.e., '{:d}' or similar
+    instead of the number itself).
+
     '''
+
+    # all formats currently have no leading 0 on the SCA number
+    scastr = '{:d}'.format(idsca[1])
+    if idsca[1]==-1: scastr = '{:d}'
+
+    # get the filter
+    if isinstance(obsdata,str):
+        filter = obsdata
+    else:
+        filter = Stn.RomanFilters[obsdata['filter'][idsca[0]]]
+
+    # for Level 2 summer 2025 format
+    if format_ == 'L2_2506':
+        out = path+'/sim_L2_{:s}_{:d}_{:s}.asdf'.format(filter, idsca[0], scastr)
+
+        # insert sim layers here
+        if extraargs is not None:
+            if 'type' in extraargs:
+                if extraargs['type'] == 'mask':
+                    out = path+'/sim_L2_{:s}_{:d}_{:s}_mask.fits'.format(filter, idsca[0], scastr)
+                if extraargs['type'] == 'labnoise':
+                    out = path+'/labnoise/slope_{:d}_{:s}.fits'.format(idsca[0], scastr)
+                if extraargs['type'] == 'truth':
+                    out = path+'/truth/Roman_WAS_truth_{:s}_{:d}_{:s}.fits'.format(filter, idsca[0], scastr)
+                if extraargs['type'] == 'noise':
+                    out = path+'/sim_L2_{:s}_{:d}_{:s}_noise.asdf'.format(filter, idsca[0], scastr)
+
+        return out
 
     # for the ANL sims
     if format_ == 'anlsim':
-        out = path+'/simple/Roman_WAS_simple_model_{:s}_{:d}_{:d}.fits'.format(
-            Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+        out = path+'/simple/Roman_WAS_simple_model_{:s}_{:d}_{:s}.fits'.format(filter, idsca[0], scastr)
 
         # insert ANL sim layers here
         if extraargs is not None:
             if 'type' in extraargs:
                 if extraargs['type'] == 'labnoise':
-                    out = path+'/labnoise/slope_{:d}_{:d}.fits'.format(idsca[0], idsca[1])
+                    out = path+'/labnoise/slope_{:d}_{:s}.fits'.format(idsca[0], scastr)
 
         return out
 
@@ -640,19 +683,16 @@ def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
     if format_ != 'dc2_imsim':
         return None
 
-    out = path+'/simple/dc2_{:s}_{:d}_{:d}.fits'.format(
-        Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+    out = path+'/simple/dc2_{:s}_{:d}_{:s}.fits'.format(filter, idsca[0], scastr)
 
     if extraargs is not None:
         if 'type' in extraargs:
             if extraargs['type'] == 'truth':
-                out = path+'/truth/dc2_{:s}_{:d}_{:d}.fits'.format(
-                    Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+                out = path+'/truth/dc2_{:s}_{:d}_{:s}.fits'.format(filter, idsca[0], scastr)
             elif extraargs['type'] == 'labnoise':
-                out = path+'/labnoise/slope_{:d}_{:d}.fits'.format(idsca[0], idsca[1])
+                out = path+'/labnoise/slope_{:d}_{:s}.fits'.format(idsca[0], scastr)
             elif extraargs['type'] == 'skyerr':
-                out = path+'/simple/dc2_{:s}_{:d}_{:d}.fits'.format(
-                    Stn.RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+                out = path+'/simple/dc2_{:s}_{:d}_{:s}.fits'.format(filter, idsca[0], scastr)
 
     return out
 
@@ -725,6 +765,9 @@ def get_all_data(inimage: 'coadd.InImage'):
         if format_ in ['dc2_imsim', 'anlsim']:
             with fits.open(filename) as f:
                 inimage.indata[0, :, :] = f['SCI'].data - float(f['SCI'].header['SKY_MEAN'])
+        if format_ in ['L2_2506']:
+            with asdf.open(filename) as f:
+                inimage.indata[0, :, :] = f['roman']['data']
     #
     # now for the extra inputs
     # if n_inframe == 1: return <-- for saving purposes, don't want to exit here
@@ -732,10 +775,26 @@ def get_all_data(inimage: 'coadd.InImage'):
     for i in range(1, n_inframe):
         sys.stdout.flush()
         # truth image (no noise)
-        if extrainput[i].casefold() == 'truth'.casefold():
+        if extrainput[i].casefold() == 'truth'.casefold() or extrainput[i][:6].casefold() == 'truth,'.casefold():
+            rescale = 1.0
+            m = re.search(r'^truth,(.+)$', extrainput[i], re.IGNORECASE)
+            if m: rescale = float(m.group(1))
             filename = _get_sca_imagefile(path, idsca, obsdata, format_, extraargs={'type': 'truth'})
             if exists(filename):
-                with fits.open(filename) as f: inimage.indata[i, :, :] = f['SCI'].data
+                if filename[-5:]=='.fits':
+                    with fits.open(filename) as f:
+                        inimage.indata[i, :, :] = f[0].data
+                    if format_=='L2_2506':
+                        # FITS truth files have to be flipped
+                        if idsca[1]%3==0:
+                            inimage.indata[i,:,:] = inimage.indata[i,:,::-1]
+                        else:
+                            inimage.indata[i,:,:] = inimage.indata[i,::-1,:]
+                if filename[-5:]=='.asdf':
+                    with fits.open(filename) as f:
+                        inimage.indata[i, :, :] = f['roman']['data']
+                # scaling
+                inimage.indata[i, :, :] *= rescale
 
         # white noise frames (generated from RNG, not file)
         m = re.search(r'^whitenoise(\d+)$', extrainput[i], re.IGNORECASE)
@@ -767,10 +826,16 @@ def get_all_data(inimage: 'coadd.InImage'):
                         inimage.indata[i, :, :] = f[0].data[4:4092,4:4092]
                         print('  -> pulled out 4088x4088 subregion: 10th & 90th percentiles = {:6.3f} {:6.3f}'.format(
                             np.percentile(f[0].data[4:4092,4:4092], 10), np.percentile(f[0].data[4:4092,4:4092], 90)))
+                if format_ == 'L2_2506':
+                    # FITS labnoise files have to be flipped
+                    if idsca[1]%3==0:
+                        inimage.indata[i,:,:] = inimage.indata[i,:,::-1]
+                    else:
+                        inimage.indata[i,:,:] = inimage.indata[i,::-1,:]
             else:
                 print('Warning: labnoise file not found, skipping ...')
 
-        # skyerr
+        # skyerr (not supported in L2_2506)
         if extrainput[i].casefold() == 'skyerr'.casefold():
             filename = _get_sca_imagefile(path, idsca, obsdata, format_, extraargs={'type': 'skyerr'})
             if exists(filename):
@@ -800,6 +865,7 @@ def get_all_data(inimage: 'coadd.InImage'):
             print('making noisy stars: ', res, idsca, ' total brightness =', tot_int, 'background =', bg, 'seed index =', q)
             brightness = GridInject.make_image_from_grid(
                 res, inpsf, idsca, obsdata, inwcs, Stn.sca_nside, inpsf_oversamp)
+            print('min/max brightness =', np.amin(brightness), np.amax(brightness)); sys.stdout.flush()
             inimage.indata[i, :, :] = rng.poisson(lam=brightness*tot_int+bg)-bg
             del rng
 
@@ -839,6 +905,32 @@ def get_all_data(inimage: 'coadd.InImage'):
             inimage.indata[i, :, :] = GalSimInject.galsim_extobj_grid(
                 res, inwcs, inpsf, Stn.sca_nside, inpsf_oversamp, extraargs=extargs)
 
+        # noise realizations saved from romanimpreprocess
+        # supported in L2_2506 and later
+        m = re.search(r'^noise,(\S+)', extrainput[i], re.IGNORECASE)
+        if m:
+            noiselabel = str(m.group(1))
+            filename = _get_sca_imagefile(path, idsca, obsdata, format_, extraargs={'type': 'noise'})
+            print('extracting noise layer ' + noiselabel + ' from ' + filename)
+            if exists(filename):
+                with asdf.open(filename) as f:
+                    # figure out which noise slice to use
+                    noise_realizations = f['config']['NOISE']['LAYER']
+                    jn_use = -1
+                    for jn in range(len(noise_realizations)):
+                        if noise_realizations[jn]==noiselabel:
+                            if jn_use>=0:
+                                warnings.warn('label ' + noiselabel + ' repeated in ' + filename + ': using first instance')
+                                break
+                            jn_use = jn
+                    # now extract that slice
+                    if jn_use>=0:
+                        inimage.indata[i, :, :] = f['noise'][jn_use,:,:]
+                    else:
+                        warnings.warn('WARNING: cannot find slice ' + noiselabel + ' in ' + filename + ': continuing')
+            else:
+                warnings.warn('WARNING: cannot find noise file: ' + filename + ': continuing')
+
         sys.stdout.flush()
 
     # this is the end of building the data cube
@@ -851,8 +943,25 @@ def get_all_data(inimage: 'coadd.InImage'):
                     pr = fits.PrimaryHDU(inimage.indata)
                     # the sciwcs HDU is simply here to save a 2D image with the science WCS --- it doesn't have science data in it
                     # need relax=True to write SIP coefficients
-                    sciwcs = fits.ImageHDU(np.zeros((Stn.sca_nside, Stn.sca_nside), dtype=np.uint8),
-                        header=inimage.inwcs.to_header(relax=True), name='SCIWCS')
-                    fits.HDUList([pr,sciwcs]).writeto(inlayer_filepath)
+                    #
+                    # if a gwcs is used, saves that in an ancillary ASDF file and writes 'GWCS' in the FITS header
+                    is_astropy_wcs = True
+                    inwcs = inimage.inwcs
+                    if isinstance(inwcs, PyIMCOM_WCS):
+                        if inwcs.constructortype == 'GWCS':
+                            is_astropy_wcs = False
+                            sciwcs = fits.ImageHDU()
+                            sciwcs.header['WCSTYPE'] = 'GWCS'
+                            fits.HDUList([pr,sciwcs]).writeto(inlayer_filepath)
+                            af = asdf.AsdfFile()
+                            af['wcs'] = inwcs.obj
+                            af.write_to(inlayer_filepath[:-5]+'_wcs.asdf')
+                        else:
+                            inwcs = inwcs.obj
+                    if is_astropy_wcs:
+                        sciwcs = fits.ImageHDU(np.zeros((Stn.sca_nside, Stn.sca_nside), dtype=np.uint8),
+                            header=inwcs.to_header(relax=True), name='SCIWCS')
+                        sciwcs['WCSTYPE'] = 'FITS'
+                        fits.HDUList([pr,sciwcs]).writeto(inlayer_filepath)
         except Timeout:
             pass

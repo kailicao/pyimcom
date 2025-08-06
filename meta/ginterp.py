@@ -1,8 +1,10 @@
 import numpy as np
+import scipy
 import sys
 from astropy.io import fits
+import time
 
-def InterpMatrix(Rsearch, samp, x_out, y_out, Cov, kappa=1.e-10, deweight=1.e24):
+def InterpMatrix(Rsearch, samp, x_out, y_out, Cov, kappa=1.e-10, deweight=1.e24, verbose=False):
     """Constructs an interpolation matrix.
 
     Required Inputs:
@@ -14,7 +16,8 @@ def InterpMatrix(Rsearch, samp, x_out, y_out, Cov, kappa=1.e-10, deweight=1.e24)
 
     Optional Inputs:
     kappa = regularization parameter to prevent singular matrices
-    deweight = parameter to de-weight points outside the search radius
+    deweight = parameter to de-weight points outside the search radius (no longer used, still accepted for legacy reasons)
+    verbose = print timing information
 
     Returns:
     posx = x positions of input pixels (int), length NN
@@ -27,6 +30,8 @@ def InterpMatrix(Rsearch, samp, x_out, y_out, Cov, kappa=1.e-10, deweight=1.e24)
     This function actually has the same algorithm as IMCOM embedded in it. But the "system
     matrix" A is the same in all cases so it is much faster than IMCOM.
     """
+
+    t0 = time.time()
 
     # extract parameters
     R = np.sqrt(np.ceil(Rsearch**2)+.01)
@@ -70,14 +75,21 @@ def InterpMatrix(Rsearch, samp, x_out, y_out, Cov, kappa=1.e-10, deweight=1.e24)
     xcorner = [0.,1.,0.,1.]
     ycorner = [0.,0.,1.,1.]
     weights = [ (1-x_out)*(1-y_out), x_out*(1-y_out), (1-x_out)*y_out, x_out*y_out] # list of arrays
+    # -- old algorithm was about 20% slower --
+    #for icorner in range(4):
+    #    wvec = np.zeros(NN)
+    #    wvec[:]  = deweight
+    #    g = np.where((posx-xcorner[icorner])**2+(posy-ycorner[icorner])**2<=R**2)
+    #    wvec[g] = kappa
+    #    Aw = A + np.diag(wvec)
+    #    Tw = np.linalg.solve(Aw,b).T
+    #    T[:,:] += Tw[:,:]*weights[icorner][:,None]
+    Ad = A + kappa*np.identity(np.shape(A)[0])
     for icorner in range(4):
-        wvec = np.zeros(NN)
-        wvec[:]  = deweight
-        g = np.where((posx-xcorner[icorner])**2+(posy-ycorner[icorner])**2<=R**2)
-        wvec[g] = kappa
-        Aw = A + np.diag(wvec)
-        Tw = np.linalg.solve(Aw,b).T
-        T[:,:] += Tw[:,:]*weights[icorner][:,None]
+        g = np.where((posx-xcorner[icorner])**2+(posy-ycorner[icorner])**2<=R**2)[0]
+        cs = scipy.linalg.cho_factor(Ad[g,:][:,g])
+        #T[:,g] += np.linalg.solve(Ad[g,:][:,g],b[g,:]).T * weights[icorner][:,None]
+        T[:,g] += scipy.linalg.cho_solve(cs,b[g,:],check_finite=False).T * weights[icorner][:,None]
     T[:,:] /= np.sum(T,axis=1)[:,None]
 
     # want U[i] = 1./ratio_sqrtdet + np.dot(A@T[i,:]-2*b[:,i],T[i,:])
@@ -86,6 +98,7 @@ def InterpMatrix(Rsearch, samp, x_out, y_out, Cov, kappa=1.e-10, deweight=1.e24)
     # (T@A-2b.T)[i,j] = T[i,k]A[k,j]-2b[j,i]
     # then the sum is sum_j (T@A-2b.T)[i,j] * T[i,j] = sum_j T[i,k]A[k,j]T[i,j] -2 sum_j b[j,i]T[i,j]
 
+    if verbose: print('InterpMatrix time =', time.time()-t0)
     return np.round(posx).astype(np.int16), np.round(posy).astype(np.int16), T, U, np.sum(T**2,axis=1)
 
 def MultiInterp(in_array, in_mask, out_size, out_origin, out_transform, Rsearch, samp, Cov, kappa=1.e-10, deweight=1.e24):

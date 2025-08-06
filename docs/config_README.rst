@@ -172,6 +172,8 @@ The simulation masks a 3x3 region around each hit. The random number generator i
 
 The default (0) is to not implement a cosmic ray mask.
 
+**Comment**: If you are reading simulations from ``romanimpreprocess``, then a mask (including cosmic ray flagging but also anything else specified in ``romanimpreprocess``) is already implemented and stored in the ``*_mask.fits`` file. So in this case it would be duplicative to also implement ``CMASK`` here.
+
 EXTRAINPUT: Additional layers\*
 -----------------------------------
 
@@ -198,7 +200,7 @@ In this example, the "science" image (always present) is layer 0; "labnoise" is 
 
 The ``pyimcom.layers`` module contains instructions for building each of the different layers, and additional options will be added in the future. The currently supported options include:
 
-- ``truth`` : This layer is the true (no noise or saturation, but including PSF) image, if supported by that input format. Clearly this is only available for the simulations.
+- ``truth`` [,s] : This layer is the true (no noise or saturation, but including PSF) image, if supported by that input format. Clearly this is only available for the simulations. If s is given (e.g., ``truth,0.1``) then the input truth input is multiplied by that factor (this is useful if the truth image and processed images are in different units).
 
 - ``whitenoise`` n : This layer generates white noise. The trailing integer n controls the random number generator seed. If the same n is used in another mosaic, then each observation ID + SCA will produce the same noise realization. The normalization is mean 0 and variance 1 in each pixel; if you are interested in other normalizations, you can appropriately re-scale the output.
 
@@ -225,6 +227,8 @@ The ``pyimcom.layers`` module contains instructions for building each of the dif
   - ``rot=`` theta : Rotate by the angle theta (in degrees, counterclockwise as seen by the observer) after drawing it but before any shear is applied. The ``rot=90`` option is commonly used in simulations to partially cancel shape noise.
 
   - ``shear=`` g_1:g_2 : Shears the galaxy by the indicated amount, in coordinates where g_1 is the East-West direction and g_2 is the Northeast-Southwest direction.
+
+- ``noise``,str : Looks for a specific noise realization with a code written by ``romanimpreprocess``, e.g.: ``noise,RS2Csky1`` will look for the noise layer named ``'RS2Csky1'`` in the ``*_noise.asdf`` file. See the `romanimpreprocess documentation <https://github.com/Roman-HLIS-Cosmology-PIT/romanimpreprocess/tree/main/L1_to_L2>`_ for how to specify the noise layers.
 
 LABNOISETHRESHOLD: Mask based on a laboratory dark\*
 -------------------------------------------------------

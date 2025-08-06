@@ -3,6 +3,7 @@ import os
 from astropy.io import fits
 from astropy import wcs
 from . import ginterp
+from ..compress.compressutils import ReadFile
 
 from ..config import Config, Settings
 from ..diagnostics.outimage_utils.helper import HDU_to_bels
@@ -22,6 +23,7 @@ class MetaMosaic:
     __init__ : Constructor.
 
     maskpix : Masks an additional set of pixels.
+    in_mask : boolean mask for input data (False = OK, True = masked)
     to_file : Writes the mosaic object to a FITS file.
     shearimage : Generate a sheared image.
 
@@ -31,7 +33,7 @@ class MetaMosaic:
         """Build from an example file.
         """
 
-        with fits.open(fname) as f:
+        with ReadFile(fname) as f:
             c = f['CONFIG'].data['text']
             n = len(c)
             cf = ''
@@ -43,10 +45,14 @@ class MetaMosaic:
 
         # get the file coordinates
         self.LegacyName = False
+        self.cprfitsgz = False
         self.stem = fname[:-11]; tail = fname[-11:]
         if fname[-9:]=='_map.fits':
-             self.LegacyName = True
-             self.stem = fname[:-15]; tail = fname[-15:]
+            self.LegacyName = True
+            self.stem = fname[:-15]; tail = fname[-15:]
+        if fname[-12:]=='.cpr.fits.gz':
+            self.cprfitsgz = True
+            self.stem = fname[:-18]; tail = fname[-18:]
         self.ix = int(tail[1:3])
         self.iy = int(tail[4:6])
 
@@ -84,12 +90,14 @@ class MetaMosaic:
                 if in_x>=0 and in_x<self.cfg.nblock and in_y>=0 and in_y<self.cfg.nblock:
                     in_fname = self.stem + '_{:02d}_{:02d}'.format(in_x,in_y)
                     if self.LegacyName: in_fname += '_map'
+                    if self.cprfitsgz: in_fname += '.cpr'
                     in_fname += '.fits'
+                    if self.cprfitsgz: in_fname += '.gz'
                     if verbose:
                         print('IN {:2d},{:2d} [{:4d}:{:4d},{:4d}:{:4d}] offset x={:5d} y={:5d}'.format(in_x, in_y, symin, symax, sxmin, sxmax, cx, cy))
                         print('  <<', in_fname)
 
-                    with fits.open(in_fname) as f:
+                    with ReadFile(in_fname) as f:
                         # the map
                         self.in_image[:,symin+cy:symax+cy,sxmin+cx:sxmax+cx] = f['PRIMARY'].data[0,:,symin:symax,sxmin:sxmax]
                         # fidelity, converted to dB
@@ -98,6 +106,9 @@ class MetaMosaic:
                         # noise, converted to dB
                         self.in_noise[symin+cy:symax+cy,sxmin+cx:sxmax+cx] = f['SIGMA'].data[0,symin:symax,sxmin:sxmax].astype(np.float32)\
                             * HDU_to_bels(f['SIGMA'])/.1
+
+        # mask pixels that weren't covered at all
+        self.in_mask |= self.in_fidelity==0
 
     def maskpix(self, extramask):
         """Pixels that are 'true' in extramask are masked out.
@@ -114,6 +125,7 @@ class MetaMosaic:
         outwcs.wcs.cdelt = [-self.cfg.dtheta, self.cfg.dtheta]
         outwcs.wcs.ctype = ["RA---STG", "DEC--STG"]
         outwcs.wcs.crval = [self.cfg.ra, self.cfg.dec]
+        outwcs.wcs.lonpole = self.cfg.lonpole
 
         # make the HDUs
         primary = fits.PrimaryHDU(self.in_image, header=outwcs.to_header())
@@ -127,7 +139,9 @@ class MetaMosaic:
 
         fits.HDUList([primary, fidelity, noise]).writeto(fname, overwrite=True)
 
-    def shearimage(self, N, jac=None, psfgrow=1., oversamp=1., fidelity_min=30., Rsearch=6., verbose=False):
+    def shearimage(self, N, jac=None, psfgrow=1., oversamp=1., fidelity_min=30., Rsearch=6.,
+            select_layers=None,
+            verbose=False):
         """Generates a sheared image and its WCS.
 
         Inputs:
@@ -137,6 +151,7 @@ class MetaMosaic:
         oversamp = up-sampling factor (e.g., 1 = preserve pixel scale)
         fidelity_min = fidelity cut (in dB) for which pixels to use
         Rsearch = search radius in interpolation
+        select_layers = list or array of integers: if given, only process these layers
         verbose = talk to STDOUT
 
         Returns:
@@ -146,6 +161,7 @@ class MetaMosaic:
             im['wcs'] = WCS object (appropriate for a FITS file)
             im['pars'] = parameter dictionary (can be turned into a FITS header)
             im['layers'] = list of layers
+            im['ref'] = projection center (x,y), 0-offset convention
 
         Comments:
         The sense of jac is that the *output* is related to the *input* by:
@@ -195,11 +211,12 @@ class MetaMosaic:
             'CD2_1':  J[1,0]*scale,
             'CD2_2':  J[1,1]*scale,
             'CRVAL1': self.cfg.ra,
-            'CRVAL2': self.cfg.dec
+            'CRVAL2': self.cfg.dec,
+            'LONPOLE': self.cfg.lonpole
         })
 
         #input mask
-        inmask = self.in_fidelity<fidelity_min
+        inmask = np.logical_or(self.in_fidelity<fidelity_min, self.in_mask)
 
         # get smearing information
         sigma = self.cfg.sigmatarget * Settings.pixscale_native * (180./np.pi) / self.cfg.dtheta
@@ -215,7 +232,15 @@ class MetaMosaic:
             print('sigma', sigma)
             print('C', C)
 
-        image, mask, Umax, Smax = ginterp.MultiInterp(self.in_image, inmask, (N,N), opos, J, Rsearch, sigma*np.sqrt(8*np.log(2)), C) 
+        # layer selection
+        ul = np.arange(np.shape(self.in_image)[0]).astype(np.int64)
+        if select_layers is not None:
+            ul = np.array(select_layers).astype(np.int64)
+        layerlist = []
+        for i in range(len(ul)):
+            layerlist.append(self.cfg.extrainput[ul[i]])
+
+        image, mask, Umax, Smax = ginterp.MultiInterp(self.in_image[ul,:,:], inmask, (N,N), opos, J, Rsearch, sigma*np.sqrt(8*np.log(2)), C) 
             # could add kappa, deweight
 
         # SVD of the Jacobian
@@ -261,13 +286,13 @@ class MetaMosaic:
             'CONV': (conv, 'convergence kappa')
         }
 
-        return {'image':image, 'mask':mask, 'wcs':outwcs, 'pars':pardict, 'layers':self.cfg.extrainput}
+        return {'image':image, 'mask':mask, 'wcs':outwcs, 'pars':pardict, 'layers':layerlist, 'ref':(xref-1,yref-1)}
 
 def shearimage_to_fits(im, fname, layers=None, overwrite=False):
     """utility to save a shearimage dictionary a FITS file"""
 
     # which layers to use?
-    nlayer = np.shape(im['image'])[-2]
+    nlayer = np.shape(im['image'])[-3]
     use_layers = layers
     if layers is None:
         use_layers = range(nlayer)

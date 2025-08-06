@@ -182,7 +182,7 @@ def gen_dynrange_data(inpath, outstem, rpix_try=50, nblockmax=100):
     ofile = outstem+'_dynrange.dat'
     with open(ofile, "w") as fn:
         fn.write(outst)
-    output['DYNRANGE'] = ofile
+    if framenumber>0: output['DYNRANGE'] = ofile
 
     # save histograms
     ofile = outstem+'_sqrtS_hist.dat'

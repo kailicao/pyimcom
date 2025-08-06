@@ -21,6 +21,12 @@ Running PyIMCOM
 
 - `How to write a PyIMCOM configuration file <docs/config_README.rst>`_
 
+- `Input file formats <docs/input_README.rst>`_
+
+- `PSF splitting <splitpsf/README.rst>`_ (under development).
+
+- `How to compress PyIMCOM output files <compress/compress_README.rst>`_
+
 Post-processing of PyIMCOM outputs
 ---------------------------------------
 
