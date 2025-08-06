@@ -141,6 +141,7 @@ The output dictionary has the following keys:
 - ``wcs``: The WCS of the output image (if you have implemented a shear, then the WCS is also sheared: the RA and Dec of an object in the WCS corresponds to its true position)
 - ``pars``: A dictionary of parameters associated with the sheared image (including provenance data and the applied shear)
 - ``layers``: The names of the layers (copied from the ``extrainput`` used to generate the mosaic.)
+- ``ref``: The projection center location (x,y) (tuple, 0-offset convention)
 
 Writing to a file
 ====================

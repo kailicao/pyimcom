@@ -139,7 +139,9 @@ class MetaMosaic:
 
         fits.HDUList([primary, fidelity, noise]).writeto(fname, overwrite=True)
 
-    def shearimage(self, N, jac=None, psfgrow=1., oversamp=1., fidelity_min=30., Rsearch=6., verbose=False):
+    def shearimage(self, N, jac=None, psfgrow=1., oversamp=1., fidelity_min=30., Rsearch=6.,
+            select_layers=None,
+            verbose=False):
         """Generates a sheared image and its WCS.
 
         Inputs:
@@ -149,6 +151,7 @@ class MetaMosaic:
         oversamp = up-sampling factor (e.g., 1 = preserve pixel scale)
         fidelity_min = fidelity cut (in dB) for which pixels to use
         Rsearch = search radius in interpolation
+        select_layers = list or array of integers: if given, only process these layers
         verbose = talk to STDOUT
 
         Returns:
@@ -158,6 +161,7 @@ class MetaMosaic:
             im['wcs'] = WCS object (appropriate for a FITS file)
             im['pars'] = parameter dictionary (can be turned into a FITS header)
             im['layers'] = list of layers
+            im['ref'] = projection center (x,y), 0-offset convention
 
         Comments:
         The sense of jac is that the *output* is related to the *input* by:
@@ -228,7 +232,15 @@ class MetaMosaic:
             print('sigma', sigma)
             print('C', C)
 
-        image, mask, Umax, Smax = ginterp.MultiInterp(self.in_image, inmask, (N,N), opos, J, Rsearch, sigma*np.sqrt(8*np.log(2)), C) 
+        # layer selection
+        ul = np.arange(np.shape(self.in_image)[0]).astype(np.int64)
+        if select_layers is not None:
+            ul = np.array(select_layers).astype(np.int64)
+        layerlist = []
+        for i in range(len(ul)):
+            layerlist.append(self.cfg.extrainput[ul[i]])
+
+        image, mask, Umax, Smax = ginterp.MultiInterp(self.in_image[ul,:,:], inmask, (N,N), opos, J, Rsearch, sigma*np.sqrt(8*np.log(2)), C) 
             # could add kappa, deweight
 
         # SVD of the Jacobian
@@ -274,7 +286,7 @@ class MetaMosaic:
             'CONV': (conv, 'convergence kappa')
         }
 
-        return {'image':image, 'mask':mask, 'wcs':outwcs, 'pars':pardict, 'layers':self.cfg.extrainput}
+        return {'image':image, 'mask':mask, 'wcs':outwcs, 'pars':pardict, 'layers':layerlist, 'ref':(xref-1,yref-1)}
 
 def shearimage_to_fits(im, fname, layers=None, overwrite=False):
     """utility to save a shearimage dictionary a FITS file"""
