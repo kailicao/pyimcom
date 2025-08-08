@@ -1,4 +1,4 @@
-'''
+"""
 Utilities for PSFs and system matrices.
 
 Classes
@@ -9,7 +9,7 @@ PSFOvl : Overlap between two PSFGrp instances or a PSFGrp instance and itself.
 SysMatA : System matrix A attached to a coadd.Block instance.
 SysMatB : System matrix B attached to a coadd.Block instance.
 
-'''
+"""
 
 import numpy as np
 from scipy.special import jv
@@ -31,7 +31,7 @@ except:
 
 
 class OutPSF:
-    '''
+    """
     Simple target output PSF models (for testing or outputs).
 
     Methods
@@ -44,11 +44,11 @@ class OutPSF:
     psf_get_fwhm (staticmethod) : Compute FWHM of a PSF.
     psf_get_inv_width (staticmethod) : Compute shear-invariant width of a PSF.
 
-    '''
+    """
 
     @staticmethod
     def psf_gaussian(n: int, sigmax: float, sigmay: float) -> np.array:
-        '''
+        """
         Gaussian spot, n x n, given sigma, centered
         (useful for testing)
 
@@ -62,7 +62,7 @@ class OutPSF:
         -------
         np.array, shape : (n, n)
 
-        '''
+        """
 
         y, x = np.mgrid[(1-n)/2/sigmay:(n-1)/2/sigmay:n*1j,
                         (1-n)/2/sigmax:(n-1)/2/sigmax:n*1j]
@@ -76,7 +76,7 @@ class OutPSF:
     @staticmethod
     def psf_simple_airy(n: int, ldp: float, obsc: float = 0.0,
                         tophat_conv: float = 0.0, sigma: float = 0.0) -> np.array:
-        '''
+        """
         Airy spot, n x n, with lambda/D = ldp pixels,
         and convolved with a tophat (square, full width tophat_conv)
         and Gaussian (sigma)
@@ -100,7 +100,7 @@ class OutPSF:
 
         normalized to *sum* to unity if analytically extended
 
-        '''
+        """
 
         # figure out pad size -- want to get to at least a tophat width and 6 sigmas
         kp = 1 + int(np.ceil(tophat_conv + 6*sigma))
@@ -131,7 +131,7 @@ class OutPSF:
     @staticmethod
     def psf_cplx_airy(n: int, ldp: float, tophat_conv: float = 0.0,
                       sigma: float = 0.0, features: int = 0) -> np.array:
-        '''
+        """
         somewhat messier Airy function with a few diffraction features printed on
         'features' is an integer that can be added. everything is band limited
 
@@ -148,7 +148,7 @@ class OutPSF:
         -------
         np.array, shape : (n, n)
 
-        '''
+        """
 
         # figure out pad size -- want to get to at least a tophat width and 6 sigmas
         kp = 1 + int(np.ceil(tophat_conv + 6*sigma))
@@ -205,7 +205,7 @@ class OutPSF:
 
     @staticmethod
     def iD5512C_getw(w: np.array, fh: float) -> None:
-        '''
+        """
         No-Numba version of routine.iD5512C_getw.
 
         The Numba version may not work in a Jupyter environment.
@@ -221,7 +221,7 @@ class OutPSF:
         -------
         None.
 
-        '''
+        """
 
         fh2 = fh * fh
         e_ =  (((+1.651881673372979740E-05*fh2 - 3.145538007199505447E-04)*fh2 +
@@ -257,7 +257,7 @@ class OutPSF:
 
     @staticmethod
     def get_psf_fwhm(psf: np.array, visualize: bool = False) -> float:
-        '''
+        """
         Compute FWHM of a PSF.
 
         This function assumes that the given PSF is azimuthally symmetric.
@@ -275,7 +275,7 @@ class OutPSF:
         float
             FWHM of given PSF in units of pixels.
 
-        '''
+        """
 
         # from PSFGrp._sample_psf
         ny, nx = np.shape(psf)[-2:]
@@ -311,7 +311,7 @@ class OutPSF:
 
     @staticmethod
     def get_psf_inv_width(psf: np.array) -> float:
-        '''
+        """
         Compute shear-invariant width of a PSF.
 
         Parameters
@@ -325,14 +325,14 @@ class OutPSF:
         float
             Shear-invariant width of given PSF in units of pixels.
 
-        '''
+        """
 
         moms = galsim.Image(psf).FindAdaptiveMom()
         return moms.moments_sigma
 
 
 class PSFGrp:
-    '''
+    """
     Group of PSFs.
 
     Either a group of input PSFs attached to an coadd.InStamp instance
@@ -350,7 +350,7 @@ class PSFGrp:
     accel_pad_and_rfft2 (staticmethod) : Zero-padding and rfft2.
     clear: Free up memory space.
 
-    '''
+    """
 
     # some default settings, will be overwritten by PSFGrp.setup
     nsamp = 383
@@ -359,7 +359,7 @@ class PSFGrp:
 
     @classmethod
     def setup(cls, npixpsf: int = 48, oversamp: int = 8, dtheta: float = 0.025/3600, psfsplit : bool = False) -> None:
-        '''
+        """
         Set up class attributes.
 
         Parameters
@@ -377,7 +377,7 @@ class PSFGrp:
         -------
         None.
 
-        '''
+        """
 
         cls.oversamp = oversamp
         cls.nsamp = npixpsf * oversamp - 1  # 383 by default
@@ -403,7 +403,7 @@ class PSFGrp:
     def __init__(self, in_or_out: bool = True,
                  inst: 'coadd.InStamp' = None, blk: 'coadd.Block' = None,
                  verbose: bool = False, visualize: bool = False) -> None:
-        '''
+        """
         Constructor.
 
         Parameters
@@ -421,7 +421,7 @@ class PSFGrp:
         -------
         None.
 
-        '''
+        """
 
         self.in_or_out = in_or_out
 
@@ -472,7 +472,7 @@ class PSFGrp:
     @staticmethod
     def visualize_psf(psf_: np.array, yxco: np.array,
                       xctr: float, yctr: float) -> None:
-        '''
+        """
         Visualize a single PSF, together with sampling positions.
 
         Parameters
@@ -488,7 +488,7 @@ class PSFGrp:
         -------
         None.
 
-        '''
+        """
 
         fig, ax = plt.subplots(figsize=(4.8, 3.6))
 
@@ -504,7 +504,7 @@ class PSFGrp:
 
     def _sample_psf(self, idx: int, psf: np.array, outpix2world2inpix: 'method' = None,
                     visualize: bool = False) -> None:
-        '''
+        """
         Perform interpolations to sample a single PSF or a set of PSFs.
 
         Parameters
@@ -527,7 +527,7 @@ class PSFGrp:
         -------
         None.
 
-        '''
+        """
 
         ny, nx = np.shape(psf)[-2:]
         xctr = (nx-1) / 2.0
@@ -575,7 +575,7 @@ class PSFGrp:
             del out_arr
 
     def _build_inpsfgrp(self, visualize: bool = False) -> None:
-        '''
+        """
         Build a group of input PSFs.
 
         Parameters
@@ -587,7 +587,7 @@ class PSFGrp:
         -------
         None.
 
-        '''
+        """
 
         # whether to use each of the input images
         self.use_inimage = np.zeros((self.inst.blk.n_inimage,), dtype=bool)
@@ -631,7 +631,7 @@ class PSFGrp:
     @staticmethod
     def _get_outpsf(outpsf: str = 'AIRYOBSC', extrasmooth: float = 0.0,
                     use_filter: int = 4) -> np.array:
-        '''
+        """
         Get an output PSF specified by configuration.
 
         Parameters
@@ -648,7 +648,7 @@ class PSFGrp:
         np.array, shape : (PSFGrp.nsamp+1, PSFGrp.nsamp+1)
             Output PSF specified by configuration.
 
-        '''
+        """
 
         if outpsf == 'GAUSSIAN':
             return OutPSF.psf_gaussian(PSFGrp.nsamp+1,
@@ -668,7 +668,7 @@ class PSFGrp:
             raise RuntimeError('Error: unsupported target output PSF type')
 
     def _build_outpsfgrp(self, visualize: bool = False) -> None:
-        '''
+        """
         Build a group of output PSFs.
 
         What output PSFs to include is set by the configuration file.
@@ -682,7 +682,7 @@ class PSFGrp:
         -------
         None.
 
-        '''
+        """
 
         cfg = self.blk.cfg  # shortcut
 
@@ -710,7 +710,7 @@ class PSFGrp:
 
     @staticmethod
     def accel_pad_and_rfft2(psf_arr: np.array) -> np.array:
-        '''
+        """
         Accelerated version of zero-padding and rfft2.
 
         For nsamp = 537 and nfft = 1280, this saves
@@ -735,7 +735,7 @@ class PSFGrp:
         np.array, shape : (..., PSFGrp.nfft, PSFGrp.nfft//2+1)
             Real Fourier transform results of psf_arr.
 
-        '''
+        """
 
         n_arr = psf_arr.shape[0]
         pad_m1 = np.zeros((n_arr, PSFGrp.nsamp, PSFGrp.nfft))
@@ -749,7 +749,7 @@ class PSFGrp:
         return res
 
     def clear(self, verbose: bool = False) -> None:
-        '''
+        """
         Free up memory space.
 
         Use this in addition to the default __del__ method to make sure that
@@ -764,7 +764,7 @@ class PSFGrp:
         -------
         None.
 
-        '''
+        """
 
         if self.in_or_out:
             if verbose:
@@ -777,7 +777,7 @@ class PSFGrp:
 
 
 class PSFOvl:
-    '''
+    """
     Overlap between two PSFGrp instances or a PSFGrp instance and itself.
 
     Methods
@@ -795,14 +795,14 @@ class PSFOvl:
     _call_ii_self : Interpolations in the input-input self-overlap case.
     clear: Free up memory space.
 
-    '''
+    """
 
     # default setting, will be overwritten by PSFOvl.setup
     flat_penalty = 1e-7
 
     @classmethod
     def setup(cls, flat_penalty: float = 1e-7) -> None:
-        '''
+        """
         Set up class attribute.
 
         Parameters
@@ -815,13 +815,13 @@ class PSFOvl:
         -------
         None.
 
-        '''
+        """
 
         cls.flat_penalty = flat_penalty
 
     def __init__(self, psfgrp1: PSFGrp, psfgrp2: PSFGrp = None,
                  verbose: bool = False, visualize: bool = False) -> None:
-        '''
+        """
         Constructor.
 
         Parameters
@@ -840,7 +840,7 @@ class PSFOvl:
         -------
         None.
 
-        '''
+        """
 
         self.grp1 = psfgrp1
         self.grp2 = psfgrp2  # None if self-overlap
@@ -865,7 +865,7 @@ class PSFOvl:
         self._build_psfovl(visualize)  # this produces self.ovl_arr
 
     def _idx_square2triangle(self, idx1: int, idx2: int) -> int:
-        '''
+        """
         Convert a 2D square index to a 1D triangle index.
 
         The motivation is that, in the input self-overlap case,
@@ -894,14 +894,14 @@ class PSFOvl:
         int
             1D triangle index.
 
-        '''
+        """
 
         assert idx1 <= idx2, 'the two indices must satisfy idx1 <= idx2'
         return (2*self.grp1.n_psf-idx1+1)*idx1//2 + idx2-idx1
 
     @staticmethod
     def accel_irfft2_and_extract(ovl_rft: np.array) -> np.array:
-        '''
+        """
         Accelerated version of irfft2 and extraction.
 
         This acceleration is based on the fact that we only need
@@ -931,7 +931,7 @@ class PSFOvl:
         np.array, shape : (..., nsamp, nsamp)
             The PSF overlap array we want.
 
-        '''
+        """
 
         n_arr = ovl_rft.shape[0]
         ovl_m2 = np.zeros((n_arr, PSFGrp.nsamp, PSFGrp.nfft//2+1), dtype=np.complex128)
@@ -951,7 +951,7 @@ class PSFOvl:
         return ovl_m1
 
     def _build_psfovl(self, visualize: bool = False) -> None:
-        '''
+        """
         Build the PSF overlap array.
 
         Parameters
@@ -963,7 +963,7 @@ class PSFOvl:
         -------
         None.
 
-        '''
+        """
 
         if self.grp2 is not None:  # cross-overlap
             self.ovl_arr = np.zeros((self.grp1.n_psf, self.grp2.n_psf, PSFGrp.nsamp, PSFGrp.nsamp))
@@ -1001,14 +1001,14 @@ class PSFOvl:
             # if the entire output self-overlap array is needed
 
     def visualize_psfovl(self) -> None:
-        '''
+        """
         Visualize the PSF overlap array.
 
         Returns
         -------
         None.
 
-        '''
+        """
 
         if self.grp2 is not None:  # cross-overlap
             n_psf1, n_psf2 = self.ovl_arr.shape[:2]  # shortcuts
@@ -1073,7 +1073,7 @@ class PSFOvl:
     def __call__(self, st1: 'coadd.InStamp',
                  st2: 'coadd.InStamp, coadd.OutStamp, or None' = None,
                  visualize: bool = False) -> np.array:
-        '''
+        """
         Wrapper for the C interpolators.
 
         Parameters
@@ -1089,7 +1089,7 @@ class PSFOvl:
         np.array, of which the shape depends on
         the nature of this PSFOvl instance and the input
 
-        '''
+        """
 
         if self.grp2 is not None:  # cross-overlap
             if self.grp2.in_or_out:  # input-input cross-overlap
@@ -1104,7 +1104,7 @@ class PSFOvl:
 
     def _call_ii_cross(self, st1: 'coadd.InStamp', st2: 'coadd.InStamp',
                        visualize: bool = False) -> np.array:
-        '''
+        """
         Interpolations in the input-input cross-overlap case.
 
         Parameters
@@ -1118,7 +1118,7 @@ class PSFOvl:
         -------
         np.array, shape : (st1.pix_cumsum[-1], st2.pix_cumsum[-1])
 
-        '''
+        """
 
         res = np.zeros((st1.pix_cumsum[-1], st2.pix_cumsum[-1]))
         ddx = st1.x_val[:, None] - st2.x_val[None, :]
@@ -1180,7 +1180,7 @@ class PSFOvl:
 
     def _call_io_cross(self, st1: 'coadd.InStamp', st2: 'coadd.OutStamp',
                        visualize: bool = False) -> np.array:
-        '''
+        """
         Interpolations in the input-output cross-overlap case.
 
         Parameters
@@ -1195,7 +1195,7 @@ class PSFOvl:
         np.array, shape : either (self.grp2.n_psf, n_outpix, st1.pix_cumsum[-1])
                               or (self.grp2.n_psf, n_outpix, selection.shape[0])
 
-        '''
+        """
 
         x_val_, y_val_ = st1.x_val, st1.y_val
         pix_count_ = st1.pix_count
@@ -1266,7 +1266,7 @@ class PSFOvl:
 
     def _call_ii_self(self, st1: 'coadd.InStamp', st2: 'coadd.InStamp',
                       visualize: bool = False) -> np.array:
-        '''
+        """
         Interpolations in the input-input self-overlap case.
 
         Note that the self-overlap of an input PSF group can be used to compute
@@ -1285,7 +1285,7 @@ class PSFOvl:
         -------
         np.array, shape : (st1.pix_cumsum[-1], st2.pix_cumsum[-1])
 
-        '''
+        """
 
         same_inst = st2 is None
         if same_inst: st2 = st1
@@ -1365,7 +1365,7 @@ class PSFOvl:
         return res
 
     def clear(self, verbose: bool = False) -> None:
-        '''
+        """
         Free up memory space.
 
         Use this in addition to the default __del__ method to make sure that
@@ -1380,7 +1380,7 @@ class PSFOvl:
         -------
         None.
 
-        '''
+        """
 
         if verbose:
             if self.grp2 is not None and not self.grp2.in_or_out:
@@ -1391,7 +1391,7 @@ class PSFOvl:
 
 
 class SysMatA:
-    '''
+    """
     System matrix A attached to a coadd.Block instance.
 
     The symtem matrix A is defined in Rowe+ 2011 Equation (17).
@@ -1406,10 +1406,10 @@ class SysMatA:
     get_iisubmat : Return a requested A submatrix.
     clear : Free up memory space.
 
-    '''
+    """
 
     def __init__(self, blk: 'coadd.Block') -> None:
-        '''
+        """
         Constructor.
 
         Parameters
@@ -1421,7 +1421,7 @@ class SysMatA:
         -------
         None.
 
-        '''
+        """
 
         self.blk = blk
 
@@ -1433,7 +1433,7 @@ class SysMatA:
 
     @staticmethod
     def ji_st2psf(ji_st: (int, int)) -> (int, int):
-        '''
+        """
         Convert InStamp index to PSFGrp index.
 
         More precisely, convert index of the InStamp of interest
@@ -1450,13 +1450,13 @@ class SysMatA:
         (int, int)
             Index of the InStamp which harbors the PSFGrp.
 
-        '''
+        """
 
         return tuple(ji >> 1 << 1 for ji in ji_st)
 
     @staticmethod
     def shift_ji_st(ji_st: (int, int), dji_st: (int, int)) -> (int, int):
-        '''
+        """
         Tool function for tuple addition.
 
         For our purposes, this function shifts an InStamp index
@@ -1474,13 +1474,13 @@ class SysMatA:
         (int, int)
             Shifted InStamp index.
 
-        '''
+        """
 
         return (ji_st[0]+dji_st[0], ji_st[1]+dji_st[1])
 
     @staticmethod
     def iisubmat_dist(ji_st1: (int, int), ji_st2: (int, int)) -> (int, int, int):
-        '''
+        """
         Calculate the index for iisubmats_ref.
 
         Specifically, calculate the "distance" between two input postage stamps
@@ -1513,7 +1513,7 @@ class SysMatA:
         or None
             when the "distance" is out of range.
 
-        '''
+        """
 
         # this should never happen by design
         assert ji_st1 <= ji_st2, f'{ji_st1=} should precede {ji_st2=}'
@@ -1529,7 +1529,7 @@ class SysMatA:
 
     def _compute_iisubmats(self, ji_st1: (int, int), ji_st2: (int, int),
                            sim_mode: bool = False, verbose: bool = False) -> None:
-        '''
+        """
         Make input-input PSFOvl and compute A submatrices.
 
         This method is only called in SysMatA.get_iisubmat.
@@ -1561,7 +1561,7 @@ class SysMatA:
         -------
         None.
 
-        '''
+        """
 
         # identify InStamp instance(s) to which the input PSFGrp instance(s) is(are) attached
         ji_psf1 = SysMatA.ji_st2psf(ji_st1)
@@ -1627,7 +1627,7 @@ class SysMatA:
 
     def get_iisubmat(self, ji_st1: (int, int), ji_st2: (int, int),
                      sim_mode: bool = False, ji_st_out: (int, int) = None) -> np.array:
-        '''
+        """
         Return the requested A submatrix.
 
         This is the only public interface of this class.
@@ -1650,7 +1650,7 @@ class SysMatA:
         np.array, shape : (st1.pix_cumsum[-1], st2.pix_cumsum[-1])
             The requested A submatrix.
 
-        '''
+        """
 
         assert ji_st1 <= ji_st2, f'{ji_st1=} should precede {ji_st2=}'
         ji_dist = SysMatA.iisubmat_dist(ji_st1, ji_st2)
@@ -1689,20 +1689,20 @@ class SysMatA:
         return arr
 
     def clear(self) -> None:
-        '''
+        """
         Free up memory space.
 
         Returns
         -------
         None.
 
-        '''
+        """
 
         del self.iisubmats_ref
 
 
 class SysMatB:
-    '''
+    """
     System matrix B attached to a coadd.Block instance.
 
     The symtem matrix B is defined in Rowe+ 2011 Equation (18).
@@ -1714,10 +1714,10 @@ class SysMatB:
     get_iosubmat : Return a requested B submatrix.
     clear : Free up memory space.
 
-    '''
+    """
 
     def __init__(self, blk: 'coadd.Block') -> None:
-        '''
+        """
         Constructor.
 
         Parameters
@@ -1729,7 +1729,7 @@ class SysMatB:
         -------
         None.
 
-        '''
+        """
 
         self.blk = blk
 
@@ -1742,7 +1742,7 @@ class SysMatB:
 
     def get_iosubmat(self, ji_st_in: (int, int), ji_st_out: (int, int),
                      sim_mode: bool = False) -> np.array:
-        '''
+        """
         Return a requested B submatrix.
 
         Note that this is the courterpart of the combination of
@@ -1766,7 +1766,7 @@ class SysMatB:
         np.array, shape : same as PSFOvl._call_io_cross
             The requested B submatrix.
 
-        '''
+        """
 
         assert max(abs(ji_st_in[0] - ji_st_out[0]), abs(ji_st_in[1] - ji_st_out[1])) <= 1, \
             f'distance between InStamp {ji_st_in} and OutStamp {ji_st_out} is out of range'
@@ -1798,13 +1798,13 @@ class SysMatB:
         return iosubmat
 
     def clear(self) -> None:
-        '''
+        """
         Free up memory space.
 
         Returns
         -------
         None.
 
-        '''
+        """
 
         del self.iopsfovls_ref

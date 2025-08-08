@@ -1,4 +1,4 @@
-'''
+"""
 Encapsulation of pyimcom background settings and configuration.
 
 Classes
@@ -12,7 +12,7 @@ Function
 --------
 format_axis : Format a panel (an axis) of a figure.
 
-'''
+"""
 
 from time import perf_counter
 from importlib.resources import files
@@ -31,7 +31,7 @@ rcParams.update({'font.family': 'serif', 'mathtext.fontset': 'dejavuserif',
 
 
 class Timer:
-    '''
+    """
     All-purpose timer.
 
     Methods
@@ -39,22 +39,22 @@ class Timer:
     __init__ : Constructor.
     __call__ : Return the time elapsed since tstart in seconds.
 
-    '''
+    """
 
     def __init__(self) -> None:
-        '''
+        """
         Constructor.
 
         Returns
         -------
         None.
 
-        '''
+        """
 
         self.tstart = perf_counter()
 
     def __call__(self, reset: bool = False) -> float:
-        '''
+        """
         Return the time elapsed since tstart in seconds.
 
         Parameters
@@ -67,7 +67,7 @@ class Timer:
         float
             Time elapsed since tstart in seconds.
 
-        '''
+        """
 
         tnow = perf_counter()
         tstart = self.tstart
@@ -77,12 +77,12 @@ class Timer:
 
 
 class Settings:
-    '''
+    """
     pyimcom background settings.
 
     This class contains assorted Roman WFI data needed for the coadd code.
 
-    '''
+    """
 
     # which header in the input file contains the WCS information
     hdu_with_wcs = 'SCI'
@@ -119,10 +119,10 @@ class Settings:
 
 
 class fpaCoords:
-   '''This contains some static data on the FPA coordinate system.
+   """This contains some static data on the FPA coordinate system.
 
    It also has some associated static methods.
-   '''
+   """
 
    # focal plane coordinates of SCA centers, in mm
    xfpa = np.array([-22.14, -22.29, -22.44, -66.42, -66.92, -67.42,-110.70,-111.48,-112.64,
@@ -143,7 +143,7 @@ class fpaCoords:
 
    @classmethod
    def pix2fpa(cls, sca, x, y):
-      '''Method to convert pixel (x,y) on a given sca to focal plane coordinates.
+      """Method to convert pixel (x,y) on a given sca to focal plane coordinates.
 
       Inputs:
          sca (in form 1..18)
@@ -152,7 +152,7 @@ class fpaCoords:
 
       Outputs:
          xfpa, yfpa (in mm)
-      '''
+      """
 
       if np.amin(sca)<1 or np.amax(sca)>18:
          raise ValueError('Invalid SCA in fpadata.pix2fpa, range={:d},{:d}'.format(np.amin(sca),np.amax(sca)))
@@ -162,7 +162,7 @@ class fpaCoords:
 
 
 class Config:
-    '''
+    """
     pyimcom configuration, with JSON file interface.
 
     Methods
@@ -175,7 +175,7 @@ class Config:
     _build_config : Terminal interface to build a configuration from scratch.
     to_file : Save the configuration to a JSON file.
 
-    '''
+    """
 
     __slots__ = (
         'cfg_file', 'NsideP', 'n1P', 'n2f',  # __init__, __call__
@@ -192,7 +192,7 @@ class Config:
     )
 
     def __init__(self, cfg_file: str = '', inmode=None) -> None:
-        '''
+        """
         Constructor.
 
         Parameters
@@ -209,7 +209,7 @@ class Config:
         -------
         None.
 
-        '''
+        """
 
         # option to load from a block output file
         if inmode == 'block':
@@ -242,14 +242,14 @@ class Config:
         self()
 
     def __call__(self) -> None:
-        '''
+        """
         Calculate or update derived quantities
 
         Returns
         -------
         None.
 
-        '''
+        """
 
         ### SECTION I: INPUT FILES ###
         if self.psfsplit:
@@ -278,7 +278,7 @@ class Config:
             self.outmaps = self.outmaps.replace('K', '')
 
     def _from_dict(self, cfg_dict: dict) -> None:
-        '''
+        """
         Build a configuration from a dictionary.
 
         Parameters
@@ -290,7 +290,7 @@ class Config:
         -------
         None.
 
-        '''
+        """
 
         ### SECTION I: INPUT FILES ###
         # input files
@@ -403,7 +403,7 @@ class Config:
         cfg_dict.clear(); del cfg_dict
 
     def _get_attrs_wrapper(self, code: str, newline: bool = True) -> None:
-        '''
+        """
         Wrapper for getting an attribute or a set of attributes.
 
         Parameters
@@ -417,7 +417,7 @@ class Config:
         -------
         None.
 
-        '''
+        """
 
         while True:
             try:
@@ -430,7 +430,7 @@ class Config:
         if newline: print()
 
     def _build_config(self) -> None:
-        '''
+        """
         Terminal interface to build a configuration from scratch.
 
         The prompts are based on comments in old text configuration files.
@@ -440,7 +440,7 @@ class Config:
         -------
         None.
 
-        '''
+        """
 
         print('### GENERAL NOTE: INPUT NOTHING TO USE DEFAULT ###' '\n', flush=True)
 
@@ -710,7 +710,7 @@ class Config:
         print('# To save this configuration, call Config.to_file.' '\n', flush=True)
 
     def to_file(self, fname: str = '') -> None:
-        '''
+        """
         Save the configuration to a JSON file.
 
         Parameters
@@ -726,7 +726,7 @@ class Config:
         or str
             Text version of the configuration.
 
-        '''
+        """
 
         cfg_dict = {}
 
@@ -807,7 +807,7 @@ class Config:
 
 
 def format_axis(ax: 'mpl.axes._axes.Axes', grid_on: bool = True) -> None:
-    '''
+    """
     Format a panel (an axis) of a figure.
 
     Parameters
@@ -821,7 +821,7 @@ def format_axis(ax: 'mpl.axes._axes.Axes', grid_on: bool = True) -> None:
     -------
     None.
 
-    '''
+    """
 
     ax.minorticks_on()
     if grid_on: ax.grid(visible=True, which='major', linestyle=':')

@@ -1,4 +1,4 @@
-'''
+"""
 Numba version of pyimcom_croutines.c.
 
 Slightly slower than C, used when furry-parakeet is not installed.
@@ -14,7 +14,7 @@ lakernel1 : PyIMCOM linear algebra kernel (eigendecomposition).
 lsolve_sps : Routine to solve Ax=b.
 build_reduced_T_wrap : Makes coaddition matrix T from a reduced space.
 
-'''
+"""
 
 import numpy as np
 from numba import njit
@@ -22,7 +22,7 @@ from numba import njit
 
 @njit
 def iD5512C_getw(w: np.array, fh: float) -> None:
-    '''
+    """
     Interpolation code written by Python.
 
     Parameters
@@ -36,7 +36,7 @@ def iD5512C_getw(w: np.array, fh: float) -> None:
     -------
     None.
 
-    '''
+    """
 
     fh2 = fh * fh
     e_ =  (((+1.651881673372979740E-05*fh2 - 3.145538007199505447E-04)*fh2 +
@@ -74,7 +74,7 @@ def iD5512C_getw(w: np.array, fh: float) -> None:
 @njit
 def iD5512C(infunc: np.array, xpos: np.array, ypos: np.array,
             fhatout: np.array) -> None:
-    '''
+    """
     2D, 10x10 kernel interpolation for high accuracy
 
     Can interpolate multiple functions at a time from the same grid
@@ -95,7 +95,7 @@ def iD5512C(infunc: np.array, xpos: np.array, ypos: np.array,
     -------
     None.
 
-    '''
+    """
 
     # extract dimensions
     nlayer, ngy, ngx = infunc.shape
@@ -133,7 +133,7 @@ def iD5512C(infunc: np.array, xpos: np.array, ypos: np.array,
 @njit
 def iD5512C_sym(infunc: np.array, xpos: np.array, ypos: np.array,
                 fhatout: np.array) -> None:
-    '''
+    """
     2D, 10x10 kernel interpolation for high accuracy
 
     Can interpolate multiple functions at a time from the same grid
@@ -156,7 +156,7 @@ def iD5512C_sym(infunc: np.array, xpos: np.array, ypos: np.array,
     -------
     None.
 
-    '''
+    """
 
     # extract dimensions
     nlayer, ngy, ngx = infunc.shape
@@ -205,7 +205,7 @@ def iD5512C_sym(infunc: np.array, xpos: np.array, ypos: np.array,
 @njit
 def gridD5512C(infunc: np.array, xpos: np.array, ypos: np.array,
                fhatout: np.array) -> None:
-    '''
+    """
     2D, 10x10 kernel interpolation for high accuracy
 
     this version works with output points on a rectangular grid so that the same
@@ -230,7 +230,7 @@ def gridD5512C(infunc: np.array, xpos: np.array, ypos: np.array,
     -------
     None.
 
-    '''
+    """
 
     # extract dimensions
     ngy, ngx = infunc.shape
@@ -289,7 +289,7 @@ def gridD5512C(infunc: np.array, xpos: np.array, ypos: np.array,
 def lakernel1(lam: np.array, Q: np.array, mPhalf: np.array,
               C: float, targetleak: float, kCmin: float, kCmax: float, nbis: int,
               kappa: np.array, Sigma: np.array, UC: np.array, T: np.array, smax: float) -> None:
-    '''
+    """
     PyIMCOM linear algebra kernel (eigendecomposition).
 
     All the steps with the for loops (i.e., except the matrix diagonalization)
@@ -325,7 +325,7 @@ def lakernel1(lam: np.array, Q: np.array, mPhalf: np.array,
     -------
     None.
 
-    '''
+    """
 
     # dimensions
     m, n = mPhalf.shape
@@ -360,7 +360,7 @@ def lakernel1(lam: np.array, Q: np.array, mPhalf: np.array,
 
 @njit
 def lsolve_sps(N: int, A: np.array, x: np.array, b: np.array) -> None:
-    '''
+    """
     Routine to solve Ax=b.
 
     Only the lower triangle of A is ever used (the rest need not even be allocated).
@@ -381,7 +381,7 @@ def lsolve_sps(N: int, A: np.array, x: np.array, b: np.array) -> None:
     -------
     None.
 
-    '''
+    """
 
     # Replace A with its Cholesky decomposition
     for i in range(N):
@@ -416,7 +416,7 @@ def lsolve_sps(N: int, A: np.array, x: np.array, b: np.array) -> None:
 def build_reduced_T_wrap(Nflat: np.array, Dflat: np.array, Eflat: np.array, kappa: np.array,
                          ucmin: float, smax: float, out_kappa: np.array,
                          out_Sigma: np.array, out_UC: np.array, out_w: np.array) -> None:
-    '''
+    """
     Makes coaddition matrix T from a reduced space.
 
     Parameters
@@ -446,7 +446,7 @@ def build_reduced_T_wrap(Nflat: np.array, Dflat: np.array, Eflat: np.array, kapp
     -------
     None.
 
-    '''
+    """
 
     # dimensions
     nv = kappa.size  # number of 'node' eigenvalues (must be >=2)
