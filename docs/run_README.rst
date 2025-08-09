@@ -66,7 +66,7 @@ You can use less computing time if you generate all the input layers first, and 
 (the ``stoptile`` tells PyIMCOM not to run through the coalition of the whole block) and then you can write a Perl script like::
 
    for $j ($j1..$j2) {
-       system "python3 -m gen1.py config $j > log-gen.$j";
+       system "python3 gen1.py config $j > log-gen.$j";
    }
 
 You could generate all of the input layers in series with ``$j1=0`` and ``$j2=BLOCK**2-1``. However, more commonly you will want to parallelize. As a rough guide, an SCA is 636 arcsec along the diagonal. So if you are generating blocks with a size of, say, 100x100 arcsec, and you are doing 36x36 blocks (BLOCK=36), then row ``i`` of the mosaic is guaranteed to use SCAs that overlap with row ``i+8``; so you can break the mosaic into "strips" of 8=ceil(636/100)+1 rows (or 8x36=288 blocks) and then each run those in parallel. So in that case, you could run 0-287, 288-575, 576-863, 864-1151, and 1152-1295 (the last block).
@@ -87,7 +87,7 @@ This is the most time-consuming step. In principle, all the blocks can be run in
 
 and then call::
 
-   python3 -m run_coaddition.py config $j > log-coadd.$j
+   python3 run_coaddition.py config $j > log-coadd.$j
 
 You could put this in a loop in a Perl script, but on the Ohio Supercomputer Center we found it is faster to just make a job array and run a separate job for each block.
 
@@ -104,5 +104,5 @@ Here ``outdir/outstem_00_00.fits`` is one of the pyIMCOM output files, and docum
 
 You need to provide a different ``writeupdir/writeupstem`` if you are running a different mosaic **or different band** so as to avoid collisions.
 
-If you want to add more diagnostic reports, see the `instructions <../diagnostics/README.rst>`_.
+If you want to add more diagnostic reports, see the `instructions <diagnostics_README.rst>`_.
 

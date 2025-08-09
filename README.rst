@@ -41,14 +41,14 @@ Running PyIMCOM
 
 - `Input file formats <docs/input_README.rst>`_
 
-- `PSF splitting <splitpsf/README.rst>`_ (under development).
+- `PSF splitting <docs/splitpsf_README.rst>`_ (under development).
 
-- `How to compress PyIMCOM output files <compress/compress_README.rst>`_
+- `How to compress PyIMCOM output files <docs/compress_README.rst>`_
 
 Post-processing of PyIMCOM outputs
 ----------------------------------
 
-- Instructions for using the `meta post-processing module <meta/meta.rst>`_
+- Instructions for using the `meta post-processing module <docs/meta_README.rst>`_
 
 Information relevant to various runs we have done in the past
 -------------------------------------------------------------
