@@ -7,6 +7,24 @@ Documentation on this site
 *******************************
 
 
+Installing PyIMCOM
+-----------------------------
+
+Conda
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: bash
+
+    conda install -c conda-forge --file requirements.txt
+    pip install .
+
+Pip
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. code-block:: bash
+
+    pip install .
+
+
 Overview of PyIMCOM concepts
 ------------------------------
 
