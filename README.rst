@@ -1,17 +1,17 @@
 PyIMCOM: Image combination package
-##################################################################################
+##################################
 
 This is the Python implementation of Image Combination (PyIMCOM) package being developed for the Roman Space Telescope "Cosmology with the High Latitude Survey" Project Infrastructure Team.
 
 Documentation on this site
-*******************************
+**************************
 
 
 Installing PyIMCOM
------------------------------
+------------------
 
 Conda
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^
 
 .. code-block:: bash
 
@@ -19,19 +19,19 @@ Conda
     pip install .
 
 Pip
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^
 .. code-block:: bash
 
     pip install .
 
 
 Overview of PyIMCOM concepts
-------------------------------
+----------------------------
 
 - `Hierarchy of input and output information <docs/hierarchy.rst>`_
 
 Running PyIMCOM
--------------------
+---------------
 
 - You will want to install the C kernel `furry-parakeet <https://github.com/hirata10/furry-parakeet>`_ for best performance and for some of the advanced features.
 
@@ -46,17 +46,17 @@ Running PyIMCOM
 - `How to compress PyIMCOM output files <compress/compress_README.rst>`_
 
 Post-processing of PyIMCOM outputs
----------------------------------------
+----------------------------------
 
 - Instructions for using the `meta post-processing module <meta/meta.rst>`_
 
 Information relevant to various runs we have done in the past
----------------------------------------------------------------
+-------------------------------------------------------------
 
 - `Preparing the PSFs for the OpenUniverse simulation <historical/OpenUniverse2024/README.rst>`_
 
 References
-********************
+**********
 
 - Optimal Linear Image Combination. `Rowe et al. ApJ 741:46 (2011) <https://ui.adsabs.harvard.edu/abs/2011ApJ...741...46R/abstract>`_
 
