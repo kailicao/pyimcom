@@ -3,18 +3,27 @@ Linear algebra kernels to solve linear systems.
 
 Classes
 -------
-_LAKernel : Abstract base class of linear algebra kernels.
-EigenKernel : LA kernel using eigendecomposition.
-CholKernel : LA kernel using Cholesky decomposition.
-IterKernel : LA kernel using iterative method.
-EmpirKernel : Fake LA kernel using empirical relation.
+_LAKernel
+    Abstract base class of linear algebra kernels.
+EigenKernel
+    LA kernel using eigendecomposition.
+CholKernel
+    LA kernel using Cholesky decomposition.
+IterKernel
+    LA kernel using iterative method.
+EmpirKernel
+    Fake LA kernel using empirical relation.
 
 Functions
 ---------
-conjugate_gradient : Simplified version of scipy.sparse.linalg.cg.
-_extract_submatrix : Extract a submatrix from a symmetric matrix.
-_extract_subvector : Extract a subvector from a vector.
-_assign_subvector : Assign values to a subvector of a vector.
+conjugate_gradient
+    Simplified version of scipy.sparse.linalg.cg.
+_extract_submatrix
+    Extract a submatrix from a symmetric matrix.
+_extract_subvector
+    Extract a subvector from a vector.
+_assign_subvector
+    Assign values to a subvector of a vector.
 
 """
 
@@ -41,27 +50,22 @@ class _LAKernel:
     """
     Abstract base class of linear algebra kernels.
 
+    Parameters
+    ----------
+    outst : coadd.OutStamp
+        Output postage stamp to which this kernel instance is attached.
+
     Methods
     -------
-    __init__ : Constructor.
-    __call__ : Solve linear systems.
+    __init__
+        Constructor.
+    __call__
+        Solve linear systems.
 
     """
 
     def __init__(self, outst: 'coadd.OutStamp') -> None:
-        """
-        Constructor.
-
-        Parameters
-        ----------
-        outst : coadd.OutStamp
-            Output postage stamp to which this kernel instance is attached.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Constructor."""
 
         self.outst = outst
         cfg = outst.blk.cfg  # shortcut
@@ -81,15 +85,21 @@ class _LAKernel:
         """
         Solve linear systems.
 
-        This produces the following arrays for self.outst:
-        T = coaddition matrix, shape = (n_out, m, n)
-        UC = fractional squared error in PSF, shape = (n_out, m)
-        Sigma = output noise amplification, shape = (n_out, m)
-        kappa = Lagrange multiplier per output pixel, shape = (n_out, m)
-
         Returns
         -------
-        None.
+        None
+
+        Notes
+        -----
+        This produces the following arrays for self.outst:
+
+        * T = coaddition matrix, shape = (n_out, m, n)
+
+        * UC = fractional squared error in PSF, shape = (n_out, m)
+
+        * Sigma = output noise amplification, shape = (n_out, m)
+
+        * kappa = Lagrange multiplier per output pixel, shape = (n_out, m)
 
         """
 
@@ -127,20 +137,15 @@ class EigenKernel(_LAKernel):
 
     Methods
     -------
-    _call_single_kappa : Solve linear systems for single kappa node.
-    _call_multi_kappa : Solve linear systems for multiple kappa nodes.
+    _call_single_kappa
+        Solve linear systems for single kappa node.
+    _call_multi_kappa
+        Solve linear systems for multiple kappa nodes.
 
     """
 
     def _call_single_kappa(self) -> None:
-        """
-        Solve linear systems for single kappa node.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Solve linear systems for single kappa node."""
 
         # get parameters and arrays
         A = self.outst.sysmata  # system matrix, shape = (n, n)
@@ -163,17 +168,19 @@ class EigenKernel(_LAKernel):
         """
         Solve linear systems for multiple kappa nodes.
 
-        Based on pyimcom_lakernel.CKernelMulti of furry-parakeet:
-        This one generates multiple images. there can be n_out target PSFs.
-
         Parameters
         ----------
-        nbis : int, optional
-            number of bisections. The default is 13.
+        nbis : int, default=13
+            Number of bisections.
 
         Returns
         -------
-        None.
+        None
+
+        Notes
+        -----
+        Based on pyimcom_lakernel.CKernelMulti of furry-parakeet.
+        This one generates multiple images. there can be n_out target PSFs.
 
         """
 
@@ -201,9 +208,12 @@ class CholKernel(_LAKernel):
 
     Methods
     -------
-    _cholesky_wrapper (staticmethod) : Wrapper for cholesky.
-    _call_single_kappa : Solve linear systems for single kappa node.
-    _call_multi_kappa : Solve linear systems for multiple kappa nodes.
+    _cholesky_wrapper
+        Wrapper for cholesky (staticmethod)
+    _call_single_kappa
+        Solve linear systems for single kappa node.
+    _call_multi_kappa
+        Solve linear systems for multiple kappa nodes.
 
     """
 
@@ -215,17 +225,17 @@ class CholKernel(_LAKernel):
 
         Parameters
         ----------
-        AA : np.array, shape : (n, n)
-            System matrix A plus kappa times noise.
-        di : (np.array, np.array), shapes : ((n,), (n,))
-            Indices to main diagonal of AA.
-        A : np.array, shape : (n, n)
-            Original system matrix.
+        AA : np.array
+            System matrix A plus kappa times noise; shape (n,n).
+        di : (np.array, np.array)
+            Indices to main diagonal of AA; each has shape (n,).
+        A : np.array
+            Original system matrix; shape (n,n).
 
         Returns
         -------
-        L : np.array, shape : (n, n)
-            cholesky results.
+        L : np.array
+            Cholesky results; shape (n,n).
 
         """
 
@@ -246,14 +256,7 @@ class CholKernel(_LAKernel):
         return L
 
     def _call_single_kappa(self) -> None:
-        """
-        Solve linear systems for single kappa node.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Solve linear systems for single kappa node."""
 
         # get parameters and arrays
         n = self.n
@@ -295,12 +298,14 @@ class CholKernel(_LAKernel):
         """
         Solve linear systems for multiple kappa nodes.
 
-        Based on pyimcom_lakernel.get_coadd_matrix_discrete of furry-parakeet:
-        alternative to CKernelMulti, almost same functionality but has a range of kappa
-
         Returns
         -------
-        None.
+        None
+
+        Notes
+        -----
+        Based on pyimcom_lakernel.get_coadd_matrix_discrete of furry-parakeet:
+        alternative to CKernelMulti, almost same functionality but has a range of kappa.
 
         """
 
@@ -360,19 +365,19 @@ def conjugate_gradient(A: np.array, b: np.array, rtol: float = 1.5e-3,
 
     Parameters
     ----------
-    A : np.array, shape : (n, n)
-        System matrix A.
-    b : np.array, shape : (n,)
-        Column vector b.
-    rtol : float, optional
-        Relative tolerance. The default is 1.5e-3.
-    maxiter : int, optional
-        Maximum number of iteration. The default is 30.
+    A : np.array
+        System matrix A, shape (n,n)
+    b : np.array
+        Column vector b, shape (n,).
+    rtol : float, default=1.5e-3
+        Relative tolerance.
+    maxiter : int, default=30
+        Maximum number of iterations.
 
     Returns
     -------
-    x : np.array, shape : (n,)
-        Solution vector b.
+    x : np.array
+        Solution vector b, shape (n,).
 
     """
 
@@ -409,15 +414,15 @@ def _extract_submatrix(mat_orig: np.array, selection: np.array) -> np.array:
 
     Parameters
     ----------
-    mat_orig : np.array, shape : (n, n)
-        Symmetric matrix to be extracted.
-    selection : np.array, shape : (n,)
-        Integer array of indices of rows and columns to extract.
+    mat_orig : np.array
+        Symmetric matrix to be extracted, shape (n,n).
+    selection : np.array
+        Integer array of indices of rows and columns to extract, shape (n,).
 
     Returns
     -------
-    mat_copy : np.array, shape : (n_, n_)
-        Extracted submatrix. n_ is number of selected rows or columns.
+    mat_copy : np.array
+        Extracted submatrix. Shape (n_,n_), where n_ is number of selected rows or columns.
 
     """
 
@@ -443,15 +448,15 @@ def _extract_subvector(vec_orig: np.array, selection: np.array) -> np.array:
 
     Parameters
     ----------
-    vec_orig : np.array, shape : (n,)
-        Vector to be extracted.
-    selection : np.array, shape : (n,)
-        Integer array of indices of elements to extract.
+    vec_orig : np.array
+        Vector to be extracted, shape (n,).
+    selection : np.array
+        Integer array of indices of elements to extract, shape (n,).
 
     Returns
     -------
-    vec_copy : np.array, shape : (n_,)
-        Extracted subvector. n_ is number of selected elements.
+    vec_copy : np.array
+        Extracted subvector. Shape (n_,) where n_ is number of selected elements.
 
     """
 
@@ -472,16 +477,16 @@ def _assign_subvector(vec_left: np.array, vec_right: np.array,
 
     Parameters
     ----------
-    vec_left : np.array, shape : (n,)
+    vec_left : np.array
         Vector to be assigned to.
-    vec_right : np.array, shape : (n_,)
+    vec_right : np.array
         Subvector of values to assign.
-    selection : np.array, shape : (n,)
-        Integer array of indices of elements to assign to.
+    selection : np.array
+        Integer array of indices of elements to assign to; same length as `vec_left`.
 
     Returns
     -------
-    None.
+    None
 
     """
 
@@ -495,9 +500,12 @@ class IterKernel(_LAKernel):
 
     Methods
     -------
-    _iterative_wrapper (staticmethod) : Wrapper for iterative method.
-    _call_single_kappa : Solve linear systems for single kappa node.
-    _call_multi_kappa : Solve linear systems for multiple kappa nodes.
+    _iterative_wrapper
+        Wrapper for iterative method (staticmethod).
+    _call_single_kappa
+        Solve linear systems for single kappa node.
+    _call_multi_kappa
+        Solve linear systems for multiple kappa nodes.
 
     """
 
@@ -510,21 +518,21 @@ class IterKernel(_LAKernel):
 
         Parameters
         ----------
-        AA : np.array, shape : (n, n)
-            System matrix A plus kappa times noise.
-        mBhalf : np.array, shape : (n, n)
-            System matrix -B/2 (for a single target PSF).
-        relevant_matrix : np.array, shape : (m, n)
-            Boolean array indicating whether to use an input pixel for an output pixel.
-        rtol : float, optional
-            Relative tolerance. The default is 1.5e-3.
-        maxiter : int, optional
-            Maximum number of iteration. The default is 30.
+        AA : np.array
+            System matrix A plus kappa times noise. Shape (n,n).
+        mBhalf : np.array
+            System matrix -B/2 (for a single target PSF). Shape (n,n).
+        relevant_matrix : np.array
+            Boolean array indicating whether to use an input pixel for an output pixel. Shape (m,n).
+        rtol : float, default=1.5e-3
+            Relative tolerance.
+        maxiter : int, default=30
+            Maximum number of iteration.
 
         Returns
         -------
-        np.array, shape : (m, n)
-            Output T matrix (for a single target PSF).
+        np.array
+            Output T matrix (for a single target PSF). Shape (m,n).
 
         """
 
@@ -548,13 +556,13 @@ class IterKernel(_LAKernel):
 
         Parameters
         ----------
-        exact_UC : bool, optional
+        exact_UC : bool, default=False
             Whether to use exact expression for U/C.
             The default is False, as this is slow and the gain is very small.
 
         Returns
         -------
-        None.
+        None
 
         """
 
@@ -607,14 +615,14 @@ class IterKernel(_LAKernel):
 
         Parameters
         ----------
-        exact_UC : bool, optional
+        exact_UC : bool, default=True
             Whether to use exact expression for U/C.
             The default is True, as the approximation does not work.
             KC: Please avoid this whenever possible as this is SUPER slow.
 
         Returns
         -------
-        None.
+        None
 
         """
 
@@ -687,20 +695,15 @@ class EmpirKernel(_LAKernel):
 
     Methods
     -------
-    _call_single_kappa : Produce the T matrix without solving linear systems.
-    _call_multi_kappa : Pathway to _call_single_kappa.
+    _call_single_kappa
+        Produce the T matrix without solving linear systems.
+    _call_multi_kappa
+        Pathway to `_call_single_kappa`.
 
     """
 
     def _call_single_kappa(self) -> None:
-        """
-        Produce the T matrix without solving linear systems.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Produce the T matrix without solving linear systems."""
 
         mddy = self.outst.yx_val[0].ravel()[:, None] - self.outst.iny_val[None, :]
         mddx = self.outst.yx_val[1].ravel()[:, None] - self.outst.inx_val[None, :]
@@ -741,13 +744,6 @@ class EmpirKernel(_LAKernel):
         del Ti
 
     def _call_multi_kappa(self) -> None:
-        """
-        Pathway to _call_single_kappa.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Pathway to _call_single_kappa, since the empirical kernel doesn't use kappa."""
 
         self._call_single_kappa()

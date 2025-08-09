@@ -3,10 +3,14 @@ Driver to coadd a block (2D array of postage stamps).
 
 Classes
 -------
-InImage : Input image attached to a Block instance.
-InStamp : Data structure for input pixel positions and signals.
-OutStamp : Driver for postage stamp coaddition.
-Block : Driver for block coaddition.
+InImage
+    Input image attached to a Block instance.
+InStamp
+    Data structure for input pixel positions and signals.
+OutStamp
+    Driver for postage stamp coaddition.
+Block
+    Driver for block coaddition.
 
 """
 
@@ -43,40 +47,42 @@ class InImage:
     """
     Input image attached to a Block instance.
 
+    Parameters
+    ----------
+    blk : Block
+        The Block instance to which this InImage instance is attached.
+    idsca : (int, int)
+        ID of observation and SCA used.
+
     Methods
     -------
-    __init__ : Constructor.
-    generate_idx_grid (staticmethod) : Generate a grid of indices.
-    _inpix2world2outpix : Composition of pix2world and world2pix.
-    outpix2world2inpix : Inverse function of _inpix2world2outpix.
-
-    partition_pixels : Partition input pixels into postage stamps.
-    extract_layers : Extract input layers.
-    clear : Free up memory space.
-
-    smooth_and_pad (staticmethod) : Utility to smear a PSF with a tophat and a Gaussian.
-    LPolyArr (staticmethod) : Utility to generate an array of Legendre polynomials.
-    psf_filename (staticmethod) : PSF file name broker.
-    get_psf_pos : Get input PSF array at given position.
+    __init__
+        Constructor.
+    generate_idx_grid
+        Generate a grid of indices (staticmethod).
+    _inpix2world2outpix
+        Composition of pix2world and world2pix.
+    outpix2world2inpix
+        Inverse function of _inpix2world2outpix.
+    partition_pixels
+        Partition input pixels into postage stamps.
+    extract_layers
+        Extract input layers.
+    clear
+        Free up memory space.
+    smooth_and_pad
+        Utility to smear a PSF with a tophat and a Gaussian (staticmethod).
+    LPolyArr
+        Utility to generate an array of Legendre polynomials (staticmethod).
+    psf_filename
+        PSF file name broker (staticmethod).
+    get_psf_pos
+        Get input PSF array at given position.
 
     """
 
     def __init__(self, blk: 'Block', idsca: (int, int)) -> None:
-        """
-        Constructor.
-
-        Parameters
-        ----------
-        blk : Block
-            The Block instance to which this InImage instance is attached.
-        idsca : (int, int)
-            ID of observation and SCA used.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Constructor."""
 
         self.blk = blk
         self.idsca = idsca
@@ -102,14 +108,15 @@ class InImage:
 
         Parameters
         ----------
-        xs : np.array, shape : (nx,)
+        xs : np.array
+            x values of the grid, length (nx,)
         ys : np.array, shape : (ny,)
-            x and y indices of the grid.
+            y values of the grid, length (ny,)
 
         Returns
         -------
-        np.array, shape : (nx * ny, 2)
-            All combinations of xs elements and ys elements.
+        np.array
+            All combinations of xs elements and ys elements. Shape (nx*ny,2)
 
         """
 
@@ -121,13 +128,13 @@ class InImage:
 
         Parameters
         ----------
-        inxys : np.array, shape : (npix, 2)
-            x and y positions in the input image coordinates.
+        inxys : np.array
+            x and y positions in the input image coordinates, shape (npix, 2)
 
         Returns
         -------
-        np.array, shape : (npix, 2)
-            x and y positions in the output block coordinates.
+        np.array
+            x and y positions in the output block coordinates, shape (npix, 2).
 
         """
 
@@ -140,13 +147,13 @@ class InImage:
 
         Parameters
         ----------
-        outxys : np.array, shape : (npix, 2)
-            x and y positions in the output block coordinates.
+        outxys : np.array
+            x and y positions in the output block coordinates, shape (npix, 2).
 
         Returns
         -------
-        np.array, shape : (npix, 2)
-            x and y positions in the input image coordinates.
+        np.array
+            x and y positions in the input image coordinates, shape (npix, 2).
 
         """
 
@@ -160,16 +167,16 @@ class InImage:
 
         Parameters
         ----------
-        sp_res : int, optional
-            Resolution of the sparse grid. The default is 90.
-        relax_coef : float, optional
-            Coefficient to create enough space for input pixels. The default is 1.05.
-        visualize : bool, optional
-            Whether to visualize the partition process and results. The default is False.
+        sp_res : int, default=90
+            Resolution of the sparse grid.
+        relax_coef : float, default=1.05
+            Coefficient to create enough space for input pixels.
+        visualize : bool, default=False
+            Whether to visualize the partition process and results.
 
         Returns
         -------
-        None.
+        None
 
         """
 
@@ -338,7 +345,7 @@ class InImage:
 
         Returns
         -------
-        None.
+        None
 
         """
 
@@ -381,16 +388,16 @@ class InImage:
 
         Parameters
         ----------
-        inArray : np.array, shape : (ny, nx)
-            Input PSF array to be smeared.
-        tophatwidth : float, optional
-        gaussiansigma : float, optional
-            Both in units of the pixels given (not native pixel). The default is 0.0.
+        inArray : np.array
+            Input PSF array to be smeared. Shape (ny, nx)
+        tophatwidth : float, default=0.
+        gaussiansigma : float, default=0.
+            Both in units of the pixels given (not native pixel).
 
         Returns
         -------
-        outArray : np.array, shape : (ny+npad*2, nx+npad*2)
-            Smeared input PSF array.
+        outArray : np.array
+            Smeared input PSF array, shape (ny+npad*2, nx+npad*2)
 
         """
 
@@ -417,8 +424,7 @@ class InImage:
     @staticmethod
     def LPolyArr(PORDER,u_,v_):
         """
-        Generates a length (PORDER+1)**2 array of the Legendre polynomials
-        for n=0..PORDER { for m=0..PORDER { coef P_m(u_) P_n(v_) }}
+        Generates an array of the Legendre polynomials.
 
         Parameters
         ----------
@@ -432,8 +438,14 @@ class InImage:
         Returns
         -------
         arr: np.array, shape : ((PORDER+1)**2)
-          the array of Legendre polynomial products
-          constant (1) is first, then increasing x-order, then increasing y-order
+          the array of Legendre polynomial products, shape : ((PORDER+1)**2)
+
+        Notes
+        -----
+        The returned array has length (PORDER+1)**2.
+        The constant (1) is first, then increasing x-order, then increasing y-order:
+        for n=0..PORDER { for m=0..PORDER { coef P_m(u_) P_n(v_) }}.
+
         """
 
         ua = np.ones(PORDER+1)
@@ -447,7 +459,21 @@ class InImage:
 
     @staticmethod
     def psf_filename(inpsf_format, obsid):
-        """PSF file name broker."""
+        """PSF file name broker.
+
+        Parameters
+        ----------
+        inpsf_format : str
+            Format for input PSFs.
+        obsid : int
+            The observation ID number. 
+
+        Returns
+        -------
+        str
+            File name.
+
+        """
 
         if inpsf_format == 'dc2_imsim':
             return 'dc2_psf_{:d}.fits'.format(obsid)
@@ -464,16 +490,15 @@ class InImage:
 
         Parameters
         ----------
-        psf_compute_point : np.array, shape : (2,)
-            Point to compute PSF in RA and Dec.
-        use_shortrange : bool, optional
-            If True and PSFSPLIT is set, then pulls only the short-range PSF G^(S).
-            The default is False.
+        psf_compute_point : np.array
+            Length 2 array, point to compute PSF in RA and Dec.
+        use_shortrange : bool, default=False
+            If True and PSFSPLIT is set in the configuration file, then pulls only the short-range PSF G^(S).
 
         Returns
         -------
-        tuple : np.array, shape : see smooth_and_pad
-            Input PSF array at given position. 
+        np.array
+            Input PSF array at given position (see smooth_and_pad for the shape).
 
         """
 
@@ -550,31 +575,30 @@ class InStamp:
     """
     Data structure for input pixel positions and signals.
 
+    Parameters
+    ----------
+    blk : Block
+        The Block instance to which this InStamp instance is attached.
+    j_st : int
+        InStamp vertical index.
+    i_st : int
+        InStamp horizontal index.
+
     Methods
     -------
-    __init__ : Constructor.
-    make_selection : Return the indices of selected input pixels.
-    get_inpsfgrp : Get the input PSFGrp attached to this InStamp.
-    clear : Free up memory space.
+    __init__
+        Constructor.
+    make_selection
+        Return the indices of selected input pixels.
+    get_inpsfgrp
+        Get the input PSFGrp attached to this InStamp.
+    clear
+        Free up memory space.
 
     """
 
     def __init__(self, blk: 'Block', j_st: int, i_st: int) -> None:
-        """
-        Constructor.
-
-        Parameters
-        ----------
-        blk : Block
-            The Block instance to which this InStamp instance is attached.
-        j_st, i_st : int, int
-            InStamp index.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Constructor."""
 
         self.blk = blk
         self.j_st = j_st
@@ -615,18 +639,17 @@ class InStamp:
 
         Parameters
         ----------
-        pivot : (float, float), optional
+        pivot : (float or None, float or None), default=(None, None)
             Pivot position in the output block coordinates.
             If None in one direction, select input pixels according to the other;
             if None in both directions, select all input pixels.
-            The default is (None, None).
-        radius : float, optional
-            Select input pixels within this radius. The default is None.
+        radius : float or None, default=None
+            Select input pixels within this radius.
 
         Returns
         -------
-        np.array, shape : (npix,)
-            Indices of selected input pixels.
+        np.array or None
+            Indices of selected input pixels (if there are any).
             None if selecting all input pixels.
 
         """
@@ -652,14 +675,13 @@ class InStamp:
 
         Parameters
         ----------
-        sim_mode : bool, optional
+        sim_mode : bool, default=False
             Whether to count references without actually making inpsfgrp.
             See the docstring of psfutil.SysMatA._compute_iisubmats.
-            The default is False.
 
         Returns
         -------
-        None.
+        None
 
         """
 
@@ -679,14 +701,7 @@ class InStamp:
             return inpsfgrp
 
     def clear(self) -> None:
-        """
-        Free up memory space.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Free up memory space."""
 
         del self.pix_count, self.pix_cumsum
         del self.y_val, self.x_val, self.data
@@ -696,21 +711,41 @@ class OutStamp:
     """
     Driver for postage stamp coaddition.
 
+    Parameters
+    ----------
+    blk : Block
+        The Block instance to which this InStamp instance is attached.
+    j_st : int
+            OutStamp index, vertical direction.
+    i_st : int
+            OutStamp index, horizontal direction.
+
     Methods
     -------
-    __init__ : Constructor.
-    _process_input_stamps : Fetch and process input postage stamps.
-    __call__ : Build system matrices and perform coaddition.
-    _build_system_matrices : Build system matrices and coaddition matrices.
-    _visualize_system_matrices : Visualize system matrices.
-    _visualize_coadd_matrices : Visualize coaddition matrices.
-
-    trapezoid (staticmethod) : Apply a trapezoid filter to transition pixels.
-    _perform_coaddition : Perform the actual multiplication.
-    _visualize_weight_computations : Display weight computations.
-    _show_in_and_out_images : Display input and output images.
-    _study_individual_pixels : Study individual input and output pixels.
-    clear : Free up memory space.
+    __init__
+        Constructor.
+    _process_input_stamps
+        Fetch and process input postage stamps.
+    __call__
+        Build system matrices and perform coaddition.
+    _build_system_matrices
+        Build system matrices and coaddition matrices.
+    _visualize_system_matrices
+        Visualize system matrices.
+    _visualize_coadd_matrices
+        Visualize coaddition matrices.
+    trapezoid
+        Apply a trapezoid filter to transition pixels (staticmethod).
+    _perform_coaddition
+        Perform the actual multiplication.
+    _visualize_weight_computations
+        Display weight computations.
+    _show_in_and_out_images
+        Display input and output images.
+    _study_individual_pixels
+        Study individual input and output pixels.
+    clear
+        Free up memory space.
 
     """
 
@@ -722,21 +757,7 @@ class OutStamp:
     }
 
     def __init__(self, blk: 'Block', j_st: int, i_st: int) -> None:
-        """
-        Constructor.
-
-        Parameters
-        ----------
-        blk : Block
-            The Block instance to which this InStamp instance is attached.
-        j_st, i_st : int, int
-            OutStamp index.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Constructor."""
 
         self.blk = blk
         self.j_st = j_st
@@ -779,6 +800,18 @@ class OutStamp:
         """
         Fetch and process input postage stamps.
 
+        Parameters
+        ----------
+        visualize : bool, default=False
+            Whether to visualize the process.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+
         This method selects input pixels to form a region like this:
         +-----+-----+-----+
         |   **|*****|**   |
@@ -791,15 +824,6 @@ class OutStamp:
         |   **|*****|**   |
         +-----+-----+-----+
         where the central postage stamp is the OutStamp we are coadding.
-
-        Parameters
-        ----------
-        visualize : bool, optional
-            Whether to visualize the process. The default is False.
-
-        Returns
-        -------
-        None.
 
         """
 
@@ -865,16 +889,16 @@ class OutStamp:
 
         Parameters
         ----------
-        visualize : bool, optional
-            Whether to visualize the process. The default is False.
-        save_abc : bool, optional
-            Whether to save system matrices. The default is False.
-        save_t : bool, optional
-            Whether to save coaddition matrices. The default is False.
+        visualize : bool, default=False
+            Whether to visualize the process.
+        save_abc : bool, default=False
+            Whether to save system matrices.
+        save_t : bool, default=False
+            Whether to save coaddition matrices.
 
         Returns
         -------
-        None.
+        None
 
         """
 
@@ -888,14 +912,14 @@ class OutStamp:
 
         Parameters
         ----------
-        visualize : bool, optional
-            Whether to visualize the process. The default is False.
-        save_abc : bool, optional
-            Whether to save system matrices. The default is False.
+        visualize : bool, default=False
+            Whether to visualize the process.
+        save_abc : bool, default=False
+            Whether to save system matrices.
 
         Returns
         -------
-        None.
+        None
 
         """
 
@@ -986,14 +1010,7 @@ class OutStamp:
             OutStamp.trapezoid(self.UC,    fade_kernel)
 
     def _visualize_system_matrices(self) -> None:
-        """
-        Visualize system matrices.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Visualize system matrices."""
 
         print('OutStamp._visualize_system_matrices')
 
@@ -1039,14 +1056,7 @@ class OutStamp:
         print(f'{self.outovlc.shape=}')  # (n_out,)
 
     def _visualize_coadd_matrices(self) -> None:
-        """
-        Visualize coaddition matrices.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Visualize coaddition matrices."""
 
         print('OutStamp._visualize_coadd_matrices')
         fk = self.blk.cfg.fade_kernel  # shortcut
@@ -1095,23 +1105,22 @@ class OutStamp:
 
         Parameters
         ----------
-        arr : np.array, shape : (..., ny, nx)
-            The array to apply the trapezoid filter.
+        arr : np.array
+            The array to apply the trapezoid filter. Shape (..., ny, nx).
         fade_kernel : int
             Half the width of the trapezoid filter.
-        recover_mode : bool, optional
-            Whether to recover faded boundaries. The default is False.
-        pad_widths : (int, int, int, int), optional
+        recover_mode : bool, default=False
+            Whether to recover faded boundaries.
+        pad_widths : (int, int, int, int), default=(0, 0, 0, 0)
             Padding width on each side (order: bottom, top, left, right).
-            The default is (0, 0, 0, 0).
-        do_sides : str, optional
-            Which sides to apply the trapezoid filter. The default is 'BTLR'.
-        use_trunc_sinc : bool, optional
-            Whether to use the truncated sinc function. The default is True.
+        do_sides : str, default='BTLR'
+            Which sides to apply the trapezoid filter.
+        use_trunc_sinc : bool, default=True
+            Whether to use the truncated sinc function.
 
         Returns
         -------
-        None.
+        None
 
         """
 
@@ -1153,16 +1162,16 @@ class OutStamp:
 
         Parameters
         ----------
-        visualize : bool, optional
-            Whether to visualize the process. The default is False.
-        save_t : bool, optional
-            Whether to save coaddition matrices. The default is False.
-        use_trunc_sinc : bool, optional
-            Argument for coadd_utils.trapezoid. The default is True.
+        visualize : bool, default=False
+            Whether to visualize the process.
+        save_t : bool, default=False
+            Whether to save coaddition matrices.
+        use_trunc_sinc : bool, default=True
+            Argument for coadd_utils.trapezoid.
 
         Returns
         -------
-        None.
+        None
 
         """
 
@@ -1216,14 +1225,7 @@ class OutStamp:
 
     def _visualize_weight_computations(self) -> None:
         
-        """
-        Display weight computations.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Display weight computations."""
 
         print('OutStamp._visualize_weight_computations')
         fk = self.blk.cfg.fade_kernel  # shortcut
@@ -1256,14 +1258,7 @@ class OutStamp:
             plt.show()
 
     def _show_in_and_out_images(self) -> None:
-        """
-        Display input and output images.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Display input and output images."""
 
         print('OutStamp._show_in_and_out_images')
         fk = self.blk.cfg.fade_kernel  # shortcut
@@ -1298,14 +1293,7 @@ class OutStamp:
             plt.show()
 
     def _study_individual_pixels(self) -> None:
-        """
-        Study individual input and output pixels.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Study individual input and output pixels."""
 
         print('OutStamp._study_individual_pixels')
 
@@ -1379,14 +1367,7 @@ class OutStamp:
             plt.show()
 
     def clear(self) -> None:
-        """
-        Free up memory space.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Free up memory space."""
 
         del self.inpix_count, self.inpix_cumsum
         self.selections.clear(); del self.selections
@@ -1403,46 +1384,50 @@ class Block:
     """
     Driver for block coaddition.
 
+    Parameters
+    ----------
+    cfg : Config, optional
+        Configuration for this Block. The default is None.
+    this_sub : int, default=0
+        Number determining the location of this Block in the mosaic.
+    run_coadd : bool, default=True
+        Whether to coadd this block.
+        Turn this off if you want to perform the procedure manually.
+
     Methods
     -------
-    __init__ : Constructor.
-    __call__ : Coadd this block.
-    parse_config : Parse the configuration.
-    _get_obs_cover: Get observations relevant to this Block.
-
-    _build_use_instamps : Build the Boolean array use_instamps.
-    _handle_postage_pad : Handle the postage padding.
-    process_input_images : Process input images.
-    build_input_stamps : Build input stamps from input images.
-
-    _output_stamp_wrapper : Wrapper for output stamp coaddition.
-    coadd_output_stamps : Coadd output stamps using input stamps.
-    compress_map : Compress float32 map to (u)int16 to save storage.
-    build_output_file : Build the output FITS file.
-    clear_all : Free up all memory spaces.
+    __init__
+        Constructor.
+    __call__
+        Coadd this block.
+    parse_config
+        Parse the configuration.
+    _get_obs_cover
+        Get observations relevant to this Block.
+    _build_use_instamps
+        Build the Boolean array use_instamps.
+    _handle_postage_pad
+        Handle the postage padding.
+    process_input_images
+        Process input images.
+    build_input_stamps
+        Build input stamps from input images.
+    _output_stamp_wrapper
+        Wrapper for output stamp coaddition.
+    coadd_output_stamps
+        Coadd output stamps using input stamps.
+    compress_map
+        Compress float32 map to (u)int16 to save storage.
+    build_output_file
+        Build the output FITS file.
+    clear_all
+        Free up all memory spaces.
 
     """
 
     def __init__(self, cfg: Config = None, this_sub: int = 0,
                  run_coadd: bool = True) -> None:
-        """
-        Constructor.
-
-        Parameters
-        ----------
-        cfg : Config, optional
-            Configuration for this Block. The default is None.
-        this_sub : int, optional
-            Number determining the location of this Block in the mosaic. The default is 0.
-        run_coadd : bool, optional
-            Whether to coadd this block. The default is True.
-            Turn this off if you want to perform the procedure manually.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Constructor."""
 
         self.timer = Timer()
         cfg(); self.cfg = cfg
@@ -1454,14 +1439,7 @@ class Block:
         if run_coadd: self()
 
     def __call__(self) -> None:
-        """
-        Coadd this block.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Coadd this block."""
 
         self.parse_config()
         # this produces: obsdata, outwcs, outpsfgrp, outpsfovl
@@ -1480,14 +1458,7 @@ class Block:
         print(f'finished at t = {self.timer():.2f} s')
 
     def parse_config(self) -> None:
-        """
-        Parse the configuration.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Parse the configuration."""
 
         print('General input information:')
         print('number of input frames = ', self.cfg.n_inframe, 'type =', self.cfg.extrainput)
@@ -1573,20 +1544,6 @@ class Block:
         """
         Get observations relevant to this Block.
 
-        Previous comments:
-          select observation/SCA pairs from a observation table
-
-        Inputs:
-          obsdata (the observation table)
-          ra (in degrees)
-          dec (in degrees)
-          radius (in degrees)
-          filter (integer, 0..10)
-
-        Outputs:
-          list of (observation, sca) that overlaps this target
-          [note SCA numbers are 1..18 for ease of comparison with the Project notation]
-
         Parameters
         ----------
         radius : float
@@ -1594,7 +1551,12 @@ class Block:
 
         Returns
         -------
-        None.
+        None
+
+        Notes
+        -----
+        This uses the observation table (obsdata), center position (ra, dec), and filter information
+        stored internally to the Block.
 
         """
 
@@ -1633,15 +1595,7 @@ class Block:
         self.obslist.sort()
 
     def _build_use_instamps(self) -> None:
-        """
-        Build use_instamps, Boolean array indicating
-        whether to use each input postage stamp.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Build use_instamps, Boolean array indicating whether to use each input postage stamp."""
 
         self.use_instamps = np.zeros((self.cfg.n1P+2, self.cfg.n1P+2), dtype=bool)
 
@@ -1655,14 +1609,7 @@ class Block:
                     if n_coadded == self.nrun: return
 
     def _handle_postage_pad(self) -> None:
-        """
-        Handle the postage padding.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Handle the postage padding."""
 
         postage_pad = self.cfg.postage_pad  # shortcut
         self.j_st_min = self.i_st_min = postage_pad + 1  # 3 by default
@@ -1695,14 +1642,7 @@ class Block:
         self._build_use_instamps()
 
     def process_input_images(self, visualize: bool = False) -> None:
-        """
-        Process input images.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Process input images."""
 
         ### Now figure out which observations we need ###
 
@@ -1750,14 +1690,7 @@ class Block:
         self.n_inimage = len(self.inimages)
 
     def build_input_stamps(self) -> None:
-        """
-        Build input stamps from input images.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Build input stamps from input images."""
 
         n1P = self.cfg.n1P  # shortcuts
         pad = self.cfg.postage_pad
@@ -1793,16 +1726,17 @@ class Block:
 
         Parameters
         ----------
-        j_st, i_st : int, int
-            OutStamp index.
-        sim_mode : bool, optional
+        j_st : int
+            Vertical OutStamp index.
+        i_st : int
+            Horizontal OutStamp index.
+        sim_mode : bool, default=False
             Whether to count references without actually making inpsfgrp.
             See the docstring of psfutil.SysMatA._compute_iisubmats.
-            The default is False.
 
         Returns
         -------
-        None.
+        None
 
         """
 
@@ -1841,14 +1775,13 @@ class Block:
 
         Parameters
         ----------
-        sim_mode : bool, optional
+        sim_mode : bool, default=False
             Whether to count references without actually making inpsfgrp.
             See the docstring of psfutil.SysMatA._compute_iisubmats.
-            The default is False.
 
         Returns
         -------
-        None.
+        None
 
         """
 
@@ -1918,8 +1851,8 @@ class Block:
 
         Parameters
         ----------
-        map_ : np.array, shape : usually (NsideP, NsideP)
-            Map to be compressed.
+        map_ : np.array
+            Map to be compressed. Shape is usually (NsideP, NsideP).
         coef : int
             Coefficient for log10 values.
         dtype : type
@@ -1964,13 +1897,13 @@ class Block:
 
         Parameters
         ----------
-        is_final : bool, optional
+        is_final : bool, default=False
             Whether this is the final (i.e., not intermediate) output.
-            If so, recover the faded block boundaries. The default is False.
+            If so, recover the faded block boundaries.
 
         Returns
         -------
-        None.
+        None
 
         """
 
@@ -2049,14 +1982,7 @@ class Block:
         hdu_list.writeto(self.outstem+'.fits', overwrite=True)
 
     def clear_all(self) -> None:
-        """
-        Free up all memory spaces.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Free up all memory spaces."""
 
         if self.cfg.tempfile is not None: self.cache_dir.rmdir()
 

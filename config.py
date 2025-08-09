@@ -3,14 +3,19 @@ Encapsulation of pyimcom background settings and configuration.
 
 Classes
 -------
-Timer : All-purpose timer.
-Settings : pyimcom background settings.
-fpaCoords : some basic data on the Roman FPA coordinates, needed for some of the tests.
-Config : pyimcom configuration, with JSON file interface.
+Timer
+    All-purpose timer.
+Settings
+    pyimcom background settings.
+fpaCoords
+    some basic data on the Roman FPA coordinates, needed for some of the tests.
+Config
+    pyimcom configuration, with JSON file interface.
 
-Function
---------
-format_axis : Format a panel (an axis) of a figure.
+Functions
+---------
+format_axis
+    Format a panel (an axis) of a figure.
 
 """
 
@@ -36,20 +41,15 @@ class Timer:
 
     Methods
     -------
-    __init__ : Constructor.
-    __call__ : Return the time elapsed since tstart in seconds.
+    __init__
+        Constructor.
+    __call__
+        Return the time elapsed since tstart in seconds.
 
     """
 
     def __init__(self) -> None:
-        """
-        Constructor.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Constructor."""
 
         self.tstart = perf_counter()
 
@@ -59,8 +59,8 @@ class Timer:
 
         Parameters
         ----------
-        reset : bool, optional
-            Whether to reset tstart. The default is False.
+        reset : bool, default=False
+            Whether to reset tstart.
 
         Returns
         -------
@@ -165,15 +165,30 @@ class Config:
     """
     pyimcom configuration, with JSON file interface.
 
+    Parameters
+    ----------
+    cfg_file : str or None, default=''
+        File path to or text content of a JSON configuration file.
+        The default is ''. This uses pyimcom/configs/default_config.json.
+        Set cfg_file=None to build a configuration from scratch.
+    inmode : str or None, optional
+        Directives for special behavior. Right now the only one supported
+        is 'block' (meaning the configuration is read from a block output).
+
     Methods
     -------
-    __init__ : Constructor.
-    __call__ : Calculate or update derived quantities.
-
-    _from_dict : Build a configuration from a dictionary.
-    _get_attrs_wrapper: Wrapper for getting an attribute or a set of attributes.
-    _build_config : Terminal interface to build a configuration from scratch.
-    to_file : Save the configuration to a JSON file.
+    __init__
+        Constructor.
+    __call__
+        Calculate or update derived quantities.
+    _from_dict
+        Build a configuration from a dictionary.
+    _get_attrs_wrapper
+        Wrapper for getting an attribute or a set of attributes.
+    _build_config
+        Terminal interface to build a configuration from scratch.
+    to_file
+        Save the configuration to a JSON file.
 
     """
 
@@ -192,24 +207,7 @@ class Config:
     )
 
     def __init__(self, cfg_file: str = '', inmode=None) -> None:
-        """
-        Constructor.
-
-        Parameters
-        ----------
-        cfg_file : str, optional
-            File path to or text content of a JSON configuration file.
-            The default is ''. This uses pyimcom/configs/default_config.json.
-            Set cfg_file=None to build a configuration from scratch.
-        inmode : str, optional
-            Directives for special behavior. Right now the only one supported
-            is 'block' (meaning the configuration is read from a block output)
-
-        Returns
-        -------
-        None.
-
-        """
+        """Constructor."""
 
         # option to load from a block output file
         if inmode == 'block':
@@ -242,14 +240,7 @@ class Config:
         self()
 
     def __call__(self) -> None:
-        """
-        Calculate or update derived quantities
-
-        Returns
-        -------
-        None.
-
-        """
+        """Calculate or update derived quantities."""
 
         ### SECTION I: INPUT FILES ###
         if self.psfsplit:
@@ -284,11 +275,11 @@ class Config:
         Parameters
         ----------
         cfg_dict : dict
-            Usually built from a JSON file.
+            This is a dictionary, usually built from a JSON file.
 
         Returns
         -------
-        None.
+        None
 
         """
 
@@ -410,12 +401,12 @@ class Config:
         ----------
         code : str
             Code segment to execute.
-        newline : bool, optional
-            Whether to add a blank line when finished. The default is True.
+        newline : bool, default=True
+            Whether to print a blank line when finished.
 
         Returns
         -------
-        None.
+        None
 
         """
 
@@ -438,7 +429,7 @@ class Config:
 
         Returns
         -------
-        None.
+        None
 
         """
 
@@ -715,15 +706,14 @@ class Config:
 
         Parameters
         ----------
-        fname : str, optional
+        fname : str or None, default=''
             JSON configuration file name to save to.
             The default is ''. This overwrites pyimcom/configs/default_config.json.
             Set fname=None to get a text version of the configuration.
 
         Returns
         -------
-        Either None
-        or str
+        str or None
             Text version of the configuration.
 
         """
@@ -814,12 +804,12 @@ def format_axis(ax: 'mpl.axes._axes.Axes', grid_on: bool = True) -> None:
     ----------
     ax : mpl.axes._axes.Axes
         Panel to be formatted.
-    grid_on : bool, optional
-        Whether to add grid to the panel. The default is True.
+    grid_on : bool, default=True
+        Whether to add grid to the panel.
 
     Returns
     -------
-    None.
+    None
 
     """
 
