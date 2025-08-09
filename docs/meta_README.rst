@@ -54,7 +54,7 @@ Construction of a mosaic is in principle quite simple: it is built from a PyIMCO
 
 The above call will make a ``MetaMosaic`` from block x=24, y=13. This contains information from the group of 3x3 blocks centered at the indicated block, i.e., the above call will also load data from (23,12), (23,13), (23,14), (24,12), (24,14), (25,12), (25,13), and (25,14) in  addition to (25,13). If a block is at the edge of the mosaic, then fewer than 9 blocks may be loaded.
 
-The constructor can work with either the raw ``.fits`` files, or with the compressed ``.cpr.fits.gz`` files (see `PyIMCOM compression <../compress/compress_README.rst>`_).
+The constructor can work with either the raw ``.fits`` files, or with the compressed ``.cpr.fits.gz`` files (see `PyIMCOM compression <compress_README.rst>`_).
 
 The configuration that generated an object is accessible as an attribute, e.g., you may get the pixel scale in the coated image by asking for ``mosaic.cfg.dtheta``, or the additional layers from ``mosaic.cfg.extrainput``.
 

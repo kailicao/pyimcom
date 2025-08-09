@@ -1,0 +1,13 @@
+numpy
+numba
+scipy
+astropy
+gwcs
+filelock
+galsim
+fitsio
+asdf
+healpy
+matplotlib
+treecorr
+scikit-image
