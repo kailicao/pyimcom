@@ -3,18 +3,13 @@ Tools to analyze coadded images.
 
 Classes
 -------
-OutImage
-    Wrapper for coadded images (blocks).
-NoiseAnal
-    Analysis of noise frames.
-StarsAnal
-    Analysis of point sources.
-_BlkGrp
-    Abstract base class for groups of blocks (mosiacs or suites).
-Mosaic
-    Wrapper for coadded mosaics (2D arrays of blocks).
-Suite
-    Wrapper for coadded suites (hashed arrays of blocks).
+OutImage : Wrapper for coadded images (blocks).
+NoiseAnal : Analysis of noise frames.
+StarsAnal : Analysis of point sources.
+
+_BlkGrp : Abstract base class for groups of blocks (mosiacs or suites).
+Mosaic : Wrapper for coadded mosaics (2D arrays of blocks).
+Suite : Wrapper for coadded suites (hashed arrays of blocks).
 
 """
 
@@ -40,41 +35,19 @@ class OutImage:
     """
     Wrapper for coadded images (blocks).
 
-    Parameters
-    ----------
-    fpath : str
-        Path to the output FITS file.
-    cfg : Config, optional
-        Configuration used for this output image.
-        If provided, no consistency check is performed.
-        The default is None. If None, it will be extracted from FITS file.
-    hdu_names : list of str, optional
-        List of HDU names of this FITS file.
-        If provided, no consistency check is performed.
-        The default is None. If None, it will be derived from `cfg`.
-
     Methods
     -------
-    get_hdu_names
-        Parse outmaps to get a list of HDU names.
-    __init__
-        Constructor.
-    get_last_line
-        Get last line of a text file.
-    get_time_consump
-        Parse terminal output to get time consumption.
-    _load_or_save_hdu_list
-        Load data from or save data to FITS file.
-    get_coadded_layer
-        Extract a coadded layer from the primary HDU.
-    get_T_weightmap
-        Extract T_weightmap from an additional HDU. 
-    get_mean_coverage
-        Compute mean coverage based on T_weightmap.
-    get_output_map
-        Extract an output map from the additional HDUs.
-    _update_hdu_data
-        Update data using data provided by a neighbor.
+    get_hdu_names (staticmethod) : Parse outmaps to get a list of HDU names.
+    __init__ : Constructor.
+    get_last_line (staticmethod) : Get last line of a text file.
+    get_time_consump : Parse terminal output to get time consumption.
+
+    _load_or_save_hdu_list : Load data from or save data to FITS file.
+    get_coadded_layer : Extract a coadded layer from the primary HDU.
+    get_T_weightmap : Extract T_weightmap from an additional HDU. 
+    get_mean_coverage : Compute mean coverage based on T_weightmap.
+    get_output_map : Extract an output map from the additional HDUs.
+    _update_hdu_data : Update data using data provided by a neighbor.
 
     """
 
@@ -90,7 +63,7 @@ class OutImage:
 
         Returns
         -------
-        list of str
+        [str]
             A list of HDU names.
 
         """
@@ -104,7 +77,27 @@ class OutImage:
         return hdu_names
 
     def __init__(self, fpath: str, cfg: Config = None, hdu_names: [str] = None) -> None:
-        """Constructor."""
+        """
+        Constructor.
+
+        Parameters
+        ----------
+        fpath : str
+            Path to the output FITS file.
+        cfg : Config, optional
+            Configuration used for this output image.
+            If provided, no consistency check is performed.
+            The default is None. If None, it will be extracted from FITS file.
+        hdu_names : [str], optional
+            List of HDU names of this FITS file.
+            If provided, no consistency check is performed.
+            The default is None. If None, it will be derived from cfg.
+
+        Returns
+        -------
+        None.
+
+        """
 
         assert exists(fpath), f'{fpath} does not exist'
         self.fpath = fpath
@@ -148,7 +141,7 @@ class OutImage:
 
         Returns
         -------
-        None
+        None.
 
         """
 
@@ -164,20 +157,22 @@ class OutImage:
 
         Parameters
         ----------
-        load_mode : bool, default=True
+        load_mode : bool, optional
             If True, load data from FITS file (if not already loaded);
             if False, remove current data from memory (if data exist).
-        save_file : bool, default=False
-            Only used when `load_mode` == False. If (`save_file` ==) True,
+            The default is True.
+        save_file : bool, optional
+            Only used when load_mode == False. If (save_file ==) True,
             save current data to FITS file (overwriting the existing file).
-        auto_to_all : bool, default=False
+            The default is False.
+        auto_to_all : bool, optional
             Only used when load_mode == False and save_file == True.
             If (auto_to_all ==) True, change 'PADSIDES' from 'auto' to 'all'
-            in the 'CONFIG' HDU of FITS file.
+            in the 'CONFIG' HDU of FITS file. The default is False.
 
         Returns
         -------
-        None
+        None.
 
         """
 
@@ -210,14 +205,15 @@ class OutImage:
         ----------
         layer : str
             Name of the layer to be extracted.
-        j_out : int or None, default=0
-            Index of the output PSF. If None, return results based on all output PSFs.
+        j_out : int, optional
+            Index of the output PSF. The default is 0.
+            If None, return results based on all output PSFs.
 
         Returns
         -------
-        data : np.array
+        data : np.array, shape : either (NsideP, NsideP)
+                                 or (n_out, NsideP, NsideP) (all output PSFs)
             Requested coadded layer.
-            The shape is either (NsideP, NsideP) or (n_out, NsideP, NsideP) (all output PSFs)
 
         """
 
@@ -243,19 +239,18 @@ class OutImage:
 
         Parameters
         ----------
-        flat : bool, default=False
-            Whether to read the flat version of T_weightmap.
-        j_out : int or None, default=0
-            Only used when `flat` is False. Index of the output PSF.
-            If None, return results based on all output PSFs.
+        flat : bool, optional
+            Whether to read the flat version of T_weightmap. The default is False.
+        j_out : int, optional
+            Only used when flat == False. Index of the output PSF.
+            The default is 0. If None, return results based on all output PSFs.
 
         Returns
         -------
-        data : np.array
+        data : np.array, shape : either (n_inimage, n1P, n1P)
+                                 or (n_out, n_inimage, n1P, n1P) (all output PSFs)
+                                 or (n_out*n1P, n_inimage*n1P) (flat version)
             Requested T_weightmap.
-            Shape is either (n_inimage, n1P, n1P) (1)
-            or (n_out, n_inimage, n1P, n1P) (all output PSFs)
-            or (n_out*n1P, n_inimage*n1P) (flat version)
 
         """
 
@@ -311,15 +306,15 @@ class OutImage:
         ----------
         outmap : str
             Name of the output map to be extracted.
-        j_out : int or None, default=0
-            Index of the output PSF.
+        j_out : int, optional
+            Index of the output PSF. The default is 0.
             If None, return results based on all output PSFs.
 
         Returns
         -------
-        data : np.array
-            Requested output map. shape is either (NsideP, NsideP)
-            or (n_out, NsideP, NsideP) (all output PSFs).
+        data : np.array, shape : either (NsideP, NsideP)
+                                 or (n_out, NsideP, NsideP) (all output PSFs)
+            Requested output map.
 
         """
 
@@ -361,13 +356,13 @@ class OutImage:
             Neighboring output image (block) who shares data with "me."
         direction : str
             Which side to update. Must be 'left', 'right', 'bottom', or 'top'.
-        add_mode : bool, default=True
+        add_mode : bool, optional
             If True, update "my" data by adding neighbor's to "mine;"
-            if False, replace "my" data with neighbor's.
+            if False, replace "my" data with neighbor's. The default is True.
 
         Returns
         -------
-        None
+        None.
 
         """
 
@@ -486,27 +481,14 @@ class NoiseAnal:
 
     Largely based on diagnostics/noise/noisespecs.py.
 
-    Parameters
-    ----------
-    outim : OutImage
-        Output image to analyze.
-    layer : str
-        Layer name of noise frame to analyze.
-
     Methods
     -------
-    __init__
-        Constructor.
-    get_norm
-        Get norm for 2D noise power spectrum (classmethod).
-    azimuthal_average
-        Compute radial profile of image (staticmethod)).
-    _get_wavenumbers
-        Calculate wavenumbers for the input image (staticmethod).
-    __call__
-        Analyze specified noise frame of given output image.
-    clear
-        Free up memory space.
+    __init__ : Constructor.
+    get_norm (classmethod) : Get norm for 2D noise power spectrum.
+    azimuthal_average (staticmethod) : Compute radial profile of image.
+    _get_wavenumbers (staticmethod) : Calculate wavenumbers for the input image.
+    __call__ : Analyze specified noise frame of given output image.
+    clear : Free up memory space.
 
     """
 
@@ -527,7 +509,21 @@ class NoiseAnal:
     PS1D_STYLES = ['solid', 'dotted', 'dashed', 'solid', 'dashdot']
 
     def __init__(self, outim: OutImage, layer: str) -> None:
-        """Constructor."""
+        """
+        Constructor.
+
+        Parameters
+        ----------
+        outim : OutImage
+            Output image to analyze.
+        layer : str
+            Layer name of noise frame to analyze.
+
+        Returns
+        -------
+        None.
+
+        """
 
         self.outim = outim
         self.layer = layer
@@ -539,6 +535,9 @@ class NoiseAnal:
     def get_norm(cls, layer: str, L: int, filtername: str, s_out: float) -> float:
         """
         Get norm for 2D noise power spectrum.
+
+        IMPORTANT: For simulated noise frames, dividing by s_in**2
+        converts from units of S_in^2 to arcsec^2.
 
         Parameters
         ----------
@@ -555,11 +554,6 @@ class NoiseAnal:
         -------
         float
             Norm for 2D noise power spectrum.
-
-        Notes
-        -----
-        For simulated noise frames, dividing by s_in**2
-        converts from units of S_in^2 to arcsec^2.
 
         """
 
@@ -579,25 +573,23 @@ class NoiseAnal:
 
         Parameters
         ----------
-        image : np.array
-            Input image, shape (L, L).
+        image : np.array, shape : (L, L)
+            Input image.
         nradbins : int
             Number of radial bins in profile.
-        rbin: np.array, optional
+        rbin: np.array, optional, shape : (L, L)
             "labels" parameter for ndimage utilities.
-            If provided, has shape (L, L).
-            The default is None. If not provided, derive from `image`.shape.
-        ridx: np.array, optional
+            The default is None. If not provided, derive from image.shape.
+        ridx: np.array, optional, shape : (nradbins,)
             "index" parameter for ndimage utilities.
-            If provided, has shape (`nradbins`,).
             The default is None. If not provided, derive from rbin.
 
         Returns
         -------
-        radial_mean : np.array
-            Mean intensity within each annulus. Main result. Shape is (`nradbins`,)
-        radial_err : np.array
-            Standard error on the mean: sigma / sqrt(N). Shape is (`nradbins`,)
+        radial_mean : np.array, shape : (nradbins,)
+            Mean intensity within each annulus. Main result
+        radial_err : np.array, shape : (nradbins,)
+            Standard error on the mean: sigma / sqrt(N).
 
         """
 
@@ -627,19 +619,17 @@ class NoiseAnal:
             the length of one axis of the image.
         nradbins : int
             number of radial bins the image should be averaged into
-        rbin: np.array, optional
+        rbin: np.array, optional, shape : (L, L)
             "labels" parameter for ndimage utilities.
-            If provided, shape is (L,L).
             The default is None. If not provided, derive from image.shape.
-        ridx: np.array, optional
+        ridx: np.array, optional, shape : (nradbins,)
             "index" parameter for ndimage utilities.
-            If provided, shape is (`nradbins`,).
-            The default is None. If not provided, derive from `rbin`.
+            The default is None. If not provided, derive from rbin.
 
         Returns
         -------
-        kmean : np.array
-            the wavenumbers for the image, shape (`nradbins`,)
+        kmean : np.array, shape : (nradbins,)
+            the wavenumbers for the image
 
         """
 
@@ -660,15 +650,16 @@ class NoiseAnal:
 
         Parameters
         ----------
-        padding : bool, default=False.
-            Whether to include padding postage stamps. (to be implemented)
-        bin_ : bool, default=True
-            Whether to bin the 2D spectrum into L/8 x L/8 image.
+        padding : bool, optional (to be implemented)
+            Whether to include padding postage stamps. The default is False.
+        bin_ : bool, optional
+            Whether to bin the 2D spectrum.
+            The default is True, binning 2D spectrum into L/8 x L/8 image.
             Currently this is ignored, as only bin_ == True is supported.
 
         Returns
         -------
-        None
+        None.
 
         """
 
@@ -703,7 +694,14 @@ class NoiseAnal:
         self.ps1d[:, 1] = ps_image_err  # powerspectrum.ps_image_err
 
     def clear(self) -> None:
-        """Free up memory space."""
+        """
+        Free up memory space.
+
+        Returns
+        -------
+        None.
+
+        """
 
         if hasattr(self, 'ps2d'):
             del self.ps2d, self.ps1d
@@ -745,23 +743,13 @@ class StarsAnal:
     """
     Analysis of point sources.
 
-    Largely based on diagnostics/starcube_nonoise.py.
-
-    Parameters
-    ----------
-    outim : OutImage
-        Output image to analyze.
-    layer : str, default='gsstar14'
-        Layer name of injected stars to analyze.
+    Largely based on diagnostics/starcube_nonoise.py.py.
 
     Methods
     -------
-    __init__
-        Constructor.
-    __call__
-        Analyze given point source frame of given output image.
-    clear
-        Free up memory space.
+    __init__ : Constructor.
+    __call__ : Analyze given point source frame of given output image.
+    clear : Free up memory space.
 
     """
 
@@ -770,7 +758,21 @@ class StarsAnal:
     ncol = len(ColDescr)
 
     def __init__(self, outim: OutImage, layer: str = 'gsstar14') -> None:
-        """Constructor."""
+        """
+        Constructor.
+
+        Parameters
+        ----------
+        outim : OutImage
+            Output image to analyze.
+        layer : str, optional
+            Layer name of injected stars to analyze. The default is 'gsstar14'.
+
+        Returns
+        -------
+        None.
+
+        """
 
         self.outim = outim
         self.layer = layer
@@ -786,21 +788,21 @@ class StarsAnal:
 
         Parameters
         ----------
-        n : int or None, optional
+        n : int, optional
             Size of output images. The default is None.
             If not provided, derive from self.cfg. Same for other parameters.
-        search_radius : float or None, optional
+        search_radius : float, optional
             Search radius for injected point sources.
-        forced_scale : float or None, optional
+        forced_scale : float, optional
             Forced scale length for star moments.
-        bdpad : int or None, optional
+        bdpad : int, optional
             Padding region around the edge.
-        res : int or None, optional
+        res : int, optional
             Resolution of HEALPix grid.
 
         Returns
         -------
-        None
+        None.
 
         """
 
@@ -953,18 +955,12 @@ class _BlkGrp:
 
     Methods
     -------
-    __call__
-        Run all the analyses below.
-    get_consump_map
-        Get map of time consumption.
-    get_coverage_map
-        Get map of mean coverages.
-    get_noise_power_spectra
-        Analyze noise power spectra of this mosaic.
-    get_star_catalog
-        Analyze injected point sources of this mosaic.
-    clear
-        Free up memory space.
+    __call__ : Run all the analyses below.
+    get_consump_map : Get map of time consumption.
+    get_coverage_map : Get map of mean coverages.
+    get_noise_power_spectra : Analyze noise power spectra of this mosaic.
+    get_star_catalog : Analyze injected point sources of this mosaic.
+    clear : Free up memory space.
 
     """
 
@@ -974,12 +970,12 @@ class _BlkGrp:
 
         Parameters
         ----------
-        overwrite : bool, default=False
-            Whether to overwrite existing results.
+        overwrite : bool, optional
+            Whether to overwrite existing results. The default is False.
 
         Returns
         -------
-        None
+        None.
 
         """
 
@@ -994,12 +990,12 @@ class _BlkGrp:
 
         Parameters
         ----------
-        overwrite : bool, default=False
-            Whether to overwrite existing results.
+        overwrite : bool, optional
+            Whether to overwrite existing results. The default is False.
 
         Returns
         -------
-        None
+        None.
 
         """
 
@@ -1031,12 +1027,12 @@ class _BlkGrp:
 
         Parameters
         ----------
-        overwrite : bool, default=False
-            Whether to overwrite existing results.
+        overwrite : bool, optional
+            Whether to overwrite existing results. The default is False.
 
         Returns
         -------
-        None
+        None.
 
         """
 
@@ -1068,14 +1064,14 @@ class _BlkGrp:
 
         Parameters
         ----------
-        bins : int, default=5
-            Number of bins for 1D power spectra.
-        overwrite : bool, default=False
-            Whether to overwrite existing results.
+        bins : int, optional
+            Number of bins for 1D power spectra. The default is 5.
+        overwrite : bool, optional
+            Whether to overwrite existing results. The default is False.
 
         Returns
         -------
-        None
+        None.
 
         """
 
@@ -1171,14 +1167,14 @@ class _BlkGrp:
 
         Parameters
         ----------
-        layer : str, default='gsstar14'
-            Layer name of injected stars to analyze.
-        overwrite : bool, default=False
-            Whether to overwrite existing results.
+        layer : str, optional
+            Layer name of injected stars to analyze. The default is 'gsstar14'.
+        overwrite : bool, optional
+            Whether to overwrite existing results. The default is False.
 
         Returns
         -------
-        None
+        None.
 
         """
 
@@ -1228,7 +1224,14 @@ class _BlkGrp:
         print(f'finished at t = {timer():.2f} s')
 
     def clear(self) -> None:
-        """Free up memory space."""
+        """
+        Free up memory space.
+
+        Returns
+        -------
+        None.
+
+        """
 
         if self.ndim == 2:  # Mosaic
             for ibx in range(self.cfg.nblock):
@@ -1249,17 +1252,10 @@ class Mosaic(_BlkGrp):
     """
     Wrapper for coadded mosaics (2D arrays of blocks).
 
-    Parameters
-    ----------
-    cfg : Config
-        Configuration used for this output mosaic.
-
     Methods
     -------
-    __init__
-        Constructor.
-    share_padding_stamps
-        Share padding postage stamps between adjacent blocks.
+    __init__ : Constructor.
+    share_padding_stamps : Share padding postage stamps between adjacent blocks.
 
     """
 
@@ -1267,7 +1263,19 @@ class Mosaic(_BlkGrp):
     padding = False  # for get_noise_power_spectra
 
     def __init__(self, cfg: Config) -> None:
-        """Constructor."""
+        """
+        Constructor.
+
+        Parameters
+        ----------
+        cfg : Config
+            Configuration used for this output mosaic.
+
+        Returns
+        -------
+        None.
+
+        """
 
         cfg(); self.cfg = cfg
         self.hdu_names = OutImage.get_hdu_names(cfg.outmaps)
@@ -1285,7 +1293,7 @@ class Mosaic(_BlkGrp):
 
         Returns
         -------
-        None
+        None.
 
         """
 
@@ -1324,19 +1332,9 @@ class Suite(_BlkGrp):
     """
     Wrapper for coadded suites (hashed arrays of blocks).
 
-    Parameters
-    ----------
-    cfg : Config
-        Configuration used for this output mosaic.
-    prime : int, default=691
-        Prime number for hashing (Paper IV).
-    nrun : int, default=16
-        Number of coadded blocks (Paper IV).
-
     Methods
     -------
-    __init__
-        Constructor.
+    __init__ : Constructor.
 
     """
 
@@ -1344,7 +1342,23 @@ class Suite(_BlkGrp):
     padding = True  # for get_noise_power_spectra
 
     def __init__(self, cfg: Config, prime: int = 691, nrun: int = 16) -> None:
-        """Constructor."""
+        """
+        Constructor.
+
+        Parameters
+        ----------
+        cfg : Config
+            Configuration used for this output mosaic.
+        prime : int, optional
+            Prime number for hashing. The default is 691 (Paper IV).
+        nrun : int, optional
+            Number of coadded blocks. The default is 16 (Paper IV).
+
+        Returns
+        -------
+        None.
+
+        """
 
         cfg(); self.cfg = cfg
         self.hdu_names = OutImage.get_hdu_names(cfg.outmaps)
