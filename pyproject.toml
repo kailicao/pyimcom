@@ -1,0 +1,45 @@
+
+[project]
+name = "pyimcom"
+license = {file = "LICENSE"}
+readme = "README.md"
+authors = [
+    { name = "Kaili Cao", email = "cao.1191@osu.edu" }
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+]
+dynamic = ["version", "dependencies", "optional-dependencies"]
+requires-python = ">=3.11"
+
+[tool.setuptools.dynamic]
+dependencies = { file = "requirements.txt" }
+
+[project.urls]
+"Source Code" = "https://github.com/Roman-HLIS-Cosmology-PIT/pyimcom"
+
+# On a mac, install optional dependencies with `pip install '.[dev]'` (include the single quotes)
+[tool.setuptools.dynamic.optional-dependencies]
+dev = { file = "requirements-dev.txt" }
+
+[build-system]
+requires = [
+    "setuptools>=62", # Used to build and package the Python project
+    "setuptools_scm>=6.2", # Gets release version from git. Makes it available programmatically
+]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+write_to = "src/pyimcom/_version.py"
+
+[tool.pytest.ini_options]
+testpaths = [
+    "tests",
+    "src",
+    "docs",
+]
+addopts = "--doctest-modules --doctest-glob=*.rst"
