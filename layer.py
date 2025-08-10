@@ -1,4 +1,4 @@
-"""
+'''
 Utilities to generate additional layers and handle masks.
 
 Classes
@@ -14,7 +14,7 @@ _get_sca_imagefile : Returns path to required SCA image file.
 check_if_idsca_exists : Determines whether an observation (id,sca) pair exists.
 get_all_data : Makes a 3D array of the image data.
 
-"""
+'''
 
 from os.path import exists
 import re
@@ -43,17 +43,17 @@ except:
 from .wcsutil import local_partial_pixel_derivatives2, PyIMCOM_WCS
 
 class GalSimInject:
-    """
+    '''
     Utilities to inject objects using GalSim.
 
     Based on fluffy-garbanzo/inject_galsim_obj.py.
     # This file will contain routines to make an input image of injected objects using GalSim.
 
-    """
+    '''
 
     @staticmethod
     def galsim_star_grid(res, mywcs, inpsf, idsca, obsdata, sca_nside, inpsf_oversamp, extraargs=None):
-        """
+        '''
         Example of a function used here that we can call from coadd_utils.get_all_data:
 
         Inputs:
@@ -71,7 +71,7 @@ class GalSimInject:
           Output: [when complete]
           nside x nside SCA with a grid of stars with unit flux
 
-        """
+        '''
 
         # extract the extraargs
         #
@@ -157,14 +157,14 @@ class GalSimInject:
 
     @staticmethod
     def subgen(rngX, lenpix, subpix):
-        """
+        '''
         generates the next lenpix numbers from the random number generator rng,
         and reports R[subpix[0]] .. R[subpix[-1]]
 
         designed to work even when lenpix is too large for memory
         assumes no repeated entries in subpix (but also doesn't have to be sorted)
 
-        """
+        '''
 
         N = np.size(subpix)
         out_temp = np.zeros(N)
@@ -186,10 +186,10 @@ class GalSimInject:
 
     @staticmethod
     def subgen_multirow(rngX, lenpix, subpix, P):
-        """
+        '''
         like subgen except makes P rows
 
-        """
+        '''
 
         out = np.zeros((P, np.size(subpix)))
         for j in range(P):
@@ -198,7 +198,7 @@ class GalSimInject:
 
     @staticmethod
     def genobj(lenpix, subpix, galstring, seed):
-        """
+        '''
         generates object parameters for a list of galaxies at pixels subpix (array)
         seed = random number generator seed
         lenpix = number of pixels ( = 12 * 4**nside)
@@ -209,7 +209,7 @@ class GalSimInject:
 
         returns a dictionary with a bunch of arrays of galaxy information
 
-        """
+        '''
 
         # nobj = np.size(subpix)
         rngX = np.random.PCG64(seed=seed)
@@ -228,7 +228,7 @@ class GalSimInject:
 
     @staticmethod
     def galsim_extobj_grid(res, mywcs, inpsf, sca_nside, inpsf_oversamp, extraargs=[]):
-        """
+        '''
         Example of a function used here that we can call from coadd_utils.get_all_data:
 
         Inputs:
@@ -248,7 +248,7 @@ class GalSimInject:
           'g': must have galtype['g'] as length 2 array giving g1 and g2.
           (conserves area)
 
-        """
+        '''
 
         # default parameters
         seed = 4096
@@ -363,16 +363,16 @@ class GalSimInject:
 
 
 class GridInject:
-    """
+    '''
     Utilities to inject stars using furry-parakeet C routine.
 
     Based on fluffy-garbanzo/grid_inject.py.
 
-    """
+    '''
 
     @staticmethod
     def make_sph_grid(res, ra, dec, radius):
-        """
+        '''
         Get Healpix pixels at resolution res that are within the given radius of (ra, dec)
         ra, dec, radius all in radians.
 
@@ -384,7 +384,7 @@ class GridInject:
           'rapix' => ra of pixels (numpy array)
           'decpix' => dec of pixel  (numpy array)
 
-        """
+        '''
 
         # get healpix nside
         nside = 2**res
@@ -414,7 +414,7 @@ class GridInject:
 
     @staticmethod
     def generate_star_grid(res, myWCS, scapar={'nside': 4088, 'pix_arcsec': 0.11}):
-        """
+        '''
         Makes a grid of positions to inject simulated sources into an SCA image
 
         Inputs:
@@ -429,7 +429,7 @@ class GridInject:
           rapix = array of RA
           decpix = array of DEC
 
-        """
+        '''
 
         # SCA side length in radians
         degree = np.pi/180
@@ -451,7 +451,7 @@ class GridInject:
 
     @staticmethod
     def make_image_from_grid(res, inpsf, idsca, obsdata, mywcs, nside_sca, inpsf_oversamp):
-        """
+        '''
         Make an SCA image with this grid of stars with a PSF from a specified file with unit flux
 
         Inputs:
@@ -462,7 +462,7 @@ class GridInject:
           mywcs = the WCS solution for this SCA
           nside_sca = side length of SCA
 
-        """
+        '''
 
         thisimage = np.zeros((nside_sca, nside_sca))
         ipix, xsca, ysca, rapix, decpix = GridInject.generate_star_grid(res, mywcs)
@@ -499,12 +499,12 @@ class GridInject:
 
 
 class CplxNoise:
-    """
+    '''
     Utilities to generate 1/f noise.
 
     Based on fluffy-garbanzo/inject_complex_noise.py.
 
-    """
+    '''
 
     @staticmethod
     def noise_1f_frame(seed):
@@ -538,14 +538,14 @@ class CplxNoise:
 
 
 class Mask:
-    """
+    '''
     Utilities for permanent and cosmic ray masks.
 
-    """
+    '''
 
     @staticmethod
     def randmask(idsca, pcut, hitinfo=None):
-        """
+        '''
         makes a psuedorandom mask that randomly removes groups of pixels (intended for CR simulation)
 
         Input:
@@ -553,7 +553,7 @@ class Mask:
           pcut = probability that a pixel is hit
           hitinfo = dictionary (use None for default)
 
-        """
+        '''
 
         seed = 100000000 + idsca[0]
         rng = np.random.default_rng(seed)
@@ -620,7 +620,7 @@ class Mask:
 
 
 def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
-    """
+    '''
     Input file name (can add formats as needed)
 
     path = directory for the files
@@ -637,7 +637,7 @@ def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
     If sca is -1, then returns a format string (i.e., '{:d}' or similar
     instead of the number itself).
 
-    """
+    '''
 
     # all formats currently have no leading 0 on the SCA number
     scastr = '{:d}'.format(idsca[1])
@@ -698,7 +698,7 @@ def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
 
 
 def check_if_idsca_exists(cfg, obsdata, idsca):
-    """
+    '''
     Determines whether an observation (id,sca) pair exists.
 
     Inputs:
@@ -708,7 +708,7 @@ def check_if_idsca_exists(cfg, obsdata, idsca):
     Returns:
       exists_ = True or False
       fname = file name
-    """
+    '''
 
     fname = _get_sca_imagefile(cfg.inpath, idsca, obsdata, cfg.informat)
     exists_ = exists(fname)
@@ -716,11 +716,11 @@ def check_if_idsca_exists(cfg, obsdata, idsca):
 
 
 def get_all_data(inimage: 'coadd.InImage'):
-    """
+    '''
     makes a 3D array of the image data
       axes of the output = [input type (e.g., 0=sci or sim), y, x]
 
-    """
+    '''
 
     # read arguments from InImage attributes
     n_inframe = inimage.blk.cfg.n_inframe  # number of input frames
