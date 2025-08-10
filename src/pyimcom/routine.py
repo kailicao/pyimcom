@@ -1,20 +1,26 @@
-'''
+"""
 Numba version of pyimcom_croutines.c.
 
 Slightly slower than C, used when furry-parakeet is not installed.
 
 Functions
 ---------
-iD5512C_getw : Interpolation code written by Python.
-iD5512C : 2D, 10x10 kernel interpolation for high accuracy.
-iD5512C_sym : iD5512C for symmetrical output.
-gridD5512C : iD5512C for rectangular grid.
+iD5512C_getw
+    Interpolation code written by Python.
+iD5512C
+    2D, 10x10 kernel interpolation for high accuracy.
+iD5512C_sym
+    iD5512C for symmetrical output.
+gridD5512C
+    iD5512C for rectangular grid.
+lakernel1
+    PyIMCOM linear algebra kernel (eigendecomposition).
+lsolve_sps
+    Routine to solve Ax=b.
+build_reduced_T_wrap
+    Makes coaddition matrix T from a reduced space.
 
-lakernel1 : PyIMCOM linear algebra kernel (eigendecomposition).
-lsolve_sps : Routine to solve Ax=b.
-build_reduced_T_wrap : Makes coaddition matrix T from a reduced space.
-
-'''
+"""
 
 import numpy as np
 from numba import njit
@@ -22,21 +28,21 @@ from numba import njit
 
 @njit
 def iD5512C_getw(w: np.array, fh: float) -> None:
-    '''
+    """
     Interpolation code written by Python.
 
     Parameters
     ----------
-    w : np.array, shape : (10,)
-        Interpolation weights in one direction.
+    w : np.array
+        Array, shape (10,); 1D interpolation weights will be written here.
     fh : float
         'xfh' and 'yfh' with 1/2 subtracted.
 
     Returns
     -------
-    None.
+    None
 
-    '''
+    """
 
     fh2 = fh * fh
     e_ =  (((+1.651881673372979740E-05*fh2 - 3.145538007199505447E-04)*fh2 +
@@ -74,7 +80,7 @@ def iD5512C_getw(w: np.array, fh: float) -> None:
 @njit
 def iD5512C(infunc: np.array, xpos: np.array, ypos: np.array,
             fhatout: np.array) -> None:
-    '''
+    """
     2D, 10x10 kernel interpolation for high accuracy
 
     Can interpolate multiple functions at a time from the same grid
@@ -82,20 +88,20 @@ def iD5512C(infunc: np.array, xpos: np.array, ypos: np.array,
 
     Parameters
     ----------
-    infunc : np.array, shape : (nlayer, ngy, ngx)
-        Input function on some grid.
-    xpos : np.array, shape : (nout,)
-        Input x values.
-    ypos : np.array, shape : (nout,)
-        Input y values.
-    fhatout : np.array, shape : (nlayer, nout)
-        Location to put the output values.
+    infunc : np.array
+        Input function on some grid. Shape (nlayer, ngy, ngx).
+    xpos : np.array
+        Input x values. Shape (nout,).
+    ypos : np.array
+        Input y values. Shape (nout,).
+    fhatout : np.array
+        Location to put the output values. Shape : (nlayer, nout).
 
     Returns
     -------
-    None.
+    None
 
-    '''
+    """
 
     # extract dimensions
     nlayer, ngy, ngx = infunc.shape
@@ -133,7 +139,7 @@ def iD5512C(infunc: np.array, xpos: np.array, ypos: np.array,
 @njit
 def iD5512C_sym(infunc: np.array, xpos: np.array, ypos: np.array,
                 fhatout: np.array) -> None:
-    '''
+    """
     2D, 10x10 kernel interpolation for high accuracy
 
     Can interpolate multiple functions at a time from the same grid
@@ -143,20 +149,20 @@ def iD5512C_sym(infunc: np.array, xpos: np.array, ypos: np.array,
 
     Parameters
     ----------
-    infunc : np.array, shape : (nlayer, ngy, ngx)
-        Input function on some grid.
-    xpos : np.array, shape : (nout,)
-        Input x values.
-    ypos : np.array, shape : (nout,)
-        Input y values.
-    fhatout : np.array, shape : (nlayer, nout)
-        Location to put the output values.
+    infunc : np.array
+        Input function on some grid. Shape (nlayer, ngy, ngx).
+    xpos : np.array
+        Input x values. Shape (nout,).
+    ypos : np.array
+        Input y values. Shape (nout,).
+    fhatout : np.array
+        Location to put the output values. Shape (nlayer, nout).
 
     Returns
     -------
-    None.
+    None
 
-    '''
+    """
 
     # extract dimensions
     nlayer, ngy, ngx = infunc.shape
@@ -205,32 +211,35 @@ def iD5512C_sym(infunc: np.array, xpos: np.array, ypos: np.array,
 @njit
 def gridD5512C(infunc: np.array, xpos: np.array, ypos: np.array,
                fhatout: np.array) -> None:
-    '''
+    """
     2D, 10x10 kernel interpolation for high accuracy
 
     this version works with output points on a rectangular grid so that the same
     weights in x and y can be used for many output points
 
-    Notes:
-    there are npi*nyo*nxo interpolations to be done in total
-    but for each input pixel npi, there is an nyo x nxo grid of output points
-
     Parameters
     ----------
-    infunc : np.array, shape : (ngy, ngx)
-        Input function on some grid.
-    xpos : np.array, shape : (npi, nxo)
-        Input x values.
-    ypos : np.array, shape : (npi, nyo)
-        Input y values.
-    fhatout : np.array, shape : (npi, nyo*nxo)
-        Location to put the output values.
+    infunc : np.array
+        Input function on some grid. Shape (ngy, ngx).
+    xpos : np.array
+        Input x values. Shape (npi, nxo).
+    ypos : np.array
+        Input y values. Shape (npi, nxo).
+    fhatout : np.array
+        Location to put the output values. Shape (npi, nyo*nxo).
 
     Returns
     -------
-    None.
+    None
 
-    '''
+    Notes
+    -----
+    There are npi*nyo*nxo interpolations to be done in total,
+    but for each input pixel npi, there is an nyo x nxo grid of output points.
+    If you want a 3D array (npi, nyo, nxo), you can reshape `fhatout` after it
+    is filled.
+
+    """
 
     # extract dimensions
     ngy, ngx = infunc.shape
@@ -289,19 +298,22 @@ def gridD5512C(infunc: np.array, xpos: np.array, ypos: np.array,
 def lakernel1(lam: np.array, Q: np.array, mPhalf: np.array,
               C: float, targetleak: float, kCmin: float, kCmax: float, nbis: int,
               kappa: np.array, Sigma: np.array, UC: np.array, T: np.array, smax: float) -> None:
-    '''
+    """
     PyIMCOM linear algebra kernel (eigendecomposition).
 
-    All the steps with the for loops (i.e., except the matrix diagonalization)
+    Performs all the steps with the for loops (i.e., except the matrix diagonalization).
+    In the parameter descriptions, "n" refers to the number of input pixels and "m"
+    to the number of output pixels.
 
     Parameters
     ----------
-    lam : np.array, shape : (n,)
-        System matrix eigenvalues.
-    Q : np.array, shape : (n, n)
-        System matrix eigenvectors. (KC: Never used?)
-    mPhalf : np.array, shape : (m, n)
-        -P/2 = premultiplied target overlap matrix.
+    lam : np.array
+        System matrix eigenvalues. Shape (n,).
+    Q : np.array
+        System matrix eigenvectors. Shape (n, n).
+        (No longer used in this version of the algorithm.)
+    mPhalf : np.array
+        -P/2 = premultiplied target overlap matrix. Shape (m, n).
     C : float
         Target normalization.
     targetleak : float
@@ -310,22 +322,26 @@ def lakernel1(lam: np.array, Q: np.array, mPhalf: np.array,
         Range of kappa/C to test.
     nbis : int
         Number of bisections.
-    kappa : np.array, shape : (m,)
-        Lagrange multiplier per output pixel.
-    Sigma : np.array, shape : (m,)
-        Output noise amplification.
-    UC : np.array, shape : (m,)
-        Fractional squared error in PSF.
-    T : np.array, shape : (m, n)
-        Coaddition matrix, needs to be multiplied by Q^T after the return.
+    kappa : np.array
+        Lagrange multiplier per output pixel. Shape (m,).
+        Writes to this array.
+    Sigma : np.array
+        Output noise amplification. Shape (m,).
+        Writes to this array.
+    UC : np.array
+        Fractional squared error in PSF. Shape (m,).
+        Writes to this array.
+    T : np.array
+        Coaddition matrix, needs to be multiplied by Q^T after the return. Shape (m,n).
+        Writes to this array.
     smax : float
-        Maximum allowed Sigma.
+        Maximum allowed noise amplification Sigma.
 
     Returns
     -------
-    None.
+    None
 
-    '''
+    """
 
     # dimensions
     m, n = mPhalf.shape
@@ -360,7 +376,7 @@ def lakernel1(lam: np.array, Q: np.array, mPhalf: np.array,
 
 @njit
 def lsolve_sps(N: int, A: np.array, x: np.array, b: np.array) -> None:
-    '''
+    """
     Routine to solve Ax=b.
 
     Only the lower triangle of A is ever used (the rest need not even be allocated).
@@ -371,17 +387,17 @@ def lsolve_sps(N: int, A: np.array, x: np.array, b: np.array) -> None:
     N : int
         Number of 'node' eigenvalues.
     A : np.array, shape : (N, N)
-        Positive definite matrix.
-    x : np.array, shape : (N,)
-        Vector, output.
-    b : np.array, shape : (N,)
-        Vector.
+        Positive definite matrix. Shape (`N`, `N`).
+    x : np.array
+        Vector, output. Shape (`N`,).
+    b : np.array
+        Vector. Shape (`N`,).
 
     Returns
     -------
-    None.
+    None
 
-    '''
+    """
 
     # Replace A with its Cholesky decomposition
     for i in range(N):
@@ -416,37 +432,41 @@ def lsolve_sps(N: int, A: np.array, x: np.array, b: np.array) -> None:
 def build_reduced_T_wrap(Nflat: np.array, Dflat: np.array, Eflat: np.array, kappa: np.array,
                          ucmin: float, smax: float, out_kappa: np.array,
                          out_Sigma: np.array, out_UC: np.array, out_w: np.array) -> None:
-    '''
-    Makes coaddition matrix T from a reduced space.
+    """
+    Intermediate quantities to build coaddition matrix T from a reduced space.
+
+    In the parameter descriptions, "m" refers to the number of output pixels and
+    "nv" to the number of kappa nodes.
 
     Parameters
     ----------
-    Nflat : np.array, shape : (m, nv, nv).flatten
-        Input noise array.
-    Dflat : np.array, shape : (m, nv).flatten
-        Input 1st order signal D/C.
-    Eflat : np.array, shape : (m, nv, nv).flatten
-        Input 2nd order signal E/C.
-    kappa : np.array, shape : (nv,)
-        List of eigenvalues, must be sorted ascending.
+    Nflat : np.array
+        Input noise array. Shape (m*nv*nv,). Flattened version of (m,nv,nv).
+    Dflat : np.array
+        Input 1st order signal D/C. Shape (m*nv,). Flattened version of (m,nv).
+    Eflat : np.array
+        Input 2nd order signal E/C. Shape (m*nv*nv,). Flattened version of (m,nv,nv). 
+    kappa : np.array
+        List of eigenvalues, must be sorted ascending. Shape (nv,).
     ucmin : float
         Min U/C.
     smax : float
         Max Sigma (noise).
-    out_kappa : np.array, shape : (m,)
-        Output "kappa" parameter.
-    out_Sigma : np.array, shape : (m,)
-        Output "Sigma".
-    out_UC : np.array, shape : (m,)
-        Output "U/C".
-    out_w : np.array, shape : (m, nv).flatten
+    out_kappa : np.array
+        Output "kappa" parameter. Shape (m,).
+    out_Sigma : np.array
+        Output "Sigma". Shape (m,).
+    out_UC : np.array
+        Output "U/C". Shape (m,).
+    out_w : np.array
         Output weights for each eigenvalue and each output pixel.
+        Shape (m*nv,). Flattened version of (m,nv). 
 
     Returns
     -------
-    None.
+    None
 
-    '''
+    """
 
     # dimensions
     nv = kappa.size  # number of 'node' eigenvalues (must be >=2)
