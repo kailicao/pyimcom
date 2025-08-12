@@ -1,3 +1,5 @@
+"""Deprecated in favor of routines in pyimcom.truthcats; will be removed soon."""
+
 # usage: python truthcats.py <filter> <input prefix> <outstem>
 # input file name is <input prefix><filter>_DD_DD_map.fits (block files)
 

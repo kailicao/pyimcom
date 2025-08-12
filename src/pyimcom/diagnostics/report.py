@@ -1,3 +1,15 @@
+"""
+PyIMCOM diagnostic report base classes.
+
+Classes
+-------
+ReportSection
+    Section of the validataion report.
+ValidationReport
+    An entire validation report, encompassing multiple sections.
+
+"""
+
 import numpy as np
 import sys
 import os
@@ -12,26 +24,41 @@ class ReportSection():
     """
     Contains a report section.
 
+    Parameters
+    ----------
+    rpt : pyimcom.diagnostics.report.ValidationReport
+        The report that this section belongs to.
+
     Attributes
     ----------
-    tex : TeX source
-    data : data block (machine readable)
-    result : string with result of test (N/A for not completed)
+    tex : str
+        LaTeX source.
+    data : str
+        Machine readable data block, to be embedded in the report.
+    result : str
+        Result of test (N/A for not completed).
 
     Methods
     -------
-    __init__ : Constructor
-    infile : construct the input file name for a given block
-    build : build this section
+    __init__
+        Constructor
+    infile
+        Construct the input file name for a given block.
+    build
+        Build this report section.
 
+    Notes
+    -----
     The build method can be redefined in inherited classes, but should keep the signature.
     The optional nblockmax is used to restrict to a maximum size nblockmax x nblockmax sub-mosaic
     (this is mostly used for testing if you want to see if your section compiles without waiting
     for everything to run).
+
     """
 
     def __init__(self, rpt):
-        """This constructs an empty section."""
+        """Constructor."""
+
         self.stem = rpt.stem
         self.LegacyName = rpt.LegacyName
         self.cfg = rpt.cfg
@@ -45,7 +72,23 @@ class ReportSection():
         self.result = 'N/A'
 
     def infile(self, in_x, in_y):
-        """Get the input file name for block (in_x,in_y)"""
+        """
+        Get the input file name for a given block.
+
+        Parameters
+        ----------
+        in_x : int
+            Horizontal position of the block.
+        in_y : int
+            Vertical position of the block.
+
+        Returns
+        -------
+        str
+            File name.
+
+        """
+
         if in_x>=0 and in_x<self.cfg.nblock and in_y>=0 and in_y<self.cfg.nblock:
            in_fname = self.stem + '_{:02d}_{:02d}'.format(in_x,in_y)
            if self.LegacyName: in_fname += '_map'
@@ -55,6 +98,20 @@ class ReportSection():
            raise Exception("pyimcom.validation.report.ReportSection: infile: block selection out of range")
 
     def build(self, nblockmax=100):
+        """
+        Builds report section. Intended to be overwritten.
+
+        Parameters
+        ----------
+        nblockmax : int
+            Maximum block size allowed.
+
+        Returns
+        -------
+        None
+
+        """
+
         self.tex += '\\section{Base class section}\nHello world.\n'
         self.data += 'HI, I AM A BOT. HOORAY!\n'
 
@@ -62,31 +119,52 @@ class ValidationReport():
     """
     Contains the validation report.
 
+    Parameters
+    ----------
+    fname : str
+        Block file name.
+    dstem : str
+        Stem for output files.
+    clear_all : bool, default=False
+        Removes existing files.
+
     Attributes
     ----------
-    tex : TeX source, dictionary of preamble, head, body, end
-    stem: stem for the input files
-    LegacyName: legacy naming convention for the input files? (bool) should be False in the future
-    cfg: the configuration
-    dstem: stem for destination files
-    datadir: data directory
-    datastem: stem for datafiles
-    datastem_from_dir: stem for datafiles, local from compilation directory (for inclusion in LaTeX)
+    tex : dict of str
+        LaTeX source, dictionary with keys 'preamble', 'head', 'body', 'appendix', and 'end'.
+    stem: str
+        Stem for the input files.
+    LegacyName : bool
+        Legacy naming convention for the input files with _map.fits? Should be False in the future.
+    cfg : pyimcom.config.Config
+        The configuration used to generate the mosaic.
+    dstem : str
+        Stem for output files.
+    datadir : str
+        Directory for associated data files.
+    datastem : str
+        Stem for associated datafiles.
+    datastem_from_dir : str
+        Stem for datafiles, local from compilation directory (for inclusion in LaTeX).
 
     Methods
     -------
-    __init__ : Constructor.
-    addsections : add sections to the report
-    texout : TeX output
-    writeto : Writes to a file.
-    compile : compile the TeX
+    __init__
+        Constructor.
+    addsections
+        Add sections to the report.
+    texout
+        Generate LaTeX output.
+    writeto
+        Writes to a file.
+    compile
+        Compile the LaTeX source into a PDF.
 
     """
 
     def __init__(self, fname, dstem, clear_all=False):
-        """Build validation report from a given file with a destination stem (dstem).
-        If clear_all is True, then removes existing files.
-        """
+        """Constructor."""
+
         with fits.open(fname) as f:
             c = f['CONFIG'].data['text']
             n = len(c)
@@ -163,7 +241,20 @@ class ValidationReport():
         self.tex['appendix'] += '\\end{verbatim}}\n\n'
 
     def addsections(self, sectionlist):
-        """Add the list of sections to the report"""
+        """
+        Add the list of sections to the report.
+
+        Parameters
+        ----------
+        sectionlist : list of pyimcom.diagnostics.report.ReportSection
+            Sections to add to the report.
+
+        Returns
+        -------
+        None
+
+        """
+
         for section in sectionlist:
             # header section
             thisresult = '{:16s}'.format(type(section).__name__[:16]) +':' + section.result
@@ -187,11 +278,12 @@ class ValidationReport():
             self.tex['body'] += '\n$$$END ' + type(section).__name__ + '\n\\end{verbatim}\n'
 
     def texout(self):
-        """Returns the entire TeX file as one string."""
+        """Returns the entire LaTeX file as one string."""
+
         return self.tex['preamble'] + self.tex['head'] + self.tex['body'] + self.tex['appendix'] + self.tex['end']
 
     def writeto(self):
-        """Write to a TeX file"""
+        """Write the LaTeX file."""
 
         # clear logfiles here
         for ending in ['aux', 'log', 'toc']:
@@ -201,7 +293,20 @@ class ValidationReport():
             f.write(self.texout())
 
     def compile(self, ntimes=2):
-        """Compile the LaTeX into a PDF (may have to run twice to get all the references)"""
+        """
+        Compile the LaTeX into a PDF.
+
+        Parameters
+        ----------
+        ntimes : int, default=2
+            Number of times to compile (may have to run twice to get all the references).
+
+        Returns
+        -------
+        None
+
+        """
+
         self.writeto()
         pwd = os.getcwd()
         head, tail = os.path.split(self.dstem)

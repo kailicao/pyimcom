@@ -1,3 +1,17 @@
+"""
+This code computes correlations of shapes etc. of star and galaxy catalogs from starcube2.py.
+
+Usage: python correlation.py <band> <instem> <outstem>
+
+Functions
+---------
+_find_psi : Computes rotation angle between pixel grid and RA/Dec coordinates.
+_compute_treecorr_angle : Rotates ellipticities to RA/Dec.
+_compute_GG_corr : Shear-shear correlation.
+_compute_NG_corr : Number-shear correlation.
+_compute_NK_corr : Number-convergence correlation.
+
+"""
 # usage: python correlation.py <band> <instem> <outstem>
 # this code computes correlations of shapes etc. of star and galaxy catalogs from starcube2.py
 
@@ -30,6 +44,27 @@ print('# number of objects', len(d))
 
 
 def _find_psi(ra, dec, ra_ctr, dec_ctr):
+    """
+    Computes rotation angle between pixel grid and RA/Dec coordinates.
+
+    Parameters
+    ----------
+    ra : np.array
+        Array of input right ascensions in degrees.
+    dec : np.array
+        Array of input declinations in degrees. Same shape as `ra`.
+    ra_ctr : float
+        RA of projection center in degrees.
+    dec_ctr : float
+        Dec of projection center in degrees.
+
+    Returns
+    -------
+    psi_r : np.array
+        Rotation angles in radians. Same shape as `ra`.
+
+    """
+
     ra = np.radians(ra)
     dec = np.radians(dec)
     ra_ctr = np.radians(ra_ctr)
@@ -46,6 +81,27 @@ def _find_psi(ra, dec, ra_ctr, dec_ctr):
 
 
 def _compute_treecorr_angle(g1, g2, psi):
+    """
+    Rotates an ellipticity.
+
+    Parameters
+    ----------
+    g1 : float or np.array
+        The + ellipticity in pixel coordinates.
+    g2 : float or np.array
+        The x ellipticity in pixel coordinates.
+    psi : float or np.array
+        The rotation angle in radians.
+
+    Returns
+    -------
+    e1 : float or np.array
+        The + ellipticity in world coordinates.
+    e2 : float or np.array
+        The x ellipticity in world coordinates.
+
+    """
+
     e1 = np.cos(2 * psi) * g1 + np.sin(2 * psi) * g2
     e2 = -np.sin(2 * psi) * g1 + np.cos(2 * psi) * g2
 
@@ -53,6 +109,30 @@ def _compute_treecorr_angle(g1, g2, psi):
 
 
 def _compute_GG_corr(ra, dec, g1, g2, out_f, xy=False):
+    """
+    Wraps TreeCorr shear-shear correlation.
+
+    Parameters
+    ----------
+    ra : np.array
+        Right ascension catalog.
+    dec : np.array
+        Declination catalog.
+    g1 : np.array
+        + shear component catalog.
+    g2 : np.array
+        x shear component catalog.
+    out_f : str
+        Output file name.
+    xy : bool, default=False
+        Use Cartesian mode? (Probably will never need this.)
+
+    Returns
+    -------
+    None
+
+    """
+
     bin_config = dict(
         sep_units='arcmin',
         bin_slop=0.1,
@@ -85,6 +165,28 @@ def _compute_GG_corr(ra, dec, g1, g2, out_f, xy=False):
 
 
 def _compute_NG_corr(ra, dec, g1, g2, out_f):
+    """
+    Wraps TreeCorr density-shear correlation.
+
+    Parameters
+    ----------
+    ra : np.array
+        Right ascension catalog.
+    dec : np.array
+        Declination catalog.
+    g1 : np.array
+        + shear component catalog.
+    g2 : np.array
+        x shear component catalog.
+    out_f : str
+        Output file name.
+
+    Returns
+    -------
+    None
+
+    """
+
     bin_config = dict(
         sep_units='arcmin',
         bin_slop=0.1,
@@ -113,6 +215,26 @@ def _compute_NG_corr(ra, dec, g1, g2, out_f):
 
 
 def _compute_NK_corr(ra, dec, kappa, out_f):
+    """
+    Wraps TreeCorr density-convergence correlation.
+
+    Parameters
+    ----------
+    ra : np.array
+        Right ascension catalog.
+    dec : np.array
+        Declination catalog.
+    kappa : np.array
+        Convergence catalog.
+    out_f : str
+        Output file name.
+
+    Returns
+    -------
+    None
+
+    """
+
     bin_config = dict(
         sep_units='arcmin',
         bin_slop=0.1,

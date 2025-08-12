@@ -1,3 +1,5 @@
+"""This script is deprecated and will be removed."""
+
 # usage: python starcube2.py <filter> <input prefix> <outstem>
 # input file name is <input prefix><filter>_DD_DD_map.fits
 # this code takes the map.fits files and analyzes the star and galaxy grid layers

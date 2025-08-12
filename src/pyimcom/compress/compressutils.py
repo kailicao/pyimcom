@@ -1,3 +1,22 @@
+"""
+Compression tools for PyIMCOM outputs.
+
+Classes
+-------
+CompressedOutput
+    Main class for compresseing a FITS file.
+
+Functions
+---------
+ReadFile
+    Stand-alone function to read a compressed FITS file.
+test
+    Long version of the test.
+test1
+    Short version of the test.
+
+"""
+
 import numpy as np
 from astropy.io import fits
 from copy import deepcopy
@@ -11,41 +30,58 @@ from .i24 import i24compress, i24decompress
 class CompressedOutput:
    """Class for compressing pyimcom output files.
 
-   Properties
+   Parameters
    ----------
-   gzip : is gzipped? (True/False)
-   ftype : file type? current options are 'fits'
-   cprstype : compression type
-   origfile : original file name (when opened)
-   hdul : HDU List of information (initially a deep copy of the input file)
-   cfg : configuration file used to generate this image
+   fname : str
+       File name for uncompressed file.
+   format : str or None, default=None
+       Compression format.
+
+   Attributes
+   ----------
+   gzip : bool
+       Is gzipped?
+   ftype : str
+       File type. Currently the only option is 'fits'.
+   cprstype : str
+       Compression type (for a full file, not currently used).
+   origfile : str
+       Original file name (when opened)
+   hdul : astropy.io.fits.HDUList
+       HDU List of information (initially a deep copy of the input file).
+   cfg : pyimcom.config.Config
+       Configuration file used to generate this image.
 
    Methods
    -------
-   __init__ : Constructor.
-   compress_2d_image : wrapper for 2d image compression (staticmethod)
-   decompress_2d_image : wrapper for 2d image decompression (staticmethod)
-   compress_layer : compresses a layer
-   decompress : decompresses the whole file
-   recompress : recompress previously compressed layers
-   to_file : saves to a file.
-   close : close associated file
+   __init__
+       Constructor.
+   compress_2d_image
+       Wrapper for 2d image compression (staticmethod).
+   decompress_2d_image
+       Wrapper for 2d image decompression (staticmethod).
+   compress_layer
+       Compresses a layer.
+   decompress
+       Decompresses the whole file.
+   recompress
+       Recompress previously compressed layers.
+   to_file
+       Saves to a file.
+   close
+       Close associated file.
 
-   Comments
-   --------
+   Notes
+   -----
    At some point, we may add file formats other than FITS, but not yet.
 
    This object is big since it stores a deep copy of the whole file.
    Therefore, it is not a good idea to open lots of compressed files at once.
+
    """
 
    def __init__(self, fname, format=None):
-      """Builds output from a specified file name and format.
-
-      format options are:
-          'orig' = original (.fits or .fits.gz, no lossy compression)
-          None = determine from file name
-      """
+      """Constructor."""
 
       self.origfile = fname
 
@@ -72,7 +108,26 @@ class CompressedOutput:
 
    @staticmethod
    def compress_2d_image(im, scheme, pars):
-      """Wrapper to compress a 2D image"""
+      """Wrapper to compress a 2D image.
+
+      Parameters
+      ----------
+      im : np.array
+          2D image to be compressed.
+      scheme : str
+          Name of the compression scheme.
+      pars : dict
+          Parameters to be passed to the compression algorithm.
+
+      Returns
+      -------
+      imout : np.array
+          The compressed 2D image, same shape as `im`.
+      ovflow : astropy.io.fits.BinTableHDU
+          A table of values that overflowed the quantization range for the
+          compression scheme. Returns None if not used.
+
+      """
 
       if scheme[:3]=='I24':
          imout, ovflow = i24compress(im,scheme,pars)
@@ -83,7 +138,26 @@ class CompressedOutput:
 
    @staticmethod
    def decompress_2d_image(im, scheme, pars, overflow=None):
-      """Wrapper to decompress a 2D image; overflow table optional"""
+      """Wrapper to decompress a 2D image; overflow table used for some formats.
+
+      Parameters
+      ----------
+      im : np.array
+          The compressed image.
+      scheme : str
+          Name of the compression scheme.
+      pars : dict
+          Parameters to be passed to the compression algorithm.
+      ovflow : astropy.io.fits.BinTableHDU or None
+          (If used.) A table of values that overflowed the quantization range for the
+          compression scheme. Returns None if not used.
+
+      Returns
+      -------
+      imout : np.array
+          The de-compressed 2D image, same shape as `im`.
+
+      """
 
       if scheme[:3]=='I24':
          return i24decompress(im,scheme,pars,overflow=overflow)
@@ -96,9 +170,22 @@ class CompressedOutput:
 
       The pars is a dictionary of parameters that go with that scheme.
       It must be in a format that supports a FITS header.
-
       If scheme is None, then the algorithm will re-compress the layer in the same way was
       done previously (if it was compressed before), otherwise it will do the NULL compression.
+
+      Parameters
+      ----------
+      layerid : int
+          Number of the layer to be compressed.
+      scheme : str or None, optional
+          Name of the compression scheme. Defaults to None (no compression).
+      pars : dict
+          Parameters to be passed to the compression algorithm.
+
+      Returns
+      -------
+      None
+
       """
 
       # this failure to write the EXTNAME shouldn't happen, but just in case
@@ -209,7 +296,21 @@ class CompressedOutput:
             self.compress_layer(ilayer)
 
    def to_file(self, fname, overwrite=False):
-      """Saves to a file. Specify file name (fname) and whether to overwrite (True/False)."""
+      """
+      Saves to a file.
+
+      Parameters
+      ----------
+      fname : str
+          File name.
+      overwrite : bool, default=False
+          Whether to overwrite the file.
+
+      Returns
+      -------
+      None
+
+      """
 
       self.hdul.writeto(fname,overwrite=overwrite)
 
@@ -218,9 +319,11 @@ class CompressedOutput:
       self.hdul.close()
 
    def __enter__(self):
+      """Entry method."""
       return self
 
    def __exit__(self, exc_type, exc_val, exc_tb):
+      """Has context manager automatically close."""
       self.close()
       return False # do not suppress exception
 
@@ -230,9 +333,18 @@ def ReadFile(fname):
    This should read a file just like astropy.io.fits.open(fname, mode='readonly'),
    but works even if the file is compressed using compressutils.
 
-   It can also be used with the Python context manager, e.g.:
-   with ReadFile('my.fits.gz') as f:
-      ...
+   Parameters
+   ----------
+   fname : str
+       File name to read.
+
+   Notes
+   -----
+   This can also be used with the Python context manager, e.g.::
+
+       with ReadFile('my.fits.gz') as f:
+         ...
+
    """
 
    # if this file hasn't been compressed, just pass the handle:
@@ -250,6 +362,18 @@ def ReadFile(fname):
 ### Test functions below here ###
 
 def test(argv):
+   """Test function, meant to be driven from the command line.
+
+   Parameters
+   ----------
+   argv : list of str
+       List of file names: [input_file, out_file_compressed, recovered_file, recompressed_file].
+
+   Returns
+   -------
+   None
+
+   """
 
    t_ = [time.time()]
    with CompressedOutput(argv[1]) as f:
@@ -306,7 +430,20 @@ def test(argv):
       ior.close()
 
 def test1(fname):
-   """Test compression of a file."""
+   """
+   Test compression of a file.
+
+   Parameters
+   ----------
+   fname : str
+       The file to compress/decompress. Order of conversions is
+       `fname` -> ... .cpr.fits.gz -> ... _recovered.fits.
+
+   Returns
+   -------
+   None
+
+   """
 
    fout = fname[:-5] + '.cpr.fits.gz'
    frec = fname[:-5] + '_recovered.fits'
@@ -341,15 +478,22 @@ def test1(fname):
             np.amax(np.abs(f1[0].data[0,j,:,:]-f2[0].data[0,j,:,:]))))
 
 if __name__ == "__main__":
-   """with 1 argument: makes compressed version of a file. .fits input only (no gz)"""
+   """Command line test.
+
+   With 1 argument: makes compressed version of a file. .fits input only (no gz).
+
+   With 5 arguments: main program arguments are::
+
+     input_file out_file_compressed recovered recompressed ncycle
+  
+   ncycle=1 is sufficient to test functionality, but can do more than once to
+   test for memory leaks.
+
+   """
+
    if len(sys.argv)==2:
       test1(sys.argv[1])
 
-   """with 5 arguments: main program arguments are:
-   input_file out_file_compressed recovered recompressed ncycle
-   ncycle=1 is sufficient to test functionality, but can do more than once to
-   test for memory leaks.
-   """
    if len(sys.argv)==6:
       for j in range(int(sys.argv[5])):
          test(sys.argv[:5])

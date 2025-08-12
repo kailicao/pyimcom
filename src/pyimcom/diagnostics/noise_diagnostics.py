@@ -1,18 +1,26 @@
-# This is a report section that is distilled from the code in the
-# noise/ directory.
-#
-# It incorporates functionality that was previously in:
-#   noisespecs.py
-#
-# It also includes the updated functionality from Katherine's analysis (August 2024):
-#
-#  # This version is trying to implement some things to reduce imcom-related correlations, including:
-#  1. only FFTing the interior postage stamp region (throwing out padded regions)
-#  2. convolving noise images with a window function before FFTing
-#
-# I changed the clipping to use the full unique region [bdpad:L+bdpad,bdpad:L+bdpad] in each image.
-#
-# --  C.H.
+"""
+Report section for noise diagnostics.
+
+Classes
+-------
+NoiseReport
+    Noise report section.
+
+Notes
+-----
+This incorporates functionality that was previously in noisespecs.py.
+
+It also includes the updated functionality from the Laliotis et al. analysis (August 2024).
+
+This version is trying to implement some things to reduce imcom-related correlations, including:
+
+#. only FFTing the interior postage stamp region (throwing out padded regions)
+
+#. convolving noise images with a window function before FFTing
+
+We have changed the clipping to use the full unique region ``[bdpad:L+bdpad,bdpad:L+bdpad]`` in each image.
+
+"""
 
 import sys
 import os
@@ -50,14 +58,36 @@ PspecResults = namedtuple(
 )
 
 class NoiseReport(ReportSection):
-    """This is a report section that is distilled from the code in the noise/ directory.
+    """
+    The noise section of the report.
+
+    Inherits from pyimcom.diagnostics.report.ReportSection. Overrides build.
     
-    It incorporates functionality that was previously in:
-      noisespecs.py
-    --  C.H.
     """
 
     def build(self, nblockmax=100, m_ab=23.9, bin_flag=1, alpha=0.9, tarfiles=True):
+        """
+        Builds the noise section of the report.
+
+        Parameters
+        ----------
+        nblockmax : int, default=100
+            Maximum size of mosaic to build.
+        m_ab : float, default=23.9
+            Scaling magnitude (not currently used).
+        bin_flag : int, default=1
+            Whether to bin? (1 = bin 8x8, 0 = do not bin)
+        alpha : float, default=0.9
+            Tukey window width for noise power spectrum.
+        tarfiles : bool, default=True
+            Generate a tarball of the data files?
+
+        Returns
+        -------
+        None
+
+        """
+
         # pulled the reference magnitude back up here
         # also the binning flag (1 = bin 8x8, 0 = do not bin)
 
@@ -102,7 +132,24 @@ class NoiseReport(ReportSection):
     # --- noisespec --- #
 
     def build_noisespec(self, m_ab, bin_flag, alpha):
-        """adapted from noisespec.py"""
+        """
+        Computes the noise power spectrum.
+
+        Parameters
+        ----------
+        m_ab : float
+            Reference star brightness (not used)
+        bin_flag : int, default=1
+            Whether to bin? (1 = bin 8x8, 0 = do not bin)
+        alpha : float, default=0.9
+            Tukey window width for noise power spectrum.
+
+        Returns
+        -------
+        str
+            Status string ('Completed').
+
+        """
 
         pars = [] # list of parameters, replaces global construction when wrapped
 
@@ -284,24 +331,30 @@ class NoiseReport(ReportSection):
     def measure_power_spectrum(noiseframe, L, norm=1., bin=True, win=True, alpha=0.9):
         """
         Measure the 2D power spectrum of image.
-        :param noiseframe: 2D ndarray
-         the input image to measure the power spectrum of.
-         in this case, a noise frame from the simulations
-        :L: the length of the FFT (must be a multiple of 8)
-        :norm: the normalization to use (power spectrum is |FFT|^2/norm)
-        :param bin: True/False
-         Whether to bin the 2D spectrum.
-         Default=True, bins spectrum into L/8 x L/8 image.
-                 (Potential extra rows are cut off.)
-        :param window: True/False
-         Whether to convolve the noise frame with a window function.
-         Default is false, so window is a top hat function
-         If true, convolves with a Tukey function with 90% of the data
-           inside the cosine region
-       :param alpha: resets Tukey window width
 
-        :return: 2D ndarray, ps
-         the 2D power spectrum of the image.
+        Parameters
+        ----------
+        noiseframe : np.array
+            The 2D input image to measure the power spectrum of.
+            In this case, a noise frame from the simulations
+        L : int
+            The length of the FFT (must be a multiple of 8).
+        norm : float, default=1.
+            The normalization to use (power spectrum is |FFT|^2/norm).
+        bin : bool, default=True
+            Whether to bin the 2D spectrum.
+            Default=True, bins spectrum into L/8 x L/8 image.
+            Potential extra rows are cut off.
+        win : bool, default=True
+            Whether to convolve the noise frame with a Tukey window function.
+        alpha : float, default=0.9
+            Tukey window parameter.
+
+        Returns
+        -------
+        np.array
+            The 2D power spectrum of the image.
+
         """
 
         # get the window function and its normalization
@@ -324,13 +377,21 @@ class NoiseReport(ReportSection):
     def _get_wavenumbers(window_length, num_radial_bins):
         """
         Calculate wavenumbers for the input image.
-        :param window_length: integer
-         the length of one axis of the image.
-        :param num_radial_bins: integer
-         number of radial bins the image should be averaged into
-        :return: 1D np array, kmean
-         the wavenumbers for the image
+
+        Parameters
+        ----------
+        window_length : int
+            The length of one axis of the image.
+        num_radial_bins: int
+            Number of radial bins the image should be averaged into.
+
+        Returns
+        -------
+        kmean : np.array
+            1D array of the wavenumbers for the image
+
         """
+
         k = np.fft.fftshift(np.fft.fftfreq(window_length))
         kx, ky = np.meshgrid(k, k)
         k = np.sqrt(kx ** 2 + ky ** 2)
@@ -345,19 +406,20 @@ class NoiseReport(ReportSection):
 
         Parameters
         ----------
-        image : 2D ndarray
-            Input image.
+        image : np.array
+            Input image, 2D.
         num_radial_bins : int
             Number of radial bins in profile.
 
         Returns
         -------
-        r : ndarray
+        r : np.array
             Value of radius at each point
-        radial_mean : ndarray
+        radial_mean : np.array
             Mean intensity within each annulus. Main result
-        radial_err : ndarray
+        radial_err : np.array
             Standard error on the mean: sigma / sqrt(N).
+
         """
 
         ny, nx = image.shape
@@ -380,16 +442,28 @@ class NoiseReport(ReportSection):
     @staticmethod
     def get_powerspectra(noiseframe, L, norm, num_radial_bins, use_slice=-1, bin_flag=1, win=True, alpha=0.9):
         """
-        Calculate the azimuthally-averaged 1D power spectrum of the image
-        :param noiseframe: 2D ndarray
-            the input image to be averaged over
-        :L: length of FFT (must be a multiple of 8)
-        :param norm: normalization of |FFT|^2->power spectrum
-        :param num_radial_bins: number of bins, should match bin number in get_wavenumbers
-        :param use_slice: noise slice number used
-        :param bin_flag: binning? (1=yes, 0=no)
+        Calculate the azimuthally-averaged 1D power spectrum of the image.
 
-        :return: named tuple, results
+        Parameters
+        ----------
+        noiseframe: np.array
+            The 2D input image to be averaged over.
+        L : int
+            Length of FFT (must be a multiple of 8).
+        norm : float
+            Normalization of |FFT|^2->power spectrum.
+        num_radial_bins : int
+            Number of bins, should match bin number in get_wavenumbers
+        use_slice : int
+            Noise slice number used.
+        bin_flag : int
+            Binning? (1=yes, 0=no).
+
+        Returns
+        -------
+        results : collection.namedtuple
+            Power spectrum results.
+
         """
 
         noise = noiseframe.copy()
@@ -415,12 +489,18 @@ class NoiseReport(ReportSection):
     # --- average_spectra --- #
 
     def average_spectra(self, bin_flag):
-        """Based on average_spectra.py:
+        """
+        Averages together all the power spectra in one band.
 
-        Original version:
-        # Program to average together all the power spectra in one band.
-        # Usage format is python average_spectra.py <filter> <inpath> <outpath>
-        #KL: add MC binning to this?
+        Parameters
+        ----------
+        bin_flag
+            Whether to bin? (1 = bin 8x8, 0 = do not bin)
+
+        Returns
+        -------
+        None
+
         """
 
         for iblock in range(self.nblock**2):
@@ -482,7 +562,19 @@ class NoiseReport(ReportSection):
 
     # --- figures --- #
     def gen_overview_fig(self):
-        """Makes a simple overview figure, returns its filename"""
+        """
+        Makes a simple overview figure.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        str
+            File name of the figure written.
+
+        """
 
         filter = Settings.RomanFilters[self.cfg.use_filter][0]
         print(self.outslab)

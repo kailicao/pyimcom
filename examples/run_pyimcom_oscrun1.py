@@ -1,4 +1,5 @@
-"""This is a script to run one of the blocks.
+"""
+This is a script to run one of the blocks.
 
 Usage is python3 -m pyimcom.run_pyimcom_oscrun1 <config> <block> [draw_only]
 
@@ -9,6 +10,7 @@ This version is for use on OSC: the temporary path is set to the $TMPDIR variabl
 modify this line.
 
 The "0" block also generates the truth catalog.
+
 """
 
 

@@ -1,4 +1,12 @@
-# Mosaic image
+"""
+Mosaic image for display in a report.
+
+Classes
+-------
+MosaicImage
+    Report section with mosaic image.
+
+"""
 
 import numpy as np
 
@@ -6,9 +14,29 @@ from .report import ReportSection
 from ..pictures.genpic import make_picture_1band
 
 class MosaicImage(ReportSection):
-    """Builds the simulated star section of the report."""
+    """
+    Builds the simulated star section of the report.
+
+    Inherits from pyimcom.diagnostics.report.ReportSection. Overrides build.
+
+    """
 
     def build(self, nblockmax=100):
+        """
+        Builds the mosaic image and associated LaTeX.
+
+        Parameters
+        ----------
+        nblock : int, default=100
+            Maximum size of mosaic to build. If larger than the nblock in the
+            configuration, builds the whole mosaic.
+
+        Returns
+        -------
+        None
+
+        """
+
         # which blocks to take
         n = min(nblockmax, self.cfg.nblock)
         ns = self.cfg.n1*self.cfg.n2
