@@ -64,9 +64,9 @@ def map_sca2sca(target_wcs, ref_wcs, pad=0, dtype=np.float64):
        WCS that we want to 'map to' (we will make a map of the full nside x nside region).
    ref_wcs : astropy.wcs.WCS
        WCS of the reference exposure that we want to 'map from'
-   pad : int, default=0
+   pad : int, optional
        Number of pixels by which to pad the input *and* output exposures.
-   dtype : type, default=np.float64
+   dtype : type, optional
        Ouput data type for xf and yf (note is_in_ref is always Boolean).
 
    Returns
@@ -101,9 +101,9 @@ def get_overlap_matrix(list_of_wcs, pad=0, verbose=False):
    ----------
    list_of_wcs : list of astropy.wcs.WCS
        The list of WCSs for each exposure; length N.
-   pad : int, default=0
+   pad : int, optional
        Number of pixels to pad around each side.
-   verbose : bool, default=False
+   verbose : bool, optional
        Whether to print details to the terminal.
 
    Returns
@@ -170,4 +170,3 @@ def str2dirstem(st):
    stdir = ''
    for k in range(N-1): stdir += parts[k] + '/'
    return(stdir,parts[-1])
-

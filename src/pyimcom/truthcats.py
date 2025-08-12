@@ -316,4 +316,3 @@ def gen_truthcats_from_cfg(cfg):
 if __name__ == '__main__':
     #gen_truthcats(sys.argv)
     gen_truthcats([None, 1, '/fs/scratch/PCON0003/cond0007/itertest2-out/itertest2_F', 'pyimcom/temp/test1'])
-

@@ -125,7 +125,7 @@ class ValidationReport():
         Block file name.
     dstem : str
         Stem for output files.
-    clear_all : bool, default=False
+    clear_all : bool, optional
         Removes existing files.
 
     Attributes
@@ -298,7 +298,7 @@ class ValidationReport():
 
         Parameters
         ----------
-        ntimes : int, default=2
+        ntimes : int, optional
             Number of times to compile (may have to run twice to get all the references).
 
         Returns

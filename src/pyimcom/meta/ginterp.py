@@ -34,11 +34,11 @@ def InterpMatrix(Rsearch, samp, x_out, y_out, Cov, kappa=1.e-10, deweight=1.e24,
         Fractional pixel positions in y (0 to 1, inclusive), shape (Npts,).
     Cov : np.array of float
         Covariance matrix of extra smoothing. length 3, array-like [Cxx, Cxy, Cyy].
-    kappa : float, default=1.e-10
+    kappa : float, optional
         Regularization parameter to prevent singular matrices.
-    deweight : float, default=1.e24
+    deweight : float, optional
         Parameter to de-weight points outside the search radius (no longer used, still accepted for legacy reasons).
-    verbose : bool, default=False
+    verbose : bool, optional
         Print timing information?
 
     Returns
@@ -153,9 +153,9 @@ def MultiInterp(in_array, in_mask, out_size, out_origin, out_transform, Rsearch,
         Sampling rate of input image (samples per FWHM).
     Cov : np.array
         Covariance matrix of extra smoothing. length 3, flattened array-like [Cxx, Cxy, Cyy].
-    kappa : float, default=1.e-10
+    kappa : float, optional
         Regularization parameter to prevent singular matrices.
-    deweight : float, default=1.e24
+    deweight : float, optional
         Parameter to de-weight points outside the search radius. Deprecated.
 
     Returns

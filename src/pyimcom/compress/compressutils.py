@@ -34,7 +34,7 @@ class CompressedOutput:
    ----------
    fname : str
        File name for uncompressed file.
-   format : str or None, default=None
+   format : str or None, optional
        Compression format.
 
    Attributes
@@ -303,7 +303,7 @@ class CompressedOutput:
       ----------
       fname : str
           File name.
-      overwrite : bool, default=False
+      overwrite : bool, optional
           Whether to overwrite the file.
 
       Returns

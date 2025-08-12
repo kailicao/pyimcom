@@ -31,7 +31,7 @@ def gen_starcube_nonoise(infile_fcn, outstem, nblockmax=100):
         A function that returns the input file path given block (ix,iy).
     outstem : str
         Output file stem.
-    nblockmax : int, default=100
+    nblockmax : int, optional
         Maximum number of blocks on each axis of a mosaic.
 
     Returns

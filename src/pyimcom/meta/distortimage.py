@@ -31,7 +31,7 @@ class MetaMosaic:
     ----------
     fname : str
         File name of block to build (sub-mosaic will be a 3x3 block region centered on this).
-    verbose : bool, default=False
+    verbose : bool, optional
         Whether to print diagnostics.
 
     Attributes
@@ -209,19 +209,19 @@ class MetaMosaic:
         ----------
         N : int
             Size of the output image (shape will be (`N`, `N`)).
-        jac : np.array or None, default=None
+        jac : np.array or None, optional
             2x2 Jacobian for transformation (None defaults to the identity).
-        psfgrow : float, default=1.
+        psfgrow : float, optional
             Factor (in linear scale) by which to grow the PSF.
-        oversamp : float, default=1.
+        oversamp : float, optional
             Up-sampling factor (e.g., 1 = preserve pixel scale).
-        fidelity_min : float, default=30.
+        fidelity_min : float, optional
             Fidelity cut (in dB) for which pixels to use.
-        Rsearch : float, default=6.
+        Rsearch : float, optional
             Search radius in interpolation, in units of coadded pixels.
-        select_layers : np.array of int or None, default=None
+        select_layers : np.array of int or None, optional
             If given, only process these layers.
-        verbose : bool, default=False
+        verbose : bool, optional
             Print diagnostics to terminal.
 
         Returns
@@ -375,7 +375,7 @@ def shearimage_to_fits(im, fname, layers=None, overwrite=False):
         File name for output.
     layers : np.array of int
         Which layers to include.
-    overwrite : bool, default=False
+    overwrite : bool, optional
         Whether to overwrite an existing file.
 
     Returns

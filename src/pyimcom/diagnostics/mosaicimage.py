@@ -27,7 +27,7 @@ class MosaicImage(ReportSection):
 
         Parameters
         ----------
-        nblock : int, default=100
+        nblock : int, optional
             Maximum size of mosaic to build. If larger than the nblock in the
             configuration, builds the whole mosaic.
 

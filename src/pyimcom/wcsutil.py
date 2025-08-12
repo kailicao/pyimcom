@@ -130,7 +130,7 @@ class LocWCS:
     ----------
     gwcs : gwcs.WCS
         The generalized WCS.
-    N : int, default=4088
+    N : int, optional
         Side length of the array.
 
     Attributes
@@ -204,11 +204,11 @@ class LocWCS:
 
         Parameters
         ----------
-        p_order : int, default=3
+        p_order : int, optional
             Order of polynomial to fit.
-        nq : int, default=100
+        nq : int, optional
             Grid size for fitting WCS (nq x nq).
-        basis : str, default='simple'
+        basis : str, optional
             Type of basis to use in fitting the WCS.
         verbose : bool
             Print lots of diagnostics to the terminal.
@@ -393,7 +393,7 @@ class PyIMCOM_WCS:
     ----------
     inwcs : fits.Header or astropy.wcs.WCS or gwcs.wcs.WCS
         The input WCS.
-    noconvert : bool, default=False
+    noconvert : bool, optional
         Do not internally convert WCS type.
 
     Methods

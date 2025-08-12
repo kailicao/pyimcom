@@ -59,7 +59,7 @@ class Timer:
 
         Parameters
         ----------
-        reset : bool, default=False
+        reset : bool, optional
             Whether to reset tstart.
 
         Returns
@@ -167,7 +167,7 @@ class Config:
 
     Parameters
     ----------
-    cfg_file : str or None, default=''
+    cfg_file : str or None, optional
         File path to or text content of a JSON configuration file.
         The default is ''. This uses pyimcom/configs/default_config.json.
         Set cfg_file=None to build a configuration from scratch.
@@ -401,7 +401,7 @@ class Config:
         ----------
         code : str
             Code segment to execute.
-        newline : bool, default=True
+        newline : bool, optional
             Whether to print a blank line when finished.
 
         Returns
@@ -706,7 +706,7 @@ class Config:
 
         Parameters
         ----------
-        fname : str or None, default=''
+        fname : str or None, optional
             JSON configuration file name to save to.
             The default is ''. This overwrites pyimcom/configs/default_config.json.
             Set fname=None to get a text version of the configuration.
@@ -804,7 +804,7 @@ def format_axis(ax: 'mpl.axes._axes.Axes', grid_on: bool = True) -> None:
     ----------
     ax : mpl.axes._axes.Axes
         Panel to be formatted.
-    grid_on : bool, default=True
+    grid_on : bool, optional
         Whether to add grid to the panel.
 
     Returns

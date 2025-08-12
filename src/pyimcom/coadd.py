@@ -167,11 +167,11 @@ class InImage:
 
         Parameters
         ----------
-        sp_res : int, default=90
+        sp_res : int, optional
             Resolution of the sparse grid.
-        relax_coef : float, default=1.05
+        relax_coef : float, optional
             Coefficient to create enough space for input pixels.
-        visualize : bool, default=False
+        visualize : bool, optional
             Whether to visualize the partition process and results.
 
         Returns
@@ -390,8 +390,8 @@ class InImage:
         ----------
         inArray : np.array
             Input PSF array to be smeared. Shape (ny, nx)
-        tophatwidth : float, default=0.
-        gaussiansigma : float, default=0.
+        tophatwidth : float, optional
+        gaussiansigma : float, optional
             Both in units of the pixels given (not native pixel).
 
         Returns
@@ -492,7 +492,7 @@ class InImage:
         ----------
         psf_compute_point : np.array
             Length 2 array, point to compute PSF in RA and Dec.
-        use_shortrange : bool, default=False
+        use_shortrange : bool, optional
             If True and PSFSPLIT is set in the configuration file, then pulls only the short-range PSF G^(S).
 
         Returns
@@ -639,11 +639,11 @@ class InStamp:
 
         Parameters
         ----------
-        pivot : (float or None, float or None), default=(None, None)
+        pivot : (float or None, float or None), optional
             Pivot position in the output block coordinates.
             If None in one direction, select input pixels according to the other;
             if None in both directions, select all input pixels.
-        radius : float or None, default=None
+        radius : float or None, optional
             Select input pixels within this radius.
 
         Returns
@@ -675,7 +675,7 @@ class InStamp:
 
         Parameters
         ----------
-        sim_mode : bool, default=False
+        sim_mode : bool, optional
             Whether to count references without actually making inpsfgrp.
             See the docstring of psfutil.SysMatA._compute_iisubmats.
 
@@ -802,7 +802,7 @@ class OutStamp:
 
         Parameters
         ----------
-        visualize : bool, default=False
+        visualize : bool, optional
             Whether to visualize the process.
 
         Returns
@@ -889,11 +889,11 @@ class OutStamp:
 
         Parameters
         ----------
-        visualize : bool, default=False
+        visualize : bool, optional
             Whether to visualize the process.
-        save_abc : bool, default=False
+        save_abc : bool, optional
             Whether to save system matrices.
-        save_t : bool, default=False
+        save_t : bool, optional
             Whether to save coaddition matrices.
 
         Returns
@@ -912,9 +912,9 @@ class OutStamp:
 
         Parameters
         ----------
-        visualize : bool, default=False
+        visualize : bool, optional
             Whether to visualize the process.
-        save_abc : bool, default=False
+        save_abc : bool, optional
             Whether to save system matrices.
 
         Returns
@@ -1109,13 +1109,13 @@ class OutStamp:
             The array to apply the trapezoid filter. Shape (..., ny, nx).
         fade_kernel : int
             Half the width of the trapezoid filter.
-        recover_mode : bool, default=False
+        recover_mode : bool, optional
             Whether to recover faded boundaries.
-        pad_widths : (int, int, int, int), default=(0, 0, 0, 0)
+        pad_widths : (int, int, int, int), optional
             Padding width on each side (order: bottom, top, left, right).
-        do_sides : str, default='BTLR'
+        do_sides : str, optional
             Which sides to apply the trapezoid filter.
-        use_trunc_sinc : bool, default=True
+        use_trunc_sinc : bool, optional
             Whether to use the truncated sinc function.
 
         Returns
@@ -1162,11 +1162,11 @@ class OutStamp:
 
         Parameters
         ----------
-        visualize : bool, default=False
+        visualize : bool, optional
             Whether to visualize the process.
-        save_t : bool, default=False
+        save_t : bool, optional
             Whether to save coaddition matrices.
-        use_trunc_sinc : bool, default=True
+        use_trunc_sinc : bool, optional
             Argument for coadd_utils.trapezoid.
 
         Returns
@@ -1388,9 +1388,9 @@ class Block:
     ----------
     cfg : Config, optional
         Configuration for this Block. The default is None.
-    this_sub : int, default=0
+    this_sub : int, optional
         Number determining the location of this Block in the mosaic.
-    run_coadd : bool, default=True
+    run_coadd : bool, optional
         Whether to coadd this block.
         Turn this off if you want to perform the procedure manually.
 
@@ -1730,7 +1730,7 @@ class Block:
             Vertical OutStamp index.
         i_st : int
             Horizontal OutStamp index.
-        sim_mode : bool, default=False
+        sim_mode : bool, optional
             Whether to count references without actually making inpsfgrp.
             See the docstring of psfutil.SysMatA._compute_iisubmats.
 
@@ -1775,7 +1775,7 @@ class Block:
 
         Parameters
         ----------
-        sim_mode : bool, default=False
+        sim_mode : bool, optional
             Whether to count references without actually making inpsfgrp.
             See the docstring of psfutil.SysMatA._compute_iisubmats.
 
@@ -1897,7 +1897,7 @@ class Block:
 
         Parameters
         ----------
-        is_final : bool, default=False
+        is_final : bool, optional
             Whether this is the final (i.e., not intermediate) output.
             If so, recover the faded block boundaries.
 

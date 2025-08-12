@@ -103,9 +103,9 @@ def cmapscale(inarray, srange, cmap=None, stretch='asinh'):
         The array to be mapped. Shape (ny,nx).
     srange : (float, float)
         The minimum and maximum values to be represented (values beyond this will saturate).
-    cmap : str or None, default=None
+    cmap : str or None, optional
         If string, uses that color scale; if None, makes a black and white image.
-    stretch : str, default='asinh'
+    stretch : str, optional
         The stretch. Current options are 'linear' and 'asinh'.
 
     Returns
@@ -144,19 +144,19 @@ def make_picture_1band(fn, outfile, layer=0, bounds=None, binning=1, cmap=None, 
         File stem (without the _DD_DD.fits).
     outfile : str
         Output file name.
-    layer : int, default=0
+    layer : int, optional
         Which image layer to use (default is the Science layer).
-    bounds : list or None, default=None
+    bounds : list or None, optional
         Boundary of the output image. If a list, should be [ymin,ymax,xmin,xmax], to indicate the range
         xmin<=x<xmax, ymin<=y<ymax. If None (default), draws the whole mosaic.
-    binning : int, default=1
+    binning : int, optional
         Binning relative to the FITS images. Larger binning reduces size of output image.
         The default is 1, corresponding to native resolution.
-    cmap : str or None, default=None
+    cmap : str or None, optional
         Color map (uses matplotlib names; None -> black & white).
-    srange : (float, float), default=(-8.,600.)
+    srange : (float, float), optional
         Minimum and maximum of the color scale.
-    stretch : str, default='asinh'
+    stretch : str, optional
         Stretch type (currently: 'asinh' or 'linear')
 
     Returns

@@ -164,13 +164,13 @@ class OutImage:
 
         Parameters
         ----------
-        load_mode : bool, default=True
+        load_mode : bool, optional
             If True, load data from FITS file (if not already loaded);
             if False, remove current data from memory (if data exist).
-        save_file : bool, default=False
+        save_file : bool, optional
             Only used when `load_mode` == False. If (`save_file` ==) True,
             save current data to FITS file (overwriting the existing file).
-        auto_to_all : bool, default=False
+        auto_to_all : bool, optional
             Only used when load_mode == False and save_file == True.
             If (auto_to_all ==) True, change 'PADSIDES' from 'auto' to 'all'
             in the 'CONFIG' HDU of FITS file.
@@ -210,7 +210,7 @@ class OutImage:
         ----------
         layer : str
             Name of the layer to be extracted.
-        j_out : int or None, default=0
+        j_out : int or None, optional
             Index of the output PSF. If None, return results based on all output PSFs.
 
         Returns
@@ -243,9 +243,9 @@ class OutImage:
 
         Parameters
         ----------
-        flat : bool, default=False
+        flat : bool, optional
             Whether to read the flat version of T_weightmap.
-        j_out : int or None, default=0
+        j_out : int or None, optional
             Only used when `flat` is False. Index of the output PSF.
             If None, return results based on all output PSFs.
 
@@ -311,7 +311,7 @@ class OutImage:
         ----------
         outmap : str
             Name of the output map to be extracted.
-        j_out : int or None, default=0
+        j_out : int or None, optional
             Index of the output PSF.
             If None, return results based on all output PSFs.
 
@@ -361,7 +361,7 @@ class OutImage:
             Neighboring output image (block) who shares data with "me."
         direction : str
             Which side to update. Must be 'left', 'right', 'bottom', or 'top'.
-        add_mode : bool, default=True
+        add_mode : bool, optional
             If True, update "my" data by adding neighbor's to "mine;"
             if False, replace "my" data with neighbor's.
 
@@ -660,9 +660,9 @@ class NoiseAnal:
 
         Parameters
         ----------
-        padding : bool, default=False.
+        padding : bool, optional
             Whether to include padding postage stamps. (to be implemented)
-        bin_ : bool, default=True
+        bin_ : bool, optional
             Whether to bin the 2D spectrum into L/8 x L/8 image.
             Currently this is ignored, as only bin_ == True is supported.
 
@@ -751,7 +751,7 @@ class StarsAnal:
     ----------
     outim : OutImage
         Output image to analyze.
-    layer : str, default='gsstar14'
+    layer : str, optional
         Layer name of injected stars to analyze.
 
     Methods
@@ -974,7 +974,7 @@ class _BlkGrp:
 
         Parameters
         ----------
-        overwrite : bool, default=False
+        overwrite : bool, optional
             Whether to overwrite existing results.
 
         Returns
@@ -994,7 +994,7 @@ class _BlkGrp:
 
         Parameters
         ----------
-        overwrite : bool, default=False
+        overwrite : bool, optional
             Whether to overwrite existing results.
 
         Returns
@@ -1031,7 +1031,7 @@ class _BlkGrp:
 
         Parameters
         ----------
-        overwrite : bool, default=False
+        overwrite : bool, optional
             Whether to overwrite existing results.
 
         Returns
@@ -1068,9 +1068,9 @@ class _BlkGrp:
 
         Parameters
         ----------
-        bins : int, default=5
+        bins : int, optional
             Number of bins for 1D power spectra.
-        overwrite : bool, default=False
+        overwrite : bool, optional
             Whether to overwrite existing results.
 
         Returns
@@ -1171,9 +1171,9 @@ class _BlkGrp:
 
         Parameters
         ----------
-        layer : str, default='gsstar14'
+        layer : str, optional
             Layer name of injected stars to analyze.
-        overwrite : bool, default=False
+        overwrite : bool, optional
             Whether to overwrite existing results.
 
         Returns
@@ -1328,9 +1328,9 @@ class Suite(_BlkGrp):
     ----------
     cfg : Config
         Configuration used for this output mosaic.
-    prime : int, default=691
+    prime : int, optional
         Prime number for hashing (Paper IV).
-    nrun : int, default=16
+    nrun : int, optional
         Number of coadded blocks (Paper IV).
 
     Methods

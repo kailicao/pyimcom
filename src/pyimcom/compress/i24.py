@@ -236,7 +236,7 @@ class I24Cube:
    pars : dict
        Parameters for the compression scheme. The possible keys are
        VMIN, VMAX, SOFTBIAS, DIFF, ALPHA, BITKEEP, and REORDER.
-   overflow : astropy.io.fits.BinTableHDU or None, default=None
+   overflow : astropy.io.fits.BinTableHDU or None, optional
        Overflow table (y,x,value). Needed if a compressed image is given as input.
 
    Attributes

@@ -71,15 +71,15 @@ class NoiseReport(ReportSection):
 
         Parameters
         ----------
-        nblockmax : int, default=100
+        nblockmax : int, optional
             Maximum size of mosaic to build.
-        m_ab : float, default=23.9
+        m_ab : float, optional
             Scaling magnitude (not currently used).
-        bin_flag : int, default=1
+        bin_flag : int, optional
             Whether to bin? (1 = bin 8x8, 0 = do not bin)
-        alpha : float, default=0.9
+        alpha : float, optional
             Tukey window width for noise power spectrum.
-        tarfiles : bool, default=True
+        tarfiles : bool, optional
             Generate a tarball of the data files?
 
         Returns
@@ -139,9 +139,9 @@ class NoiseReport(ReportSection):
         ----------
         m_ab : float
             Reference star brightness (not used)
-        bin_flag : int, default=1
+        bin_flag : int, optional
             Whether to bin? (1 = bin 8x8, 0 = do not bin)
-        alpha : float, default=0.9
+        alpha : float, optional
             Tukey window width for noise power spectrum.
 
         Returns
@@ -339,15 +339,15 @@ class NoiseReport(ReportSection):
             In this case, a noise frame from the simulations
         L : int
             The length of the FFT (must be a multiple of 8).
-        norm : float, default=1.
+        norm : float, optional
             The normalization to use (power spectrum is |FFT|^2/norm).
-        bin : bool, default=True
+        bin : bool, optional
             Whether to bin the 2D spectrum.
             Default=True, bins spectrum into L/8 x L/8 image.
             Potential extra rows are cut off.
-        win : bool, default=True
+        win : bool, optional
             Whether to convolve the noise frame with a Tukey window function.
-        alpha : float, default=0.9
+        alpha : float, optional
             Tukey window parameter.
 
         Returns

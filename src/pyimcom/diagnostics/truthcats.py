@@ -231,4 +231,3 @@ for key in fullTables.keys:
 output_filename = 'multi_table.fits'
 hdul.writeto(output_filename, overwrite=True)
 print(f"FITS file '{output_filename}' with multiple tables created.")
-

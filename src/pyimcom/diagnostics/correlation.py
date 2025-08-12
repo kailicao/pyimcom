@@ -124,7 +124,7 @@ def _compute_GG_corr(ra, dec, g1, g2, out_f, xy=False):
         x shear component catalog.
     out_f : str
         Output file name.
-    xy : bool, default=False
+    xy : bool, optional
         Use Cartesian mode? (Probably will never need this.)
 
     Returns

@@ -106,7 +106,7 @@ def run_imsubtract(config_file, display=None):
     ----------
     config_file : str
         Location of a configuration file.
-    display : str or None, default=None
+    display : str or None, optional
         Display location for intermediate steps.
 
     Notes

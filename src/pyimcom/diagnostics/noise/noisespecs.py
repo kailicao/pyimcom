@@ -155,7 +155,7 @@ for iblock in range(nstart,nstart+nblockuse):
           ----------
           noiseframe : np.array
               2D array; the input image to measure the power spectrum of.
-          bin : bool, default=True
+          bin : bool, optional
               Whether to bin the 2D spectrum.
               Default=True, bins spectrum into L/8 x L/8 image.
               (Potential extra rows are cut off.)

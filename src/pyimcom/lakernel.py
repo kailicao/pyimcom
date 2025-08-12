@@ -170,7 +170,7 @@ class EigenKernel(_LAKernel):
 
         Parameters
         ----------
-        nbis : int, default=13
+        nbis : int, optional
             Number of bisections.
 
         Returns
@@ -369,9 +369,9 @@ def conjugate_gradient(A: np.array, b: np.array, rtol: float = 1.5e-3,
         System matrix A, shape (n,n)
     b : np.array
         Column vector b, shape (n,).
-    rtol : float, default=1.5e-3
+    rtol : float, optional
         Relative tolerance.
-    maxiter : int, default=30
+    maxiter : int, optional
         Maximum number of iterations.
 
     Returns
@@ -524,9 +524,9 @@ class IterKernel(_LAKernel):
             System matrix -B/2 (for a single target PSF). Shape (n,n).
         relevant_matrix : np.array
             Boolean array indicating whether to use an input pixel for an output pixel. Shape (m,n).
-        rtol : float, default=1.5e-3
+        rtol : float, optional
             Relative tolerance.
-        maxiter : int, default=30
+        maxiter : int, optional
             Maximum number of iteration.
 
         Returns
@@ -556,7 +556,7 @@ class IterKernel(_LAKernel):
 
         Parameters
         ----------
-        exact_UC : bool, default=False
+        exact_UC : bool, optional
             Whether to use exact expression for U/C.
             The default is False, as this is slow and the gain is very small.
 
@@ -615,7 +615,7 @@ class IterKernel(_LAKernel):
 
         Parameters
         ----------
-        exact_UC : bool, default=True
+        exact_UC : bool, optional
             Whether to use exact expression for U/C.
             The default is True, as the approximation does not work.
             KC: Please avoid this whenever possible as this is SUPER slow.

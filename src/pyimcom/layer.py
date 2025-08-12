@@ -94,7 +94,7 @@ class GalSimInject:
             Observation table (needed for some data formats).
         sca_nside : int
             Side length of the SCA (4088 for Roman).
-        extraargs : dict or None, default=None
+        extraargs : dict or None, optional
             If a dictionary, then contains more parameters to pass to some of the functions..
 
         Returns
@@ -360,7 +360,7 @@ class GalSimInject:
             Side length of the SCA (4088 for Roman).
         inpsf_oversamp : int or float
             PSF oversampling factor.
-        extraargs : list of str, default=[]
+        extraargs : list of str, optional
             List of extra arguments to pass for drawing galaxies.
             An example would be ``extraargs=['seed=12345', 'rot=90', 'shear=0.2:0.1']``.
 
@@ -762,7 +762,7 @@ class Mask:
             Observation ID, SCA pair.
         pcut : float
             Probability that any given pixel is hit.
-        hitinfo : dict or None, default=None
+        hitinfo : dict or None, optional
             For future expansion, right now always use None.
 
         Returns

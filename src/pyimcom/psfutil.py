@@ -103,11 +103,11 @@ class OutPSF:
             Size of output to generate.
         ldp : float
             Diffraction spot width lambda/D in pixels.
-        obsc : float, default=0.
+        obsc : float, optional
             Fractional linear obscuration.
-        tophat_conv : float, default=0.
+        tophat_conv : float, optional
             Convolution with a square top-hat of the given full width.
-        sigma : float, default=0.
+        sigma : float, optional
             Convolution with a Gaussian of the given 1 sigma width.
 
         Returns
@@ -164,11 +164,11 @@ class OutPSF:
             Size of output to generate.
         ldp : float
             Diffraction spot width lambda/D in pixels.
-        tophat_conv : float, default=0.
+        tophat_conv : float, optional
             Convolution with a square top-hat of the given full width.
-        sigma : float, default=0.
+        sigma : float, optional
             Convolution with a Gaussian of the given 1 sigma width.
-        features : int, default=0
+        features : int, optional
             Flags controlling which messy features to add.
 
         Returns
@@ -372,15 +372,15 @@ class PSFGrp:
 
     Parameters
     ----------
-    in_or_out : bool, default=True
+    in_or_out : bool, optional
         True if input PSF group, False if output PSF group.
     inst : pyimcom.coadd.InStamp
         Input stamp, must be provided when in_or_out is True.
     blk : pyimcom.coadd.Block
         Block,  must be provided when in_or_out is False.
-    verbose : bool, default=False
+    verbose : bool, optional
         Whether to print additional information.
-    visualize : bool, default=False
+    visualize : bool, optional
         Whether to visualize PSFs and sampling positions.
 
     Methods
@@ -418,13 +418,13 @@ class PSFGrp:
 
         Parameters
         ----------
-        npixpsf : int, default=48
+        npixpsf : int, optional
             Size of PSF postage stamp in native pixels.
-        oversamp : int, default=8
+        oversamp : int, optional
             PSF oversampling factor relative to native pixel scale.
-        dtheta : float, default=6.944444444444445e-06
+        dtheta : float, optional
             Output pixel scale in degrees. The default is 0.025/3600 (corresponds to 0.025 arcsec)).
-        psfsplit : bool, default=False
+        psfsplit : bool, optional
             Is PSF splitting implemented in this run?
 
         Returns
@@ -554,7 +554,7 @@ class PSFGrp:
         outpix2world2inpix : method, optional
             InImage outpix2world2inpix of the appropriate InImage instance.
             The default is None, meaning not to rotate the sampling positions.
-        visualize : bool, default=False
+        visualize : bool, optional
             Whether to visualize PSFs and sampling positions.
 
         Returns
@@ -614,7 +614,7 @@ class PSFGrp:
 
         Parameters
         ----------
-        visualize : bool, default=False
+        visualize : bool, optional
             Whether to visualize PSFs and sampling positions.
 
         Returns
@@ -670,11 +670,11 @@ class PSFGrp:
 
         Parameters
         ----------
-        outpsf : str, default='AIRYOBSC'
+        outpsf : str, optional
             Target output PSF type. Options are 'GAUSSIAN', 'AIRYOBSC', and 'AIRYUNOBSC'.
         extrasmooth : float, optional
             Target output PSF extra smearing. The default is 0.0.
-        use_filter : int, default=4
+        use_filter : int, optional
             Which filter to use (0..10).
 
         Returns
@@ -709,7 +709,7 @@ class PSFGrp:
 
         Parameters
         ----------
-        visualize : bool, default=False
+        visualize : bool, optional
             Whether to visualize PSFs and sampling positions.
 
         Returns
@@ -797,7 +797,7 @@ class PSFGrp:
 
         Parameters
         ----------
-        verbose : bool, default=False
+        verbose : bool, optional
             Whether to print additional information.
 
         Returns
@@ -824,12 +824,12 @@ class PSFOvl:
     ----------
     psfgrp1 : pyimcom.psfutil.PSFGrp
         The first PSFGrp instance.
-    psfgrp2 : pyimcom.psfutil.PSFGrp or None, default=None
+    psfgrp2 : pyimcom.psfutil.PSFGrp or None, optional
         The second PSFGrp instance.
         The default is None, indicating the self-overlap of psfgrp1.
-    verbose : bool, default=False
+    verbose : bool, optional
         Whether to print additional information.
-    visualize : bool, default=False
+    visualize : bool, optional
         Whether to visualize the PSF overlap array.
 
     Methods
@@ -869,7 +869,7 @@ class PSFOvl:
 
         Parameters
         ----------
-        flat_penalty : float, default=1e-7
+        flat_penalty : float, optional
             Amount by which to penalize having different contributions
             to the output from different input images.
 
@@ -1011,7 +1011,7 @@ class PSFOvl:
 
         Parameters
         ----------
-        visualize : bool, default=False
+        visualize : bool, optional
             Whether to visualize the PSF overlap array.
 
         Returns
@@ -1131,7 +1131,7 @@ class PSFOvl:
         st2 : pyimcom.coadd.InStamp or coadd.OutStamp or None
             Second input stamp. The default is None, indicating diagonal
             blocks of the A matrix (2nd stamp same as 1st).
-        visualize : bool, default=False
+        visualize : bool, optional
             Whether to visualize overlap arrays and sampling positions.
 
         Returns
@@ -1163,7 +1163,7 @@ class PSFOvl:
             First input stamp.
         st2 : pyimcom.coadd.InStamp
             Second input stamp.
-        visualize : bool, default=False
+        visualize : bool, optional
             Whether to visualize overlap arrays and sampling positions.
 
         Returns
@@ -1243,7 +1243,7 @@ class PSFOvl:
             Input stamp.
         st2 : pyimcom.coadd.OutStamp
             Output stamp.
-        visualize : bool, default=False
+        visualize : bool, optional
             Whether to visualize overlap arrays and sampling positions.
 
         Returns
@@ -1336,10 +1336,10 @@ class PSFOvl:
         ----------
         st1 : pyimcom.coadd.InStamp
             First input stamp.
-        st2 : pyimcom.coadd.InStamp or None, default=None
+        st2 : pyimcom.coadd.InStamp or None, optional
             Second input stamp.
             The default is None, indicating diagonal blocks of the A matrix.
-        visualize : bool, default=False
+        visualize : bool, optional
             Whether to visualize overlap arrays and sampling positions.
 
         Returns
@@ -1436,7 +1436,7 @@ class PSFOvl:
 
         Parameters
         ----------
-        verbose : bool, default=False
+        verbose : bool, optional
             Whether to print additional information.
 
         Returns
@@ -1616,9 +1616,9 @@ class SysMatA:
             Index of the first InStamp.
         ji_st2 : (int, int)
             Index of the second InStamp.
-        sim_mode : bool, default=False
+        sim_mode : bool, optional
             Whether to count references without actually computing submatrices.
-        verbose : bool, default=False
+        verbose : bool, optional
             Whether to print additional information.
 
         Returns
@@ -1703,7 +1703,7 @@ class SysMatA:
             Index of the first InStamp.
         ji_st2 : (int, int)
             Index of the second InStamp.
-        sim_mode : bool, default=False
+        sim_mode : bool, optional
             Whether to count references without actually computing submatrices.
         ji_st_out : (int, int)
             Index of the OutStamp. Needed for virtual memory.
@@ -1807,7 +1807,7 @@ class SysMatB:
             Index of the InStamp.
         ji_st_out : (int, int)
             Index of the OutStamp.
-        sim_mode : bool, default=False
+        sim_mode : bool, optional
             Whether to count references without actually computing submatrices.
 
         Returns
