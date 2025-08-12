@@ -1,6 +1,11 @@
-# Python script for calculating block-wise evaluation criteria: noise amplification and 2D equivalent width
-# Relies on power spectra outputs from noisespecs.py
-# Usage format: python noiseevals.py <filter> <instem> <outstem>
+"""
+Python script for calculating block-wise evaluation criteria: noise amplification and 2D equivalent width
+
+Relies on power spectra outputs from noisespecs.py
+
+Usage format: python noiseevals.py <filter> <instem> <outstem>
+
+"""
 
 import sys
 import numpy
