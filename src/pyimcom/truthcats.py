@@ -311,3 +311,9 @@ def gen_truthcats(pars):
 # usage from configuration file
 def gen_truthcats_from_cfg(cfg):
     gen_truthcats([None, cfg.use_filter, cfg.outstem, None])
+
+# stand-alone usage
+if __name__ == '__main__':
+    #gen_truthcats(sys.argv)
+    gen_truthcats([None, 1, '/fs/scratch/PCON0003/cond0007/itertest2-out/itertest2_F', 'pyimcom/temp/test1'])
+
