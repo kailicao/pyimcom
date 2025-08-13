@@ -178,7 +178,7 @@ class CompressedOutput:
           Number of the layer to be compressed.
       scheme : str or None, optional
           Name of the compression scheme. Defaults to None (no compression).
-      pars : dict
+      pars : dict, optional
           Parameters to be passed to the compression algorithm.
 
       Returns
