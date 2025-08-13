@@ -417,7 +417,6 @@ class PyIMCOM_WCS:
     """
 
     def __init__(self, inwcs, noconvert=False):
-        """Constructor."""
 
         self.array_shape = (Settings.sca_nside,Settings.sca_nside)
 
