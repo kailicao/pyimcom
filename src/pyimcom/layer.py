@@ -574,7 +574,7 @@ class GridInject:
             HEALPix resolution (nside == 2**res)
         myWCS : astropy.wcs.WCS or pyimcom.wcsutil.PyIMCOM_WCS
             World coordinate system for the SCA
-        scapar : dict
+        scapar : dict, optional
             Should have keyword/values:
             * 'sca_nside' : int, side length of SCA
             * 'pix_arcsec' : float, reference pixel scale in arcsec
