@@ -280,7 +280,6 @@ class I24Cube:
    """
 
    def __init__(self, inarray, pars, overflow=None):
-      """Constructor."""
 
       # figure out what we have
       self.pars = copy.copy(pars)
