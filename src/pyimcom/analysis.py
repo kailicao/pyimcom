@@ -51,7 +51,7 @@ class OutImage:
     hdu_names : list of str, optional
         List of HDU names of this FITS file.
         If provided, no consistency check is performed.
-        The default is None. If None, it will be derived from `cfg`.
+        If None, it will be derived from `cfg`.
 
     Methods
     -------
