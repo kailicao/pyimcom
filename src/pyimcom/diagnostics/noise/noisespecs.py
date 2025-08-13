@@ -186,7 +186,7 @@ for iblock in range(nstart,nstart+nblockuse):
           ----------
           window_length : int
               The length of one axis of the image.
-          num_radial_bins : int
+          num_radial_bins : int, optional
               The number of radial bins the image should be averaged into.
 
           Returns
