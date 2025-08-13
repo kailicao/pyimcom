@@ -169,7 +169,6 @@ class LocWCS:
     """
 
     def __init__(self,gwcs,N=4088):
-        """Constructor."""
 
         self.gwcs = gwcs
         self.N = N
