@@ -755,7 +755,6 @@ class OutStamp:
     }
 
     def __init__(self, blk: 'Block', j_st: int, i_st: int) -> None:
-        """Constructor."""
 
         self.blk = blk
         self.j_st = j_st
