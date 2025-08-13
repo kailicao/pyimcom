@@ -1,4 +1,12 @@
-# Simulated star diagnostics report section
+"""
+Simulated star diagnostics report section.
+
+Classes
+-------
+SimulatedStar
+    Report section for the simulated stars.
+
+"""
 
 import numpy as np
 import sys
@@ -18,7 +26,12 @@ from .dynrange import gen_dynrange_data
 from .starcube_nonoise import gen_starcube_nonoise
 
 class SimulatedStar(ReportSection):
-    """Builds the simulated star section of the report."""
+    """
+    Builds the simulated star section of the report.
+
+    Inherits from pyimcom.diagnostics.report.ReportSection, overrides the build method.
+
+    """
 
     def build(self, nblockmax=100):
 

@@ -1,5 +1,11 @@
-# usage: python noisespecs.py <filter> <input prefix> <outstem>
-# input file name is <input prefix><filter>_DD_DD_map.fits
+"""
+Noise spectra
+
+Usage: python noisespecs.py <filter> <input prefix> <outstem>
+
+input file name is ``<input prefix><filter>_DD_DD_map.fits``
+
+"""
 
 import sys
 import numpy
@@ -144,15 +150,21 @@ for iblock in range(nstart,nstart+nblockuse):
       def measure_power_spectrum(noiseframe, bin=True):
           """
           Measure the 2D power spectrum of image.
-          :param noiseframe: 2D ndarray
-           the input image to measure the power spectrum of.
-           in this case, a noise frame from the simulations
-          :param bin: True/False
-           Whether to bin the 2D spectrum.
-           Default=True, bins spectrum into L/8 x L/8 image.
-                   (Potential extra rows are cut off.)
-          :return: 2D ndarray, ps
-           the 2D power spectrum of the image.
+
+          Parameters
+          ----------
+          noiseframe : np.array
+              2D array; the input image to measure the power spectrum of.
+          bin : bool, optional
+              Whether to bin the 2D spectrum.
+              Default=True, bins spectrum into L/8 x L/8 image.
+              (Potential extra rows are cut off.)
+
+          Returns
+          -------
+          np.array
+              The 2D power spectrum of the image.
+
           """
           
           fft = np.fft.fftshift(np.fft.fft2(noiseframe))
@@ -169,13 +181,21 @@ for iblock in range(nstart,nstart+nblockuse):
       def _get_wavenumbers(window_length, num_radial_bins=nradbins):
           """
           Calculate wavenumbers for the input image.
-          :param window_length: integer
-           the length of one axis of the image.
-          :param num_radial_bins: integer
-           number of radial bins the image should be averaged into
-          :return: 1D np array, kmean
-           the wavenumbers for the image
+
+          Parameters
+          ----------
+          window_length : int
+              The length of one axis of the image.
+          num_radial_bins : int, optional
+              The number of radial bins the image should be averaged into.
+
+          Returns
+          -------
+          kmean : np.array
+              The wavenumbers for the image (1D), length `num_radial_bins`.
+
           """
+
           k = np.fft.fftshift(np.fft.fftfreq(window_length))
           kx, ky = np.meshgrid(k, k)
           k = np.sqrt(kx ** 2 + ky ** 2)
@@ -190,19 +210,20 @@ for iblock in range(nstart,nstart+nblockuse):
       
           Parameters
           ----------
-          image : 2D ndarray
-              Input image.
+          image : np.array
+              Input image (2D).
           num_radial_bins : int
               Number of radial bins in profile.
       
           Returns
           -------
-          r : ndarray
-              Value of radius at each point
-          radial_mean : ndarray
-              Mean intensity within each annulus. Main result
-          radial_err : ndarray
-              Standard error on the mean: sigma / sqrt(N).
+          r : np.array
+              Value of radius at each point (1D, length `num_radial_bins`).
+          radial_mean : np.array
+              Mean intensity within each annulus. Main result. 1D, length `num_radial_bins`.
+          radial_err : np.array
+              Standard error on the mean: sigma / sqrt(N). 1D, length `num_radial_bins`.
+
           """
       
           ny, nx = image.shape
@@ -232,12 +253,21 @@ for iblock in range(nstart,nstart+nblockuse):
       
       def get_powerspectra(noiseframe, num_radial_bins=nradbins):
           """
-          Calculate the azimuthally-averaged 1D power spectrum of the image
-          :param noiseframe: 2D ndarray
-              the input image to be averaged over
-          :param num_radial_bins: number of bins, should match bin number in get_wavenumbers
+
+          Calculate the azimuthally-averaged 1D power spectrum of the image.
+
+          Parameters
+          ----------
+          noiseframe : np.array
+              the input image to be averaged over (2D)
+          num_radial_bins : int, optional
+              Number of bins, should match bin number in get_wavenumbers.
       
-          :return: named tuple, results
+          Returns
+          -------
+          results : collections.namedtuple
+              Contains the keys 'ps_image', 'ps_image_err', 'npix', 'k', 'ps_2d', 'noiselayer'.
+
           """
       
           noise = noiseframe.copy()

@@ -1,5 +1,12 @@
-# usage: python truthcats.py <filter> <input prefix> <outstem>
-# input file name is <input prefix><filter>_DD_DD_map.fits (block files)
+"""
+Truth catalog generation (needed since some of the injected objects have random parameters).
+
+Functions
+---------
+gen_truthcats
+    Generates a truth catalog.
+
+"""
 
 import sys
 import numpy
@@ -18,15 +25,31 @@ from .config import Settings, Config
 from .coadd import Block
 
 def gen_truthcats(pars):
-    """Generates a truth catalog. The argument is a list:
+    """Generates a truth catalog and writes it to a FITS file.
+
+    Parameters
+    ----------
+    pars : list
+        A 4-entry list of:
+        * name : str or None
+        * filter : str or int
+        * input prefix : str
+        * outstem : str
+
+    Returns
+    -------
+    None
 
     [<name>, <filter>, <input prefix>, <outstem>]
 
-    If <name> is not None, then reads WCS from the output file.
-    If <name> is None, then the WCS is generated internally. In this case, only the
+    Notes
+    -----
+    If "name" is not None, then reads WCS from the output file.
+    If "name" is None, then the WCS is generated internally. In this case, only the
     starting block output file needs to exist.
 
-    Filter should either be a letter or an integer. If it is a letter, then includes it in the input file name.
+    The "filter" should either be a letter ('F','H','J',...) or an integer (0,1,2,...) designation.
+    If it is a letter, then you should still include it in the input file prefix.
 
     If the outstem is '', then the output file name is generated according to the configuration file.
 

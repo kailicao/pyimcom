@@ -1,3 +1,18 @@
+"""
+Metadetection mosaic class and associated functions.
+
+Classes
+-------
+MetaMosaic
+    A (sub-)mosaic that can be sheared.
+
+Functions
+---------
+shearimage_to_fits
+    Writes a sheared image to a FITS file.
+
+"""
+
 import numpy as np
 import os
 from astropy.io import fits
@@ -12,20 +27,40 @@ class MetaMosaic:
     """
     Contains mosaic information for use in meta operations.
 
+    Parameters
+    ----------
+    fname : str
+        File name of block to build (sub-mosaic will be a 3x3 block region centered on this).
+    verbose : bool, optional
+        Whether to print diagnostics.
+
     Attributes
     ----------
-    cfg : configuration file
-    Nside : side length of image
-    in_image : the input image cube
+    cfg : pyimcom.config.Config
+        PyIMCOM configuration used in this file.
+    Nside : int
+        Side length of moasic image.
+    in_image : np.array
+        3D array; the input image cube.
+    in_fidelity : np.array of float
+        2D fidelity map
+    in_noise : np.array of float
+        2D noise map
+    in_mask : np.array of bool
+        2D mask
 
     Methods
     -------
-    __init__ : Constructor.
-
-    maskpix : Masks an additional set of pixels.
-    in_mask : boolean mask for input data (False = OK, True = masked)
-    to_file : Writes the mosaic object to a FITS file.
-    shearimage : Generate a sheared image.
+    __init__
+        Constructor.
+    maskpix
+        Masks an additional set of pixels.
+    in_mask
+        Boolean mask for input data (False = OK, True = masked).
+    to_file
+        Writes the mosaic object to a FITS file.
+    shearimage
+        Generate a sheared image.
 
     """
 
@@ -111,12 +146,37 @@ class MetaMosaic:
         self.in_mask |= self.in_fidelity==0
 
     def maskpix(self, extramask):
-        """Pixels that are 'true' in extramask are masked out.
         """
+        Provide additional masking beyond the default.
+
+        Pixels that are True in `extramask` are masked out.
+
+        Parameters
+        ----------
+        extramask : np.array of bool
+            2D array of pixels to mask out.
+
+        Returns
+        -------
+        None
+
+        """
+
         self.in_mask = np.logical_or(extramask, self.in_mask)
 
     def to_file(self, fname):
-        """Writes the input mosaic images to a FITS file.
+        """
+        Writes the input mosaic images to a FITS file.
+
+        Parameters
+        ----------
+        fname : str
+            File name for the output FITS file.
+
+        Returns
+        -------
+        None
+
         """
 
         # generate the WCS
@@ -142,32 +202,47 @@ class MetaMosaic:
     def shearimage(self, N, jac=None, psfgrow=1., oversamp=1., fidelity_min=30., Rsearch=6.,
             select_layers=None,
             verbose=False):
-        """Generates a sheared image and its WCS.
+        """
+        Generates a sheared image and its WCS.
 
-        Inputs:
-        N = size of the output image (shape will be (N,N))
-        jac = 2x2 Jacobian for transformation (None defaults to the identity)
-        psfgrow = factor (in linear scale) by which to grow the PSF
-        oversamp = up-sampling factor (e.g., 1 = preserve pixel scale)
-        fidelity_min = fidelity cut (in dB) for which pixels to use
-        Rsearch = search radius in interpolation
-        select_layers = list or array of integers: if given, only process these layers
-        verbose = talk to STDOUT
+        Parameters
+        ----------
+        N : int
+            Size of the output image (shape will be (`N`, `N`)).
+        jac : np.array or None, optional
+            2x2 Jacobian for transformation (None defaults to the identity).
+        psfgrow : float, optional
+            Factor (in linear scale) by which to grow the PSF.
+        oversamp : float, optional
+            Up-sampling factor (e.g., 1 = preserve pixel scale).
+        fidelity_min : float, optional
+            Fidelity cut (in dB) for which pixels to use.
+        Rsearch : float, optional
+            Search radius in interpolation, in units of coadded pixels.
+        select_layers : np.array of int or None, optional
+            If given, only process these layers.
+        verbose : bool, optional
+            Print diagnostics to terminal.
 
-        Returns:
-        im = image dictionary containing:
-            im['image'] = image cube (3D)
-            im['mask'] = image mask (2D, Boolean, True=masked)
-            im['wcs'] = WCS object (appropriate for a FITS file)
-            im['pars'] = parameter dictionary (can be turned into a FITS header)
-            im['layers'] = list of layers
-            im['ref'] = projection center (x,y), 0-offset convention
+        Returns
+        -------
+        im : dict
+            Image dictionary containing 'image', 'mask', 'wcs', 'pars', 'layers', and 'ref'..
 
-        Comments:
-        The sense of jac is that the *output* is related to the *input* by:
-        d{input coords} = J d{output coords}
+        Notes
+        -----
+        The output image contains:
+        *   ``im['image']`` : np.array, image cube (3D)
+        *   ``im['mask']`` : np.array, image mask (2D, Boolean, True=masked)
+        *   ``im['wcs']`` : astropy.wcs.WCS, world coordinate system object (appropriate for a FITS file)
+        *   ``im['pars']`` : dict, parameter dictionary (can be turned into a FITS header)
+        *   ``im['layers']`` : list of str, names of layers
+        *   ``im['ref']`` : (int, int), projection center (x,y), 0-offset convention
 
-        Assumes a Gaussian PSF.
+        The sense of `jac` is that the *output* is related to the *input* by:
+        d{input coords[i]} = sum_j jac[i,j] d{output coords[j]}
+
+        Assumes a Gaussian PSF, returns an error if something else is used.
 
         """
 
@@ -289,7 +364,25 @@ class MetaMosaic:
         return {'image':image, 'mask':mask, 'wcs':outwcs, 'pars':pardict, 'layers':layerlist, 'ref':(xref-1,yref-1)}
 
 def shearimage_to_fits(im, fname, layers=None, overwrite=False):
-    """utility to save a shearimage dictionary a FITS file"""
+    """
+    Utility to save a shearimage dictionary a FITS file.
+
+    Parameters
+    ----------
+    im : dict
+        Image dictionary from MetaMosaic.shearimage.
+    fname : str
+        File name for output.
+    layers : np.array of int, optional
+        Which layers to include.
+    overwrite : bool, optional
+        Whether to overwrite an existing file.
+
+    Returns
+    -------
+    None
+
+    """
 
     # which layers to use?
     nlayer = np.shape(im['image'])[-3]

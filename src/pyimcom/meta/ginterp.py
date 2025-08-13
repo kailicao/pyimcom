@@ -1,3 +1,17 @@
+"""
+Deconvolution-shear-reconvolution-resampling tools.
+
+Functions
+---------
+InterpMatrix
+    Constructs an interpolation matrix.
+MultiInterp
+    Performs the interpolation.
+test
+    A test function for InterpMatrix.
+
+"""
+
 import numpy as np
 import scipy
 import sys
@@ -5,30 +19,46 @@ from astropy.io import fits
 import time
 
 def InterpMatrix(Rsearch, samp, x_out, y_out, Cov, kappa=1.e-10, deweight=1.e24, verbose=False):
-    """Constructs an interpolation matrix.
+    """
+    Constructs a reconvolution + interpolation matrix.
 
-    Required Inputs:
-    Rsearch = search radius (from corners)
-    samp = sampling rate of input image (samples per FWHM)
-    x_out = fractional pixel positions in x (0 to 1, inclusive), length Npts
-    y_out = fractional pixel positions in y (0 to 1, inclusive), length Npts
-    Cov = covariance matrix of extra smoothing. length 3, array-like [Cxx, Cxy, Cyy]
+    Parameters
+    ----------
+    Rsearch : float
+        Search radius (from corners), in gridded pixels.
+    samp : float
+        Sampling rate of input image (samples per FWHM).
+    x_out : np.array of float
+        Fractional pixel positions in x (0 to 1, inclusive), shape (Npts,).
+    y_out : np.array of float
+        Fractional pixel positions in y (0 to 1, inclusive), shape (Npts,).
+    Cov : np.array of float
+        Covariance matrix of extra smoothing. length 3, array-like [Cxx, Cxy, Cyy].
+    kappa : float, optional
+        Regularization parameter to prevent singular matrices.
+    deweight : float, optional
+        Parameter to de-weight points outside the search radius (no longer used, still accepted for legacy reasons).
+    verbose : bool, optional
+        Print timing information?
 
-    Optional Inputs:
-    kappa = regularization parameter to prevent singular matrices
-    deweight = parameter to de-weight points outside the search radius (no longer used, still accepted for legacy reasons)
-    verbose = print timing information
+    Returns
+    -------
+    posx : np.array of int
+        x positions of input pixels, shape (NN,)
+    posy : np.array of int
+        y positions of input pixels, shape (NN,)
+    T : np.array of float
+        Interpolation/smoothing matrix, shape (Npts, NN).
+    U : np.array of float
+        Fractional squared leakage, shape (Npts,).
+    Sigma : np.array of float
+        Noise amplification = sum_i T_{ai}^2, shape (Npts,).
 
-    Returns:
-    posx = x positions of input pixels (int), length NN
-    posy = y positions of input pixels (int), length NN
-    T = interpolation/smoothing matrix (matrix, form of numpy 2D array), length Npts x NN
-    U = fractional squared leakage
-    Sigma = sum_i T_{ai}^2 (noise squared metric)
-
-    Comments:
+    Notes
+    -----
     This function actually has the same algorithm as IMCOM embedded in it. But the "system
     matrix" A is the same in all cases so it is much faster than IMCOM.
+
     """
 
     t0 = time.time()
@@ -102,34 +132,52 @@ def InterpMatrix(Rsearch, samp, x_out, y_out, Cov, kappa=1.e-10, deweight=1.e24,
     return np.round(posx).astype(np.int16), np.round(posy).astype(np.int16), T, U, np.sum(T**2,axis=1)
 
 def MultiInterp(in_array, in_mask, out_size, out_origin, out_transform, Rsearch, samp, Cov, kappa=1.e-10, deweight=1.e24):
-    """Interpolates from an input array to a regularly spaced output array.
+    """
+    Interpolates from an input array to a regularly spaced output array, including some additional smoothing..
 
-    Required Inputs:
-    in_array = array to interpolate from (may be 3D, with multiple layers)
-    in_mask = Boolean mask for input array (True = masked; False = good)
-    out_size = output array size, format: (ny,nx)
-    out_origin, out_transform = length 2 vector and 2x2 matrix for mapping from input-->output coordinates
-    Rsearch = search radius (from corners)
-    samp = sampling rate of input image (samples per FWHM)
-    Cov = covariance matrix of extra smoothing. length 3, array-like [Cxx, Cxy, Cyy]
+    Parameters
+    ----------
+    in_array : np.array of float
+        Array to interpolate from (may be 3D, with multiple layers).
+    in_mask : np.array of bool
+        Boolean mask for input array (True = masked; False = good).
+    out_size : (int, int)
+        Output array size, format: (ny,nx).
+    out_origin : np.array
+        Length 2 vector of origin for mapping input-->output coordinates.
+    out_transform : np.array
+        Shape (2,2) matrix of Jacobian for mapping input-->output coordinates.
+    Rsearch : float
+        Search radius (from corners) in pixels in `in_array`.
+    samp : float
+        Sampling rate of input image (samples per FWHM).
+    Cov : np.array
+        Covariance matrix of extra smoothing. length 3, flattened array-like [Cxx, Cxy, Cyy].
+    kappa : float, optional
+        Regularization parameter to prevent singular matrices.
+    deweight : float, optional
+        Parameter to de-weight points outside the search radius. Deprecated.
 
-    Optional Inputs:
-    kappa = regularization parameter to prevent singular matrices
-    deweight = parameter to de-weight points outside the search radius
+    Returns
+    -------
+    out_array : np.array of float
+        2D or 3D. Same number of layers as `in_array`.
+    out_mask : np.array of bool
+        Boolean mask for output array (True = masked; False = good).
+    Umax : float
+        Maximum leakage from the interpolation step.
+    Smax : float
+        Maximum noise metric from the interpolation step.
 
-    Returns:
-    out_array (same number of layers as in_array)
-    out_mask = Boolean mask for output array (True = masked; False = good)
-    Umax = maximum leakage from the interpolation step
-    Smax = maximum noise metric from the interpolation step
+    Notes
+    -----
+    The mapping between input and output coordinates is, using `out_origin` and `out_transform`, ::
 
-    Comments:
-    The mapping between input and output coordinates is
+      x_in = out_transform[0][0]*x_out + out_transform[0][1]*y_out + out_origin[0]
+      y_in = out_transform[1][0]*x_out + out_transform[1][1]*y_out + out_origin[1]
 
-    x_in = out_transform[0][0]*x_out + out_transform[0][1]*y_out + out_origin[0]
-    y_in = out_transform[1][0]*x_out + out_transform[1][1]*y_out + out_origin[1]
+    Both are 0-offset, C/Python style.
 
-    (both are 0-offset, C/Python style)
     """
 
     # get dimensions
@@ -213,6 +261,7 @@ def MultiInterp(in_array, in_mask, out_size, out_origin, out_transform, Rsearch,
 
 # This is a stand-alone test routine
 def test():
+    """Test for InterpMatrix."""
 
     ### Test for InterpMatrix ###    
     ng = 17

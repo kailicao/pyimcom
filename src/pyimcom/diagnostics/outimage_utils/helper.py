@@ -1,5 +1,14 @@
-# helper functions to read metadata in output coadded map diagnostics
-#
+"""
+Helper functions to read metadata in output coadded map diagnostics
+
+Functions
+---------
+UNIT_to_bels
+    Convert a unit string to units of bels.
+HDU_to_bels
+    Convert a FITS header to units of bels.
+
+"""
 
 # may need to add more packages here in the future
 import numpy as np
@@ -7,10 +16,20 @@ import re
 from astropy.io import fits
 
 def UNIT_to_bels(unitstring):
-   """Convert a UNIT string (usually a FITS header value) to units of bels
-   Should have a number and optional SI prefix, 0.2uB (supports m=milli, u=micro, n=nano)
-   Output is a floating point number, in this case 2.0e-7
-   Returns np.nan if no match or unrecognized
+   """
+   Convert a UNIT string (usually a FITS header value) to units of bels
+
+   Parameters
+   ----------
+   unitstring : str
+       A number and optional SI prefix, e.g. ``0.2uB`` (supports m=milli, u=micro, n=nano).
+
+   Returns
+   -------
+   float
+       Floating version of the `unitstring`, e.g., ``2.0e-7``.
+       Returns np.nan if no match or unrecognized.
+
    """
 
    s = re.match(r'([\d\.\-\+eE]+)([mun]?)B', unitstring)
@@ -24,8 +43,20 @@ def UNIT_to_bels(unitstring):
    return x
 
 def HDU_to_bels(inhdu):
-   """Reads the UNIT keyword from a FITS header and converts it to bels
-   Returns np.nan if no match or unrecognized
+   """
+   Reads the UNIT keyword from a FITS header and converts it to bels.
+
+   Parameters
+   ----------
+   inhdu : astropy.io.fits.ImageHDU
+       The FITS HDU to read.
+
+   Returns
+   -------
+   float
+       Floating version of the unitstring encoded in the FITS header.
+       Returns np.nan if no match or unrecognized.
+
    """
 
    return UNIT_to_bels(inhdu.header['UNIT'])

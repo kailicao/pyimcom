@@ -1,5 +1,12 @@
-# code to construct dynamic range estimates from block files
-#
+"""
+Code to construct dynamic range estimates from block files.
+
+Functions
+---------
+gen_dynrange_data
+    Generates dynamic range data and writes to files.
+
+"""
 
 nscale=1
 # nscale=10 # this line is for bug compensation --- will remove it later
@@ -199,6 +206,12 @@ def gen_dynrange_data(inpath, outstem, rpix_try=50, nblockmax=100):
     return output
 
 if __name__ == "__main__":
+    """
+    Command line driver.
+
+    Format: python3 -m dynrange <file stem> <output filename>
+    """
+
     def fn(ibx,iby):
         return sys.argv[1] + '_{:02d}_{:02d}.fits'.format(ibx,iby)
 

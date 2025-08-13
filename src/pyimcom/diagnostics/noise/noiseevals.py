@@ -1,6 +1,11 @@
-# Python script for calculating block-wise evaluation criteria: noise amplification and 2D equivalent width
-# Relies on power spectra outputs from noisespecs.py
-# Usage format: python noiseevals.py <filter> <instem> <outstem>
+"""
+Python script for calculating block-wise evaluation criteria: noise amplification and 2D equivalent width
+
+Relies on power spectra outputs from noisespecs.py
+
+Usage format: python noiseevals.py <filter> <instem> <outstem>
+
+"""
 
 import sys
 import numpy
@@ -136,7 +141,7 @@ for iblock in range(nstart, nstart + nblockuse):
         Inputs:
         p1d: numpy array containing power, wavenumber
         noisetype: white, 1f
-        nmcbind: number of mean coverage bins. default=5
+        nmcbind: number of mean coverage bins. optional
 
         Returns: Ratio of measured vs. predicted 1D power spectrum
         """

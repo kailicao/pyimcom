@@ -1,6 +1,11 @@
-# Program to average together all the power spectra in one band.
-# Usage format is python average_spectra.py <filter> <inpath> <outpath>
-#KL: add MC binning to this?
+"""
+Program to average together all the power spectra in one band.
+
+Usage format is python average_spectra.py <filter> <inpath> <outpath>
+
+KL: add MC binning to this?
+
+"""
 
 import sys
 import numpy as np

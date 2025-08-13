@@ -1,5 +1,12 @@
-# usage: python starcube_nonoise.py <filter> <input prefix> <outstem>
-# input file name is <input prefix><filter>_DD_DD.fits
+"""
+Code to generate a catalog of injected stars and their properties in the coadded image.
+
+Functions
+---------
+gen_starcube_nonoise
+    Extracts the noiseless star cube and the moments.
+
+"""
 
 import sys
 import numpy as np
@@ -15,19 +22,25 @@ from .outimage_utils.helper import HDU_to_bels
 from ..config import Config
 
 def gen_starcube_nonoise(infile_fcn, outstem, nblockmax=100):
-    """Extracts the noiseless star cube and the moments.
+    """
+    Extracts the noiseless star cube and the moments.
 
     Arguments
     ---------
-    infile_fcn : function that returns the input file path given block (ix,iy)
-    outstem : output file stem
-    nblockmax : optional, restricts the maximum block size
+    infile_fcn : function
+        A function that returns the input file path given block (ix,iy).
+    outstem : str
+        Output file stem.
+    nblockmax : int, optional
+        Maximum number of blocks on each axis of a mosaic.
 
     Returns
     -------
-    output : dictionary of returned parameters. Currently has:
-        STARCAT : file name for star catalog
-        FIDHIST : fidelity histogram
+    output : dict
+        The return parameters dictionary contains two strings:
+        key 'STARCAT' points to the file name for the star catalog, and
+        key 'FIDHIST' points to the file name for the fidelity histogram.
+
     """
 
     output = {

@@ -1,3 +1,16 @@
+"""
+Stand-alone script to make a display PNG image from a mosaic.
+
+Calling format::
+
+   python -m pyimcom.pictures.make_picture_1band /fs/scratch/PCON0003/cond0007/itertest2-out/itertest2_F xstart ystart n out.png
+
+if the output images are in ``/fs/scratch/PCON0003/cond0007/itertest2-out/itertest2_F_DD_DD.fits``
+(where ``DD`` = x & y block indices)
+and you want to combine n x n blocks starting at (xstart,ystart).
+
+"""
+
 import numpy as np
 import sys
 import os
@@ -6,13 +19,6 @@ from astropy.io import fits
 from ..config import Config
 
 from PIL import Image
-
-"""Call from 2 layers up, e.g.,
-python -m pyimcom.pictures.make_picture_1band.py /fs/scratch/PCON0003/cond0007/itertest2-out/itertest2_F xstart ystart n out.png
-if the output images are in /fs/scratch/PCON0003/cond0007/itertest2-out/itertest2_F_DD_DD.fits
-(where 'DD' = x & y block indices)
-and you want to combine n x n blocks starting at (xstart,ystart)
-"""
 
 # extract the file name (without the '_DD_DD.fits')
 fn = sys.argv[1]

@@ -1,9 +1,30 @@
-"""This file contains the PyIMCOM_WCS class, which allows PyIMCOM to take in a WCS either as a
+"""
+This file contains the PyIMCOM_WCS class, which allows PyIMCOM to take in a WCS either as a
 FITS header or a GWCS from an ASDF file.
 
 PyIMCOM_WCS supports the all_pix2world and all_world2pix methods, which are like their astropy
 counterparts. A separate local_partial_pixel_derivatives2 function was written so that we don't
 need to rely on astropy's partial derivative function (which has singular behavior near the poles).
+
+Classes
+-------
+ABasis
+    Base class for basis polynomials.
+SimpleBaiss
+    Simple polynomials.
+LocWCS
+    Internal version of gwcs plus approximations.
+PyIMCOM_WCS
+    Main class for PyIMCOM's WCS, intended to support functions in PyIMCOM that were
+    originally written with astropy.wcs.WCS but now also have to accept gwcs inputs.
+
+Functions
+---------
+local_partial_pixel_derivatives2
+    Jacobian for WCS (2-sided derivative, designed to also work near poles).
+_stand_alone_test
+    Unit test function.
+
 """
 
 import numpy as np
@@ -20,19 +41,32 @@ from .config import Settings
 ### === UTILITIES FOR APPROXIMATING A GWCS ===
 
 class ABasis:
-    """Base class for basis polynomials.
+    """Base class for 2D basis polynomials. These are defined in the range -1<u<1 and -1<v<1.
 
     Want to use inherited classes that replace the coef_setup method.
 
-    Attributes:
-    p_order : max order of the polynomial
-    N : side length of grid the polynomial is evaluated on
-    N_basis : number of basis modes
-    coefs : coefficient matrix: coefs[i,j,k] is the coefficient of u^i v^j in the kth polynomial
-    eval : evaluation of polynomials
+    Parameters
+    ----------
+    p_order : int
+        Max order of the polynomial.
+    N : int
+        Side length of grid the polynomial is evaluated on.
+
+    Attributes
+    ----------
+    N_basis : int
+        Number of basis modes.
+    coefs : np.array
+        Coefficient matrix: coefs[i,j,k] is the coefficient of u^i v^j in the kth polynomial.
+
+    Methods
+    -------
+    eval
+        evaluation of polynomials
     """
 
     def __init__(self,p_order,N):
+
         self.p_order = p_order
         self.N = N
         self.N_basis = ((p_order+1)*(p_order+2))//2
@@ -40,12 +74,30 @@ class ABasis:
         self.coef_setup()
 
     def coef_setup(self):
+        """Build the coefficients.
+
+        Shouldn't get here, always use the methods from the inherited classes."""
         pass # shouldn't get here, always use the methods from the inherited classes
 
     def eval(self,u,v):
-        """Takes in an array of u and v, and returns a 2D array out[k,l] = kth poly evaluated at lth point.
+        """Takes in an array of positions, and returns an array of the basis polynomials evaluated at those points.
 
+        Parameters
+        ----------
+        u : np.array
+            Array of horizontal positions. Shape (npts,).
+        v : np.array
+            Array of vertical positions. Shape (npts,).
+
+        Returns
+        -------
+        np.array
+            A 2D array: out[k,l] = kth poly evaluated at lth point. Shape (N_basis, npts).
+
+        Notes
+        -----
         Could be replaced with a more stable version for specific types of polynomials if provided by that basis.
+
         """
 
         out = np.zeros((self.N_basis, np.size(u)))
@@ -56,9 +108,11 @@ class ABasis:
         return out
 
 class SimpleBasis(ABasis):
-    """Simple polynomials (each coefficient is 1)"""
+    """Simple polynomials (each coefficient is 1). Base class is pyimcom.wcsutil.ABasis."""
 
     def coef_setup(self):
+        """Build the coefficients."""
+
         self.basis = 'simple'
         k = 0
         for i in range(self.p_order+1):
@@ -69,27 +123,53 @@ class SimpleBasis(ABasis):
 ### WCS classes ###
 
 class LocWCS:
+    """WCS built from a gwcs that can be reported in various formats.
 
-    """WCS that can be reported in various formats.
+    Parameters
+    ----------
+    gwcs : gwcs.WCS
+        The generalized WCS.
+    N : int, optional
+        Side length of the array.
 
-    Methods:
-    __init__ : constructor from gwcs
-    wcs_approx_sip : build approximate TAN-SIP WCS
-    _make_errmap : report the error map
-    err_interp : makes error map interpolator for the TAN-SIP approximation
+    Attributes
+    ----------
+    gwcs : gwcs.WCS
+        The generalized WCS. (Same as `gwcs`.)
+    N : int
+        Side length of the array. (Same as `N`.)
+    ra_ctr : float
+        Right ascension of projection center.
+    dec_ctr : float
+        Declination of projection center.
+    uEast : np.array
+        3-component unit vector pointing East.
+    uNorth : np.array
+        3-component unit vector pointing North.
+    J : np.array
+        2x2 Jacobian from detector to tangent plane coordinates in radians.
+    approx_wcs : astropy.wcs.WCS
+        The best-fit TAN-SIP approximation (if set).
+    max_wcs_err : float
+        The worst error (in pixels) from the approx_wcs (if set).
+    errmap : np.array
+        The error map (in pixels) from the approx_wcs (if set). Shape (2, `N`, `N`).
 
-    Attributes:
-    gwcs : the generalized WCS
-    N : side length of the array (probably 4088)
-    ra_ctr,dec_ctr : coordinates of center
-    uEast, uNorth : 3-component unit vectors East and North
-    J : 2x2 Jacobian from detector to tangent plane coordinates in *radians*
-    approx_wcs : the best-fit astropy wcs (if set)
-    max_wcs_err : the worst error (in pixels) from the approx_wcs (if set)
-    errmap : error map (in pixels) from the approx_wcs (if set)
+    Methods
+    -------
+    __init__
+       Constructor.
+    wcs_approx_sip
+       Build approximate TAN-SIP WCS.
+    _make_errmap
+       Build the error map.
+    err_interp
+        Makes error map interpolator for the TAN-SIP approximation.
+
     """
 
     def __init__(self,gwcs,N=4088):
+
         self.gwcs = gwcs
         self.N = N
 
@@ -118,16 +198,25 @@ class LocWCS:
         #print(self.J/degree*3600/.11)
 
     def wcs_approx_sip(self, p_order=3, nq=100, basis='simple', verbose=False):
-        """Generate approximate TAN-SIP polynomial wcs, and store as self.wcs.
+        """Generate approximate TAN-SIP polynomial wcs.
 
-        Parameters:
-        p_order : order of polynomial to fit
-        nq : grid size for fitting WCS (nq x nq)
-        basis : type of basis to use in fitting the WCS
-        verbose : talk a lot? (bool)
+        Parameters
+        ----------
+        p_order : int, optional
+            Order of polynomial to fit.
+        nq : int, optional
+            Grid size for fitting WCS (nq x nq).
+        basis : str, optional
+            Type of basis to use in fitting the WCS.
+        verbose : bool
+            Print lots of diagnostics to the terminal.
 
+        Notes
+        -----
         The following basis sets for the linear algerbra are available:
-        simple : simple polynomials (could be unstable for high order)
+
+        * 'simple' : simple polynomials (could be unstable for high order)
+
         """
 
         N = self.N
@@ -218,13 +307,22 @@ class LocWCS:
         self._make_errmap()
 
     def _make_errmap(self):
-        """Makes a (2,N,N)-shaped error map.
+        """Builds the error map.
 
-        Format is: errmap[0,j,i] is the x-offset of pixel (i,j); errmap[1,j,i] is the y-offset.
-        offset is in the sense of if there is a barred coordinate system that is the TAN-SIP approximation
-        and unbarred is the true system, then
-        xbar = x + errmap[0,y,x]
-        ybar = y + errmap[1,y,x]
+        Notes
+        -----
+        The shape of the error map is (2, N, N).
+
+        The format is:
+
+        * errmap[0,j,i] is the x-offset of pixel (i,j)
+        * errmap[1,j,i] is the y-offset.
+
+        The offset is in the sense of if there is a barred coordinate system that is the TAN-SIP approximation
+        and unbarred is the true system, then::
+
+          # xbar == x + errmap[0,y,x]
+          # ybar == y + errmap[1,y,x]
 
         """
 
@@ -245,9 +343,22 @@ class LocWCS:
         """Makes interpolators for the delta x = xbar-x and delta y = ybar-y directions.
 
         The functions returned are of the form dX(arr), where arr is an array of shape (K,2)
-        indicating K points. arr[:,0] is the y-values, and arr[:,1] is the x-values.
+        indicating K points. arr[:,0] are the y-values, and arr[:,1] are the x-values.
 
-        The linear extrapolation is done from a pixels from each edge.
+        Parameters
+        ----------
+        a : int
+            Number of pixels from edge to use for linear extrapolation..
+        n_pad : int
+            Distance to extrapolate the error map.
+
+        Returns
+        -------
+        function
+            An interpolator function for the delta x error.
+        function
+            An interpolator function for the delta y error.
+
         """
 
         # spacings
@@ -272,32 +383,40 @@ class LocWCS:
 ### === END UTILITIES ===
 
 class PyIMCOM_WCS:
-    """Class that has the key methods we depend on from astropy.wcs,
-    but can be constructed from other types of WCS information.
+    """
+    Class that has the key methods we depend on from astropy.wcs,
+    but can be constructed from other types of WCS information (including gwcs).
 
-    Methods:
+    Parameters
     ----------
-    __init__ : constructor
-    all_pix2world : pixel -> world coordinates (astropy-like)
-    all_world2pix : world -> pixel coordinates (astropy-like)
+    inwcs : fits.Header or astropy.wcs.WCS or gwcs.wcs.WCS
+        The input WCS.
+    noconvert : bool, optional
+        Do not internally convert WCS type.
 
-    Attributes:
-    -------------
-    constructortype : what type of input was used to make this object
-    type : what type of method to use in computation (currently ASTROPY or GWCS)
-    obj : the WCS object being wrapped
-    err : for 'ASTROPY+', contains an interpolator for the error
+    Methods
+    -------
+    __init__
+       Constructor.
+    all_pix2world
+       pixel -> world coordinates (astropy-like)
+    all_world2pix
+       world -> pixel coordinates (astropy-like)
+
+    Attributes
+    ----------
+    constructortype : str
+        What type of input was used to make this object.
+    type : str
+        What type of method to use in computation (currently ASTROPY or GWCS).
+    obj : variable
+        The WCS object being wrapped.
+    err : (function,function), optional
+        For 'ASTROPY+', contains an interpolator for the error. Not used for other types.
+
     """
 
     def __init__(self, inwcs, noconvert=False):
-        """Constructor. Selects from the possible types of input WCS objects.
-
-        Possible input methods, tested in order:
-        astropy.fits Header
-        astropy.wcs object
-
-        If noconvert is True, then does not try to convert a GWCS object into internal formats.
-        """
 
         self.array_shape = (Settings.sca_nside,Settings.sca_nside)
 
@@ -333,8 +452,21 @@ class PyIMCOM_WCS:
         raise TypeError('Unrecognized WCS type.')
 
     def _all_pix2world(self, pos, origin):
-        """Following astropy convention:
-        arguments are (N,2) array, origin
+        """
+        An astropy-like function to go from pixel to world coordinates.
+
+        Parameters
+        ----------
+        pos : np.array
+            Pixel coordinates, shape (N,2).
+        origin: int
+            Offset of lower-left pixel, should be 0 or 1.
+
+        Returns
+        -------
+        np.array
+            World coordinates. Shape (N,2).
+
         """
 
         if self.type=='ASTROPY':
@@ -350,7 +482,36 @@ class PyIMCOM_WCS:
             return np.vstack((ra,dec)).T
 
     def all_pix2world(self, *args):
-        """This version also allows 3-argument format with 1D arrays or scalars"""
+        """
+        An astropy-like function to go from pixel to world coordinates.
+
+        This has both a 2-argument or a 3-argument format.
+
+        In 2-argument format, `pos` is a shape (N, 2) array and the return is also a shape (N, 2) array.
+
+        In 3-argument format, `pos` is a shape (N,) array of pixel x, `pos2` is a shape (N,) array of
+        pixel y, and the return valus is ra, dec, both shape (N,) arrays. For N=1, you may use scalars.
+
+        Parameters
+        ----------
+        pos : np.array
+            Pixel coordinates.
+        pos2 : np.array, optional
+            2nd pixel coordinates array.
+        origin: int
+            Offset of lower-left pixel, should be 0 or 1.
+
+        Returns
+        -------
+        np.array or np.array, np.array
+            World coordinates.
+
+        See Also
+        --------
+        _all_pix2world : 2-argument format.
+
+        """
+
         if len(args)==2: return self._all_pix2world(np.array(args[0]),args[1])
         o = self._all_pix2world(np.vstack((args[0],args[1])).T, args[2])
         if isinstance(args[0],np.ndarray):
@@ -359,8 +520,21 @@ class PyIMCOM_WCS:
             return o[0,0], o[0,1]
 
     def _all_world2pix(self, pos, origin):
-        """Following astropy convention:
-        arguments are (N,2) array, origin
+        """
+        An astropy-like function to go from world to pixel coordinates.
+
+        Parameters
+        ----------
+        pos : np.array
+            World coordinates, shape (N,2).
+        origin: int
+            Offset of lower-left pixel, should be 0 or 1.
+
+        Returns
+        -------
+        np.array
+            Pixel coordinates. Shape (N,2).
+
         """
 
         if self.type=='ASTROPY':
@@ -382,7 +556,36 @@ class PyIMCOM_WCS:
             return np.vstack((x,y)).T + origin
 
     def all_world2pix(self, *args):
-        """This version also allows 3-argument format with 1D arrays or scalars"""
+        """
+        An astropy-like function to go from pixel to world coordinates.
+
+        This has both a 2-argument or a 3-argument format.
+
+        In 2-argument format, `pos` is a shape (N, 2) array and the return is also a shape (N, 2) array.
+
+        In 3-argument format, `pos` is a shape (N,) array of ra, `pos2` is a shape (N,) array of
+        dec, and the return valus is x, y, both shape (N,) arrays. For N=1, you may use scalars.
+
+        Parameters
+        ----------
+        pos : np.array
+            World coordinates.
+        pos2 : np.array, optional
+            2nd world coordinates array.
+        origin: int
+            Offset of lower-left pixel, should be 0 or 1.
+
+        Returns
+        -------
+        np.array or np.array, np.array
+            Pixel coordinates.
+
+        See Also
+        --------
+        _all_world2pix : 2-argument format.
+
+        """
+
         if len(args)==2: return self._all_world2pix(np.array(args[0]),args[1])
         o = self._all_world2pix(np.vstack((args[0],args[1])).T, args[2])
         if isinstance(args[0],np.ndarray):
@@ -394,21 +597,26 @@ def local_partial_pixel_derivatives2(inwcs,x,y):
     """Alternative form of the local partial derivatives function
     that is well-behaved near the poles and uses 2-sided derivatives.
 
-    Arguments:
+    Parameters
     ----------
-    inwcs : input wcs (astropy or with compatible all_pix2world method)
-    x : x position in pixels (0 offset)
-    y : y position in pixels (0 offset)
+    inwcs : pyimcom.wcsutil.PyIMCOM_WCS
+        The WCS that we are using.
+    x : float
+        x position in pixels (0 offset)
+    y : float
+        y position in pixels (0 offset)
 
-    Returns:
-    --------
-    jac : 2x2 Jacobian matrix, with output 0->West and 1->North
+    Returns
+    -------
+    jac : np.array
+        2x2 Jacobian matrix, with output 0->West and 1->North
 
-    Comments:
-    ---------
+    Notes
+    -----
     This is relative to unit vectors, so jac[0,:] is -cos(declination) * d(ra)/d(pix x or y).
-    So note this is different from astroy local_partial_pixel_derivatives2, which doesn't
+    So note this is different from astropy local_partial_pixel_derivatives, which doesn't
     have the factor of -cos(declination).
+
     """
 
     # choose grid of positions for the numerical derivative
@@ -436,8 +644,19 @@ def local_partial_pixel_derivatives2(inwcs,x,y):
     return(jac/degree) # output in degrees, not radians for consistency with astropy function
 
 def _stand_alone_test(infile):
-    """Simple tests of the above routines. Can be either an L2 ASDF file or FITS with the
-    WCS in the primary HDU.
+    """
+    Simple tests of the above routines.
+
+    Parameters
+    ----------
+    infile : str
+        File name. Can be either an L2 ASDF file or FITS with the
+        WCS in the primary HDU.
+
+    Returns
+    -------
+    None
+
     """
 
     if infile[-5:]=='.asdf':
@@ -466,4 +685,6 @@ def _stand_alone_test(infile):
     print(np.linalg.det(jac*3600))
 
 if __name__ == "__main__":
+    """Command-line test, with input file as an argument."""
+
     _stand_alone_test(sys.argv[1])

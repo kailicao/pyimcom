@@ -1,3 +1,19 @@
+"""
+Tools to make a mosaic picture.
+
+Functions
+---------
+resolve_bounds
+    Turn boundary list into tuple.
+get_config
+    Utility to get the configuration from a FITS file..
+cmapscale
+    Color mapping.
+make_picture_1band
+    Turns a single-band mosaic into an image file.
+
+"""
+
 import numpy as np
 import sys
 import os
@@ -8,7 +24,28 @@ from matplotlib import cm
 from ..config import Config
 
 def resolve_bounds(bounds, nblock):
-    """Turns bounds object into a tuple of ymin,ymax,xmin,xmax"""
+    """
+    Turns bounds object into a tuple of ymin,ymax,xmin,xmax restricted to `nblock` x `nblock` region.
+
+    Parameters
+    ----------
+    bounds : list of int
+        Length 4: [ymin,ymax,xmin,xmax]
+    nblock : int
+        The mosaic size in blocks.
+
+    Returns
+    -------
+    ymin : int
+        Bottom side of mosaic (inclusive).
+    ymax : int
+        Top side of mosaic (exclusive).
+    xmin : int
+        Left side of mosaic (inclusive).
+    xmax : int
+        Right side of mosaic (exclusive).
+
+    """
 
     def check1(ymin,ymax,xmin,xmax):
         return ymin>=0 and ymax<=nblock and xmin>=0 and xmax<=nblock and ymax>ymin and xmax>xmin
@@ -33,7 +70,20 @@ def resolve_bounds(bounds, nblock):
     return 0,nblock,0,nblock
 
 def get_config(fn1):
-    """Utility to get the configuration file."""
+    """
+    Utility to get the configuration.
+
+    Parameters
+    ----------
+    fn1 : str
+        File name.
+
+    Returns
+    -------
+    pyimcom.config.Config
+        The configuration used to generate `fn1`.
+
+    """
 
     cf = ''
     with fits.open(fn1) as f:
@@ -44,6 +94,27 @@ def get_config(fn1):
 
 # color mapping, input --> output on 0-255 scale
 def cmapscale(inarray, srange, cmap=None, stretch='asinh'):
+    """
+    Color mapping for making a display image.
+
+    Parameters
+    ----------
+    inarray : np.array of float
+        The array to be mapped. Shape (ny,nx).
+    srange : (float, float)
+        The minimum and maximum values to be represented (values beyond this will saturate).
+    cmap : str or None, optional
+        If string, uses that color scale; if None, makes a black and white image.
+    stretch : str, optional
+        The stretch. Current options are 'linear' and 'asinh'.
+
+    Returns
+    -------
+    np.array of uint8
+        Either a grayscale 2D array shape = (ny,nx) if cmap is None;
+        or an RGB 3D array shape = (ny,nx,3) if cmap is not None.
+
+    """
 
     (lsmin,lsmax) = srange
 
@@ -64,17 +135,34 @@ def cmapscale(inarray, srange, cmap=None, stretch='asinh'):
 
 
 def make_picture_1band(fn, outfile, layer=0, bounds=None, binning=1, cmap=None, srange=(-8.,600.), stretch='asinh'):
-    """Writes a mosaic image from a set of IMCOM output files.
+    """
+    Writes a mosaic image from a set of IMCOM output files.
 
-    Inputs:
-        fn = file stem (without the _DD_DD.fits)
-        outfile = output file name
-        layer = which image layer to use
-        bounds = boundary of the output image (default = whole mosaic)
-        binning = binning relative to the FITS images (reduces size of output image)
-        cmap = color map (uses matplotlib names; None -> black & white)
-        srange = color scale (min,max)
-        stretch = stretch type (current: asinh, linear)
+    Parameters
+    ----------
+    fn : str
+        File stem (without the _DD_DD.fits).
+    outfile : str
+        Output file name.
+    layer : int, optional
+        Which image layer to use (default is the Science layer).
+    bounds : list or None, optional
+        Boundary of the output image. If a list, should be [ymin,ymax,xmin,xmax], to indicate the range
+        xmin<=x<xmax, ymin<=y<ymax. If None (default), draws the whole mosaic.
+    binning : int, optional
+        Binning relative to the FITS images. Larger binning reduces size of output image.
+        The default is 1, corresponding to native resolution.
+    cmap : str or None, optional
+        Color map (uses matplotlib names; None -> black & white).
+    srange : (float, float), optional
+        Minimum and maximum of the color scale.
+    stretch : str, optional
+        Stretch type (currently: 'asinh' or 'linear')
+
+    Returns
+    -------
+    None
+
     """
 
     bw = (cmap is None)

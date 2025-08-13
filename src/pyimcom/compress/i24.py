@@ -1,4 +1,31 @@
-"""Functions to compress float arrays to 24 bit integers."""
+"""Functions to compress float arrays to 24 bit integers.
+
+Functions
+---------
+lsbf_fwd
+    Least significant bits moved first.
+lsbf_rev
+    Inverse of `lsbf_fwd`.
+diff_fwd
+    Replaces an image with an array of differences.
+diff_rev
+    Inverse of `diff_fwd`.
+smallnum_fwd
+    Re-maps numbers of small absolute value to be near 0 when unsigned.
+smallnum_rev
+    Inverse of `smallnum_fwd`.
+i24compress
+    Compresses an array using the 'I24' scheme.
+i24decompress
+    Decompresses an array using the 'I24' scheme.
+
+Classes
+-------
+I24Cube
+    Object that can be reformatted as floating point, integer, or compressed integer
+    in the 'I24' scheme.
+
+"""
 
 import numpy as np
 import copy
@@ -8,12 +35,28 @@ import time
 ### Utilities for reorganizing uint8 cubes ###
 
 def lsbf_fwd(im):
-   """Takes a 2D uint8 image and swaps the bits so that the least significant
+   """
+   Takes a 2D uint8 image and swaps the bits so that the least significant
    bit goes first, then the next, etc. and the most significant bit goes last.
 
    If given a 3D image, then does each 2D slice. The intent would be to use
    this on objects with a shape of (3,ny,nx); it will work for any number of slices,
    but it will be slow if the number of slices (3 in this case) is large.
+
+   Parameters
+   ----------
+   im : np.array of uint8
+       2D or 3D image.
+
+   Returns
+   -------
+   out_im : np.array of uint8
+       2D or 3D bit-swapped image. Same shape as `im`.
+
+   See Also
+   --------
+   lsbf_rev : Inverse function.
+
    """
 
    # 3D images are done one slice at a time
@@ -38,7 +81,23 @@ def lsbf_fwd(im):
    return out_im
 
 def lsbf_rev(im):
-   """Inverse function of lsbf_fwd"""
+   """Inverse of the bit-swapping function lsbf_fwd.
+
+   Parameters
+   ----------
+   im : np.array of uint8
+       2D or 3D image.
+
+   Returns
+   -------
+   out_im : np.array of uint8
+       2D or 3D bit-swapped image. Same shape as `im`.
+
+   See Also
+   --------
+   lsbf_fwd : Forward function.
+
+   """
 
    # 3D images are done one slice at a time 
    if len(np.shape(im))==3:
@@ -56,8 +115,25 @@ def lsbf_rev(im):
 ### Utilities for differencing integer cubes ###
 
 def diff_fwd(im,bitkeep):
-   """Replace an int32 image with differences of the same shape.
-   Keeps bitkeep bits (up to 31).
+   """
+   Replace an int32 image with differences of the same shape.
+
+   Parameters
+   ----------
+   im : np.array of int32
+       A 2D input image.
+   bitkeep : int
+       Number of bits to keep. The maximum is 31.
+
+   Returns
+   -------
+   np.array of int32
+       The image of differences, same shape as `im`.
+
+   See Also
+   --------
+   diff_rev : Inverse function.
+
    """
 
    ny,nx = np.shape(im)
@@ -67,7 +143,25 @@ def diff_fwd(im,bitkeep):
    return(c.reshape((ny,nx)).astype(np.int32))   
 
 def diff_rev(im,bitkeep):
-   """Inverse function of diff_fwd."""
+   """Reconstruct an image from differences. Inverse function of diff_fwd.
+
+   Parameters
+   ----------
+   im : np.array of int32
+       A 2D input image of differences.
+   bitkeep : int
+       Number of bits to keep. The maximum is 31.
+
+   Returns
+   -------
+   np.array of int32
+       The original image, same shape as `im`.
+
+   See Also
+   --------
+   diff_fwd : Forward function.
+
+   """
 
    ny,nx = np.shape(im)
    c = im.astype(np.uint32).flatten()
@@ -77,50 +171,115 @@ def diff_rev(im,bitkeep):
 ### Utilities for packaging small numbers together ###
 
 def smallnum_fwd(im,bitkeep):
-   """Packages small numbers together. Works on an int32 image with bitkeep bits used
-   and negative numbers rolling over as -j --> 2**bitkeep-j.
    """
+   Remapping to package small differences of either sign near 0.
+
+   Works on an int32 image with bitkeep bits used
+   and negative numbers rolling over as ``-j --> 2**bitkeep-j``.
+
+   Parameters
+   ----------
+   im : np.array of int32
+       A 2D input image.
+   bitkeep : int
+       Number of bits to keep. The maximum is 31.
+
+   Returns
+   -------
+   np.array of int32
+       Re-mapped image, same shape as `im`.
+
+   See Also
+   --------
+   smallnum_rev : Inverse function.
+
+   """
+
    return np.where(im>=2**(bitkeep-1), 2*(2**bitkeep-im)-1, 2*im)
 
 def smallnum_rev(im,bitkeep):
-   """Inverse of smallnum_fwd."""
+   """
+   Reconstructs images that have been re-mapped. Inverse of smallnum_fwd.
+
+   Parameters
+   ----------
+   im : np.array of int32
+       A 2D input image that has been re-mapped. 
+   bitkeep : int
+       Number of bits to keep. The maximum is 31.
+
+   Returns
+   -------
+   np.array of int32
+       Original image, same shape as `im`.
+
+   See Also
+   --------
+   smallnum_fwd : Forward function.
+
+   """
 
    return np.where(im%2, 2**bitkeep-1-im//2, im//2)
 
 class I24Cube:
 
-   """Routines to compress a float cube to int24 with scaling.
+   """
+   Class to compress a float cube to int24 with scaling, and reconstruct the original image.
+
+   Parameters
+   ----------
+   inarray : np.array
+       The input array. Options are
+       * 2D float32 (original image)
+       * 2D int32 (intermediate step: leading byte not used)
+       * 3D uint8 (compressed form)
+   pars : dict
+       Parameters for the compression scheme. The possible keys are
+       VMIN, VMAX, SOFTBIAS, DIFF, ALPHA, BITKEEP, and REORDER.
+   overflow : astropy.io.fits.BinTableHDU or None, optional
+       Overflow table (y,x,value). Needed if a compressed image is given as input.
 
    Attributes
-   ------------
-   ny, nx = shape of image
-   pars = compression parameters
-   data = current image data
-   mode = current image type
-   vmin, vmax = min and max range to compress
-   alpha = power law index of compression (1=linear)
-   bitkeep = number of bits to keep (max 24)
-   softbias = integer in [0,2**24) to add (to avoid slight negative fluctuations being 111111); if -1, uses smallnum compression instead
-   diff = use difference of successive pixels? (boolean)
-   overflow = overflow table (y,x,value)
+   ----------
+   ny : int
+       Height of image
+   nx : int
+       Width of image
+   pars : dict
+       Compression parameters specified when constructed.
+   data : np.array
+       Current image data.
+   mode : str
+       Current image type. One of 'float32', 'int32', or 'uint8'.
+   vmin : float
+       Minimum of compression range.
+   vmax : float
+       Maximum of compression range.
+   alpha : float
+       Power law index of compression (1=linear).
+   bitkeep : int
+       Number of bits to keep (maximum=24).
+   reorder : bool
+       Implement bit reordering?
+   softbias : int
+       Integer in [0,2**24) to add (to avoid slight negative fluctuations being 111111).
+       If -1, uses smallnum compression instead.
+   diff : bool
+       Use difference of successive pixels?
+   overflow : astropy.io.fits.BinTableHDU or None
+       Overflow table (y,x,value).
    reorder = use bit reordering? (boolean)
 
    Methods
    --------
-   __init__ : constructor (from either float or integer array)
-   to_mode : change image format to a different (often compressed) type
+   __init__
+       Constructor.
+   to_mode
+       Change image format to a different (often compressed) storage mode.
+
    """
 
    def __init__(self, inarray, pars, overflow=None):
-      """Constructor from one of:
-      
-      - 2D float32 (original image)
-      - 2D int32 (intermediate step: leading byte not used)
-      - 3D uint8 (compressed form)
-
-      pars : parameters for the compression scheme
-      overflow : overflow table (give this input when decompressing)
-      """
 
       # figure out what we have
       self.pars = copy.copy(pars)
@@ -169,7 +328,19 @@ class I24Cube:
       self.overflow = overflow
 
    def to_mode(self, mode):
-      """Converts to the given mode. Options are float32, int32, uint8."""
+      """
+      Converts to the given mode.
+
+      Parameters
+      ----------
+      mode : str
+          Options are 'float32', 'int32', and 'uint8'.
+
+      Returns
+      -------
+      None
+
+      """
 
       if mode not in ['float32', 'int32', 'uint8']:
          raise Exception("Unrecognized mode: {:s}".format(mode))
@@ -250,6 +421,29 @@ class I24Cube:
 # stand-alone functions
 
 def i24compress(im, scheme, pars):
+   """
+   Compresses an image.
+
+   Parameters
+   ----------
+   scheme : str
+       Compression scheme (right now supports 'I24A', 'I24B').
+   pars : dict
+       Parameters to pass to compression algorithm.
+
+   Returns
+   -------
+   data : np.array
+       The compressed data cube.
+   overflow : astropy.io.fits.BinTableHDU
+       The table of values that overflowed the quantization range.
+
+   See Also
+   --------
+   pyimcom.compress.i24.I24Cube : Compression class; see for possible keys in `pars`.
+
+   """
+
    cube = I24Cube(im, pars)
    if scheme=='I24A':
       cube.to_mode('int32')
@@ -262,6 +456,29 @@ def i24compress(im, scheme, pars):
    return cube.data, cube.overflow
 
 def i24decompress(im, scheme, pars, overflow=None):
+   """
+   Decompresses an image.
+
+   Parameters
+   ----------
+   scheme : str
+       Compression scheme (right now supports 'I24A', 'I24B').
+   pars : dict
+       Parameters to pass to compression algorithm.
+    overflow: astropy.io.fits.BinTableHDU or None, optional
+        Overflow table (y,x,value). Needed if a compressed image is given as input.
+   Returns
+   -------
+   data : np.array
+       The de-compressed data cube.
+
+   See Also
+   --------
+   pyimcom.compress.i24.I24Cube : Compression class; see for possible keys in `pars`.
+
+   """
+
+
    cube = I24Cube(im, pars, overflow=overflow)
    if scheme=='I24A' or scheme=='I24B':
       cube.to_mode('float32')

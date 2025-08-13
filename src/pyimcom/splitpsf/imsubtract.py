@@ -1,3 +1,17 @@
+"""
+Routines for implementing the image subtraction step in PSF wing removal.
+
+Functions
+---------
+pltshow
+    Helper to determine where to save a plot.
+get_wcs
+    Extracts the World Coordinate System from a cached file.
+run_imsubtract
+    Main workflow for image subtraction step.
+
+"""
+
 import numpy as np
 import sys
 #from astropy.wcs import WCS
@@ -18,7 +32,31 @@ from ..config import Config
 from ..wcsutil import PyIMCOM_WCS
 
 def pltshow(plt, display, pars={}):
-    """Where to save a plot"""
+    """
+    Where to save a plot.
+
+    Parameters
+    ----------
+    display : str or None
+        Sends to file (if string), screen (None), or nowhere (if '/dev/null')
+    pars : dict, optional
+        Parameters for saving the file.
+        Must be provided if a file is requested.
+
+    Returns
+    -------
+    None
+
+    Notes
+    -----
+    The `pars` dictionary contains the keys:
+    * 'type' : str, currently only supports 'window'
+    * 'obsid' : int, observation ID
+    * 'sca' : int, SCA number
+    * 'ix' : int, x block index
+    * 'iy' : int, y block index
+
+    """
 
     if display is None:
         plt.show()
@@ -36,8 +74,21 @@ def pltshow(plt, display, pars={}):
         plt.savefig(display+f'_{obsid}_{sca}_{ix:02d}_{iy:02d}.png')
 
 def get_wcs(cachefile):
-    """Gets the WCS from a cached FITS file.
+    """
+    Gets the WCS from a cached FITS file.
+
     If a gwcs is used, finds the attached ASDF file and reads that.
+
+    Parameters
+    ----------
+    cachefile : str
+        Name of the cached file.
+
+    Returns
+    -------
+    pyimcom.wcsutils.PyIMCOM_WCS
+        The World Coordinate System of the cached file.
+
     """
 
     with fits.open(cachefile) as hdul:
@@ -48,14 +99,23 @@ def get_wcs(cachefile):
         return PyIMCOM_WCS(hdul['SCIWCS'].header)
 
 def run_imsubtract(config_file, display=None):
-    """Main routine to run imsubtract.
+    """
+    Main routine to run imsubtract.
 
-    Input is config_file.
+    Parameters
+    ----------
+    config_file : str
+        Location of a configuration file.
+    display : str or None, optional
+        Display location for intermediate steps.
 
-    Several options for display:
-        -- display = None : print to screen
-        -- display = '/dev/null' : don't save
-        -- display = any other string : save to display+f'_{obsid}_{sca}_{ix:02d}_{iy:02d}.png'
+    Notes
+    -----
+    There are several options for `display`:
+
+    * `display` = None : print to screen
+    * `display` = '/dev/null' : don't save
+    * `display` = any other string : save to ``display+f'_{obsid}_{sca}_{ix:02d}_{iy:02d}.png'``
 
     """
 
@@ -225,7 +285,9 @@ if __name__ == '__main__':
 
     python3 -m pyimcom.splitpsf.imsubtract <config> [<output images>]
     (uses plt.show() if output stem not specified; output image directory is relative to cache file)
+
     """
+
     start = time.time()
     # get the json file
     config_file = sys.argv[1]
