@@ -39,7 +39,7 @@ def pltshow(plt, display, pars={}):
     ----------
     display : str or None
         Sends to file (if string), screen (None), or nowhere (if '/dev/null')
-    pars : dict
+    pars : dict, optional
         Parameters for saving the file.
         Must be provided if a file is requested.
 
