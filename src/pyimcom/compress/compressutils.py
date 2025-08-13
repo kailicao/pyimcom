@@ -147,7 +147,7 @@ class CompressedOutput:
           Name of the compression scheme.
       pars : dict
           Parameters to be passed to the compression algorithm.
-      ovflow : astropy.io.fits.BinTableHDU or None
+      ovflow : astropy.io.fits.BinTableHDU or None, optional
           (If used.) A table of values that overflowed the quantization range for the
           compression scheme. Returns None if not used.
 
