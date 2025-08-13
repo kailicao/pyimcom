@@ -457,7 +457,6 @@ class PSFGrp:
     def __init__(self, in_or_out: bool = True,
                  inst: 'coadd.InStamp' = None, blk: 'coadd.Block' = None,
                  verbose: bool = False, visualize: bool = False) -> None:
-        """Constructor."""
 
         self.in_or_out = in_or_out
 
