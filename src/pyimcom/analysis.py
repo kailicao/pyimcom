@@ -768,7 +768,6 @@ class StarsAnal:
     ncol = len(ColDescr)
 
     def __init__(self, outim: OutImage, layer: str = 'gsstar14') -> None:
-        """Constructor."""
 
         self.outim = outim
         self.layer = layer
