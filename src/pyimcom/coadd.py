@@ -1384,7 +1384,7 @@ class Block:
     Parameters
     ----------
     cfg : Config, optional
-        Configuration for this Block. The default is None.
+        Configuration for this Block.
     this_sub : int, optional
         Number determining the location of this Block in the mosaic.
     run_coadd : bool, optional
