@@ -458,6 +458,10 @@ class NoiseReport(ReportSection):
             Noise slice number used.
         bin_flag : int, optional
             Binning? (1=yes, 0=no).
+        win : bool, optional
+            Whether to convolve the noise frame with a Tukey window function.
+        alpha : float, optional
+            Tukey window parameter.        
 
         Returns
         -------
