@@ -1781,7 +1781,6 @@ class SysMatB:
     """
 
     def __init__(self, blk: 'coadd.Block') -> None:
-        """Constructor."""
 
         self.blk = blk
 
