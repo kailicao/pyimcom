@@ -66,7 +66,6 @@ class ABasis:
     """
 
     def __init__(self,p_order,N):
-        """Constructor."""
 
         self.p_order = p_order
         self.N = N
