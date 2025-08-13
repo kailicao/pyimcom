@@ -900,7 +900,7 @@ def _get_sca_imagefile(path, idsca, obsdata, format_, extraargs=None):
         Observation table (needed for some data formats).
     format_ : str
         Input file format type identifier from the configuration.
-    extraargs : dict or None
+    extraargs : dict or None, optional
         Additional arguments that can be provided for some types of files.
         Default is None.
 
