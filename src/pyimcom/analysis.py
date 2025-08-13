@@ -784,7 +784,7 @@ class StarsAnal:
         Parameters
         ----------
         n : int or None, optional
-            Size of output images. The default is None.
+            Size of output images.
             If not provided, derive from self.cfg. Same for other parameters.
         search_radius : float or None, optional
             Search radius for injected point sources.
