@@ -65,7 +65,6 @@ class _LAKernel:
     """
 
     def __init__(self, outst: 'coadd.OutStamp') -> None:
-        """Constructor."""
 
         self.outst = outst
         cfg = outst.blk.cfg  # shortcut
