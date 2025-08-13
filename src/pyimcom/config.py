@@ -49,7 +49,6 @@ class Timer:
     """
 
     def __init__(self) -> None:
-        """Constructor."""
 
         self.tstart = perf_counter()
 
