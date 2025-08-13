@@ -456,7 +456,7 @@ class NoiseReport(ReportSection):
             Number of bins, should match bin number in get_wavenumbers
         use_slice : int, optional
             Noise slice number used.
-        bin_flag : int
+        bin_flag : int, optional
             Binning? (1=yes, 0=no).
 
         Returns
