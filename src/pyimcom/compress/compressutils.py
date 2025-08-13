@@ -81,7 +81,6 @@ class CompressedOutput:
    """
 
    def __init__(self, fname, format=None):
-      """Constructor."""
 
       self.origfile = fname
 
