@@ -565,9 +565,6 @@ class NoiseReport(ReportSection):
         """
         Makes a simple overview figure.
 
-        Parameters
-        ----------
-        None
 
         Returns
         -------
