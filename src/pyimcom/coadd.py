@@ -1424,7 +1424,6 @@ class Block:
 
     def __init__(self, cfg: Config = None, this_sub: int = 0,
                  run_coadd: bool = True) -> None:
-        """Constructor."""
 
         self.timer = Timer()
         cfg(); self.cfg = cfg
