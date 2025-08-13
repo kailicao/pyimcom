@@ -82,7 +82,6 @@ class InImage:
     """
 
     def __init__(self, blk: 'Block', idsca: (int, int)) -> None:
-        """Constructor."""
 
         self.blk = blk
         self.idsca = idsca
