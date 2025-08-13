@@ -454,7 +454,7 @@ class NoiseReport(ReportSection):
             Normalization of |FFT|^2->power spectrum.
         num_radial_bins : int
             Number of bins, should match bin number in get_wavenumbers
-        use_slice : int
+        use_slice : int, optional
             Noise slice number used.
         bin_flag : int
             Binning? (1=yes, 0=no).
