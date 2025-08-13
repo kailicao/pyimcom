@@ -465,7 +465,8 @@ def i24decompress(im, scheme, pars, overflow=None):
        Compression scheme (right now supports 'I24A', 'I24B').
    pars : dict
        Parameters to pass to compression algorithm.
-
+    overflow: astropy.io.fits.BinTableHDU or None, optional
+        Overflow table (y,x,value). Needed if a compressed image is given as input.
    Returns
    -------
    data : np.array
