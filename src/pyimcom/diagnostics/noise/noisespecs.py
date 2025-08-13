@@ -260,7 +260,7 @@ for iblock in range(nstart,nstart+nblockuse):
           ----------
           noiseframe : np.array
               the input image to be averaged over (2D)
-          num_radial_bins : int
+          num_radial_bins : int, optional
               Number of bins, should match bin number in get_wavenumbers.
       
           Returns
