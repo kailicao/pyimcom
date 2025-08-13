@@ -206,7 +206,6 @@ class Config:
     )
 
     def __init__(self, cfg_file: str = '', inmode=None) -> None:
-        """Constructor."""
 
         # option to load from a block output file
         if inmode == 'block':
