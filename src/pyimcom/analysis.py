@@ -527,7 +527,6 @@ class NoiseAnal:
     PS1D_STYLES = ['solid', 'dotted', 'dashed', 'solid', 'dashdot']
 
     def __init__(self, outim: OutImage, layer: str) -> None:
-        """Constructor."""
 
         self.outim = outim
         self.layer = layer
