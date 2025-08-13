@@ -517,7 +517,9 @@ class PSFGrp:
         yxco : np.array
             Sampling positions, with (0, 0) at the PSF center. Must be 3-dimensional.
             `yxco`[0,:,:] represents x-positions and `yxco`[1,:,:] represents y-positions.
-        xctr, yctr : float, float
+        xctr : float
+            Position of the PSF center.
+        yctr : float
             Position of the PSF center.
 
         Returns
