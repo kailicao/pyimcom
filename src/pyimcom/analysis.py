@@ -47,7 +47,7 @@ class OutImage:
     cfg : Config, optional
         Configuration used for this output image.
         If provided, no consistency check is performed.
-        The default is None. If None, it will be extracted from FITS file.
+        If None, it will be extracted from FITS file.
     hdu_names : list of str, optional
         List of HDU names of this FITS file.
         If provided, no consistency check is performed.
