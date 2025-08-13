@@ -57,7 +57,6 @@ class ReportSection():
     """
 
     def __init__(self, rpt):
-        """Constructor."""
 
         self.stem = rpt.stem
         self.LegacyName = rpt.LegacyName
