@@ -373,7 +373,7 @@ def shearimage_to_fits(im, fname, layers=None, overwrite=False):
         Image dictionary from MetaMosaic.shearimage.
     fname : str
         File name for output.
-    layers : np.array of int
+    layers : np.array of int, optional
         Which layers to include.
     overwrite : bool, optional
         Whether to overwrite an existing file.
