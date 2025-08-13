@@ -104,7 +104,6 @@ class OutImage:
         return hdu_names
 
     def __init__(self, fpath: str, cfg: Config = None, hdu_names: [str] = None) -> None:
-        """Constructor."""
 
         assert exists(fpath), f'{fpath} does not exist'
         self.fpath = fpath
