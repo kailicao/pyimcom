@@ -102,7 +102,7 @@ class ReportSection():
 
         Parameters
         ----------
-        nblockmax : int
+        nblockmax : int, optional
             Maximum block size allowed.
 
         Returns
