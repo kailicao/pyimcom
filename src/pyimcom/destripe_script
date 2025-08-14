@@ -23,6 +23,6 @@ export OMP_NUM_THREADS=8
 echo "OMP_NUM_THREADS: $OMP_NUM_THREADS"
 
 #Run programs
-cd /fs/scratch/PCON0003/klaliotis/pyimcom/
+cd /fs/scratch/PCON0003/klaliotis/pyimcom/src/pyimcom
 
 python3 imDestripe.py
