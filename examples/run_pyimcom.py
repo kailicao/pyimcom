@@ -1,3 +1,5 @@
+"""PyIMCOM example."""
+
 import sys
 import numpy as np
 from pyimcom.config import Config, Settings as Stn
