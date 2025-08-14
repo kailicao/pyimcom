@@ -5,6 +5,7 @@ Program to remove correlated noise stripes from RST images.
 import os
 import glob
 import time
+t0_global = time.time()
 import csv
 import cProfile
 import pstats
@@ -274,7 +275,7 @@ class Sca_img:
             det_mat = np.reshape(np.linalg.det(derivs_px), (4088, 4088))
             g_eff[:, :] = 1 / (np.abs(det_mat) * np.cos(np.deg2rad(dec[1:4089, 1:4089])) * t_exp * A_eff)
             g_eff.flush()
-            write_to_file(f'G_eff calc duration: {time.time() - g0}')
+            #write_to_file(f'G_eff calc duration: {time.time() - g0}')
             del g_eff
 
         self.g_eff = np.memmap(tempdir + obsid + '_' + scaid + '_geff.dat', dtype='float64', mode='r',
@@ -391,7 +392,7 @@ class Sca_img:
             make_Neff = False
 
         t_a_start = time.time()
-        write_to_file(f'Starting interpolation for SCA {self.obsid}_{self.scaid}')
+        #write_to_file(f'Starting interpolation for SCA {self.obsid}_{self.scaid}')
         sys.stdout.flush()
 
         N_BinA = 0
@@ -724,7 +725,7 @@ def cost_function_single(j, sca_a, p, f, thresh=None):
 
     J_A_mask *= I_A.mask
 
-    psi = np.where(J_A_mask, I_A.image - J_A_image, 0)
+    psi = np.where(J_A_mask, I_A.image - J_A_image, 0).astype('float32')
     result = f(psi, thresh) if thresh is not None else f(psi)
     local_epsilon = np.sum(result)
 
@@ -866,12 +867,14 @@ def main():
         max_p.params = max_params
         max_epsilon, max_psi = cost_function(max_p, f, thresh)
         max_resids = residual_function(max_psi, f_prime, thresh)
+        del max_psi
         d_cost_max = np.sum(max_resids * direction)
 
         min_params = p.params + alpha_min * direction
         min_p.params = min_params
         min_epsilon, min_psi = cost_function(min_p, f, thresh)
         min_resids = residual_function(min_psi, f_prime, thresh)
+        del min_psi
         d_cost_min = np.sum(min_resids * direction)
 
         conv_params = []
@@ -911,7 +914,9 @@ def main():
             working_p.params = working_params
 
             working_epsilon, working_psi = cost_function(working_p, f, thresh)
+            print('Global elapsed t = {:8.1f}'.format((time.time()-t0_global)/60))
             working_resids = residual_function(working_psi, f_prime, thresh)
+            print('Global elapsed t = {:8.1f}'.format((time.time()-t0_global)/60))
             d_cost = np.sum(working_resids * direction)
             convergence_crit = (alpha_max - alpha_min)
             conv_params.append([working_epsilon, alpha_test, d_cost])
@@ -926,7 +931,7 @@ def main():
             write_to_file(f"Working params: {working_p.params}")
             write_to_file(f"Current alpha range (min, test, max): {alpha_min, alpha_test, alpha_max}")
             write_to_file(f"Current delta alpha: {convergence_crit}")
-            if TIME:  write_to_file(f"Time spent in this LS iteration: {(time.time() - t0_ls_iter) / 60} minutes.")
+            write_to_file(f"Time spent in this LS iteration: {(time.time() - t0_ls_iter) / 60} minutes.")
 
             # Convergence and update criteria and checks
             if ((working_epsilon < best_epsilon + tol * alpha_test * d_cost) and (np.abs(alpha_test)>=1e-6)):
@@ -1004,9 +1009,11 @@ def main():
                              'MSE', 'Parameter Change'])
 
         write_to_file('### Starting initial cost function')
+        print('Global elapsed t = {:8.1f}'.format((time.time()-t0_global)/60))
         global test_image_dir
         test_image_dir = outpath + '/test_images/' + str(0) + '/'
         psi = cost_function(p, f, thresh)[1]
+        print('Global elapsed t = {:8.1f}'.format((time.time()-t0_global)/60))
         sys.stdout.flush()
 
         for i in range(max_iter):
@@ -1020,6 +1027,7 @@ def main():
                 grad, gr_term1, gr_term2 = residual_function(psi, f_prime, thresh, extrareturn=True)
                 del gr_term1, gr_term2
                 write_to_file(f"Minutes spent in initial residual function: {(time.time() - t_start_CG_iter) / 60}")
+                print('Global elapsed t = {:8.1f}'.format((time.time()-t0_global)/60))
                 sys.stdout.flush()
 
             # Compute the norm of the gradient
@@ -1060,6 +1068,7 @@ def main():
             t_start_LS = time.time()
             write_to_file(f"Initiating linear search in direction: {direction}")
             p_new, psi_new, grad_new = linear_search(p, direction, f, f_prime, grad, thresh)
+            print('Global elapsed t = {:8.1f}'.format((time.time()-t0_global)/60))
             ls_time = (time.time() - t_start_LS) / 60
             write_to_file(f'Total time spent in linear search: {ls_time}')
             write_to_file(
@@ -1087,6 +1096,7 @@ def main():
             direction_prev = direction
 
             write_to_file(f'Total time spent in this CG iteration: {(time.time() - t_start_CG_iter) / 60} minutes.')
+            print('Global elapsed t = {:8.1f}'.format((time.time()-t0_global)/60))
             sys.stdout.flush()
 
             if i == max_iter - 1:
@@ -1134,7 +1144,7 @@ if __name__ == '__main__':
     profiler.enable()
     mem_usage = None
     try:
-        mem_usage = memory_usage(main, interval=1800, retval=False)
+        mem_usage = memory_usage(main, interval=120, retval=False)
     finally:
         profiler.disable()
         stream=io.StringIO()
