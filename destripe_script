@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=96
-#SBATCH --mem=420G
-#SBATCH --time=140:00:00
-#SBATCH --job-name=imdestripe_H_test_mosaic
+#SBATCH --cpus-per-task=60
+#SBATCH --mem=200G
+#SBATCH --time=72:00:00
+#SBATCH --job-name=imdestripe_H_test_med
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=laliotis.2@osu.edu
-#SBATCH --output=/fs/scratch/PCON0003/klaliotis/imdestripe/mosaic_test/imdestripe_test.out.%j
+#SBATCH --output=/fs/scratch/PCON0003/klaliotis/imdestripe/med_test/imdestripe_test.out.%j
 #SBATCH --account=PCON0003
 
 #Set echo
