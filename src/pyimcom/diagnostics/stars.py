@@ -165,7 +165,7 @@ def _starplot_diagnostic(datastem):
     S.set_yticks(y,yl)
     esig = ewinvar**0.5
     outdict['RMS_ELLIP_FIXEDWIN'] = esig
-    S.text(55, 0.007, 'rms = {:11.5E}'.format(esig), color='k')
+    S.text(55, 0.05, 'rms = {:11.5E}'.format(esig), color='k')
     S.scatter(alldata[:,20],np.hypot(alldata[:,18],alldata[:,19]),s=0.1,color='#2020ff',marker='+')
 
     # size deviation from median
@@ -190,7 +190,7 @@ def _starplot_diagnostic(datastem):
     outdict['RMS_SIZE_ERR'] = sizerrvar**0.5/sizemed
     S.text(55, 0.018, 'rms = {:11.5E}'.format(outdict['RMS_SIZE_ERR']), color='k')
     outdict['MED_SIZE'] = sizemed
-    S.text(55, 0.009, r'$\sigma_{\rm med}/s_{\rm out}=$' + '{:.5f}'.format(sizemed), color='k')
+    S.text(55, 0.012, r'$\sigma_{\rm med}/s_{\rm out}=$' + '{:.5f}'.format(sizemed), color='k')
     ds = alldata[:,13]/sizemed-1.
     S.scatter(alldata[:,20],np.clip(ds,1e-49,None),s=0.2,color='#00a040',marker='1',label='positive')
     S.scatter(alldata[:,20],np.clip(-ds,1e-49,None),s=0.2,color='#e06000',marker='2',label='negative')
