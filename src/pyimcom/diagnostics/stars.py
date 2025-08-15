@@ -147,7 +147,7 @@ def _starplot_diagnostic(datastem):
     ## Windowed ellipticity ##
     S = F.add_subplot(2,3,6)
     S.set_xlabel('Fidelity (dB)')
-    S.set_ylabel(r'$|e_{\rm out}|$ (0.4" window)')
+    S.set_ylabel(r'$|e_{\rm out}|$ (0.4$"$ window)')
     S.set_title('Windowed ellipticity')
     S.set_xlim(30,80)
     S.set_ylim(1e-5,1e-2)
@@ -192,9 +192,9 @@ def _starplot_diagnostic(datastem):
     outdict['MED_SIZE'] = sizemed
     S.text(55, 0.025, r'$\sigma_{\rm med}/s_{\rm out}=$' + '{:.5f}'.format(sizemed), color='k')
     ds = alldata[:,13]/sizemed-1.
-    S.legend(loc='upper right')
     S.scatter(alldata[:,20],np.clip(ds,1e-49,None),s=0.2,color='#00a040',marker='1',label='positive')
     S.scatter(alldata[:,20],np.clip(-ds,1e-49,None),s=0.2,color='#e06000',marker='2',label='negative')
+    S.legend(loc='upper right')
 
     # sqrtS histogram
     S = F.add_subplot(2,3,3)
@@ -220,7 +220,7 @@ def _starplot_diagnostic(datastem):
         if 10**i>ymax: break
     S.set_yticks(y,yl)
     S.grid(True, color='g', linestyle='-', linewidth=.25)
-    S.text(1.2, 0.4*ymax, '{:.3f}'.format(pc) + r'\% at >2', color='k')
+    S.text(1.2, 0.4*ymax, '{:.3f}'.format(pc) + r'\% at $>$2', color='k')
     outdict['PCT_NOISE_GT2'] = pc
     sdata = np.loadtxt(datastem + '_SimulatedStar_sqrtS_hist.dat')
     S.bar(sdata[:,0], sdata[:,1], width=0.7*(sdata[1,0]-sdata[0,0]), align='center', facecolor='#406000', edgecolor='#0000a0')
@@ -249,7 +249,7 @@ def _starplot_diagnostic(datastem):
         if 10**i>ymax: break
     S.set_yticks(y,yl)
     S.grid(True, color='g', linestyle='-', linewidth=.25)
-    S.text(6.5, 0.4*ymax, '{:.3f}'.format(pc) + r'\% at >10', color='k')
+    S.text(6.5, 0.4*ymax, '{:.3f}'.format(pc) + r'\% at $>$10', color='k')
     ndata = np.loadtxt(datastem + '_SimulatedStar_neff_hist.dat')
     S.bar(ndata[:,0], ndata[:,1], width=0.7*(ndata[1,0]-ndata[0,0]), align='center', facecolor='#406000', edgecolor='#0000a0')
 
