@@ -43,7 +43,7 @@ s_in = 0.11  # arcsec^2
 t_exp = 154  # sec
 
 # Import config file
-CFG = Config(cfg_file='/fs/scratch/PCON0003/klaliotis/pyimcom/configs/imdestripe_configs/config_destripe_med.json')
+CFG = Config(cfg_file='/fs/scratch/PCON0003/klaliotis/pyimcom/configs/imdestripe_configs/config_destripe-H.json')
 filter_ = filters[CFG.use_filter]
 A_eff = areas[CFG.use_filter]
 obsfile = CFG.ds_obsfile #location and stem of input images. overwritten by temp input dir
