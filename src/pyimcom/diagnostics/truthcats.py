@@ -14,6 +14,7 @@ from os.path import exists
 from layer import GalSimInject, GridInject
 import json
 import re
+from ..compress.compressutils import ReadFile
 
 bd = 40  # padding size
 bd2 = 8
@@ -47,7 +48,7 @@ for iblock in range(nstart, nblockmax ** 2):
 
     # extract information from the header of the first file
     if iblock == nstart:
-        with fits.open(infile) as f:
+        with ReadFile(infile) as f:
 
             n = numpy.shape(f[0].data)[-1]  # size of output images
 
@@ -80,7 +81,7 @@ for iblock in range(nstart, nblockmax ** 2):
 
     if not exists(infile): continue
 
-    with fits.open(infile) as f:
+    with ReadFile(infile) as f:
         mywcs = wcs.WCS(f[0].header)
 
     resolutionTables = {}  # re-initiate these to empty for each block, since we need to redo coords per block

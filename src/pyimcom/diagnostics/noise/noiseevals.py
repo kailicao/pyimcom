@@ -20,6 +20,7 @@ import json
 import re
 import numpy as np
 import datetime
+from ...compress.compressutils import ReadFile
 
 print('This run started: ', datetime.datetime.now())
 
@@ -84,7 +85,7 @@ for iblock in range(nstart, nstart + nblockuse):
     
     # extract information from the header of the first file
     if iblock == nstart:
-        with fits.open(infile) as f:
+        with ReadFile(infile) as f:
 
             n = numpy.shape(f[0].data)[-1]  # size of 2D PS images
 
@@ -124,10 +125,9 @@ for iblock in range(nstart, nstart + nblockuse):
         continue
         
     print('# Running block: ', blockid)
-    f = fits.open(infile)
-    ps_2d = np.copy(f['PRIMARY'].data.astype(np.float32))
-    ps_1d = np.copy(f['P1D_TABLE'].data)
-    f.close()
+    with ReadFile(infile) as f:
+        ps_2d = np.copy(f['PRIMARY'].data.astype(np.float32))
+        ps_1d = np.copy(f['P1D_TABLE'].data)
     
     print('# Noise Layers: ', noiselayers)
 

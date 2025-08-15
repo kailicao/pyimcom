@@ -44,6 +44,7 @@ import json
 import re
 import numpy as np
 
+from ..compress.compressutils import ReadFile
 from ..config import Settings
 from .report import ReportSection
 
@@ -62,7 +63,25 @@ class NoiseReport(ReportSection):
     The noise section of the report.
 
     Inherits from pyimcom.diagnostics.report.ReportSection. Overrides build.
-    
+
+    Attributes
+    ----------
+    nblock : int
+        Number of blocks in the (sub)mosaic used.
+    psfiles : list of str
+        List of power spectrum file names.
+    outslab : list of int
+        Indices of the layers used for the power spectrum computation.
+    orignames : list of str
+        Names of the layers used for the power spectrum computation.
+    L : int
+        Side length of the unique region in a block, in output pixels.
+    noiselayers : dict
+        A dictionary with values that are integers corresponding to the input layer
+        corresponding to the type of noise indicated in the key. (Keys should be strings.)
+    NLK : list of str
+        The keys of `noiselayers`, sorted in the same order as EXTRAINPUT in the configuration.
+
     """
 
     def build(self, nblockmax=100, m_ab=23.9, bin_flag=1, alpha=0.9, tarfiles=True):
@@ -193,7 +212,7 @@ class NoiseReport(ReportSection):
                 if is_first:
                     is_first=False
 
-                    with fits.open(infile) as f:
+                    with ReadFile(infile) as f:
                         n = np.shape(f[0].data)[-1] # size of output images
                         config = ''
                         for g in f['CONFIG'].data['text'].tolist(): config += g+' '
@@ -226,11 +245,12 @@ class NoiseReport(ReportSection):
                         if m:
                             noiselayers[str(m[0])] = i
                     print('# Noise Layers (format is layer:use_slice): ', noiselayers)
+                    NLK = list(noiselayers.keys()) # save for shorthand -- note this is in insertion order!
 
                 print('# Running file: ' + infile, 'whitenoisekey =', whitenoisekey)
 
                 # mean coverage
-                with fits.open(infile) as f:
+                with ReadFile(infile) as f:
                     mean_coverage = np.mean(np.sum(np.where(f['INWEIGHT'].data[0, :, :, :] > 0, 1, 0), axis=0)[2:-2, 2:-2])
 
                 if bin_flag==0:
@@ -243,9 +263,9 @@ class NoiseReport(ReportSection):
                     raise Exception('Error: bin flag must be 0 (no binning) or 1 (8x8 binning)')
 
                 i_layer = 0
-                for noiselayer in noiselayers:
+                for noiselayer in NLK:
                     use_slice = noiselayers[noiselayer]
-                    with fits.open(infile) as f:
+                    with ReadFile(infile) as f:
                         indata = np.copy(f[0].data[0, use_slice, bdpad:L+bdpad, bdpad:L+bdpad]).astype(np.float32)
                     nradbins = L//16 # Number of radial bins is side length div. into 8 from binning and then (floor) div. by 2.
                                      # Note that with the new clipping this is L again, the Aug. 2024 clipping needed (L-bdpad)
@@ -257,7 +277,7 @@ class NoiseReport(ReportSection):
                     if m:
                         norm_LN = (s_in**2)*area*tfr/(h_jy*gain) #factor to convert LN from flux DN/fr/s to intensity microJy/arcsec^2
                         if filter == 'K':
-                            with fits.open(infile) as f:
+                            with ReadFile(infile) as f:
                                 wndata = np.copy(f[0].data[0, noiselayers[whitenoisekey], bdpad:L+bdpad, bdpad:L+bdpad]).astype(np.float32)
                             wndata*=np.sqrt((B1-B0)/t_exp)*tfr/gain #convert WN to DN/fr
                             indata+=wndata #add to lab noise
@@ -289,7 +309,7 @@ class NoiseReport(ReportSection):
                 hdr['LAYERKEY'] = str(noiselayers)
                 hdr['NLAYERS'] = (len(noiselayers), 'Number of layers with noise')
                 key_layer2 = ['']*(1 + len(configStruct['EXTRAINPUT']))
-                for d in noiselayers.keys():
+                for d in NLK:
                     d_ = noiselayers[d]
                     key_layer2[d_]=d
                 key_layer = []
@@ -299,9 +319,9 @@ class NoiseReport(ReportSection):
                         key_layer.append(key_layer2[k])
                         self.orignames.append(configStruct['EXTRAINPUT'][k-1])
                 del key_layer2
-                for il in range(len(noiselayers)):
+                for il in range(len(NLK)):
                     key_ = 'LAYER{:02d}'.format(il)
-                    hdr[key_] = (key_layer[il], 'Noise layer '.format(il))
+                    hdr[key_] = (key_layer[il], 'Noise layer {:d} in intermediate file'.format(il))
                     if key_layer[il][:10]=='whitenoise': self.outslab[0]=il
                     if key_layer[il][:7]=='1fnoise': self.outslab[1]=il
                     if key_layer[il][:8]=='labnoise': self.outslab[2]=il
@@ -323,6 +343,7 @@ class NoiseReport(ReportSection):
 
         self.suffix = blockid[7:]
         self.noiselayers = noiselayers # save this for reference later
+        self.NLK = NLK
         return 'Completed'
 
     ## Utility functions below here ##
@@ -516,7 +537,7 @@ class NoiseReport(ReportSection):
 
             # extract information from the header of the first file
             if iblock==0:
-                with fits.open(infile) as f:
+                with ReadFile(infile) as f:
                     n = np.shape(f['PRIMARY'])[0]
                     l = (f['P1D_TABLE'].data).shape[0]
                     total_2D = np.zeros( np.shape(np.transpose(f['PRIMARY'].data, (1, 2, 0))) )
@@ -526,7 +547,7 @@ class NoiseReport(ReportSection):
             if not exists(infile):
                 continue
 
-            with fits.open(infile) as f:
+            with ReadFile(infile) as f:
                 indata_2D = np.copy(np.transpose(f['PRIMARY'].data, (1, 2, 0))).astype(np.float32)
                 indata_1D = np.copy(f['P1D_TABLE'].data)
 
@@ -609,7 +630,8 @@ class NoiseReport(ReportSection):
         for k in range(3):
             self.tex += ' {\em ' + pos[k] + ' panel} (' + ntypes[k] + ' noise): '
             if self.outslab[k] is not None:
-                self.tex += 'layer {:d} (in output file), name='.format(self.outslab[k]) + '{\\tt ' + self.orignames[self.outslab[k]] + '}.'
+                self.tex += 'layer {:d} (PyIMCOM) $\\rightarrow$ {:d} (PS table), name='.format(self.noiselayers[self.NLK[self.outslab[k]]], self.outslab[k])
+                self.tex += '{\\tt ' + self.orignames[self.outslab[k]] + '}.'
             else:
                 self.tex += 'not run.'
             self.tex += ' \n'

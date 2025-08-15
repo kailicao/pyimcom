@@ -18,6 +18,7 @@ import galsim
 import json
 import re
 
+from ..compress.compressutils import ReadFile
 from .outimage_utils.helper import HDU_to_bels
 from ..config import Config
 
@@ -77,7 +78,7 @@ def gen_starcube_nonoise(infile_fcn, outstem, nblockmax=100):
 
             # extract information from the header of the first file
             if is_first:
-                with fits.open(infile) as f:
+                with ReadFile(infile) as f:
 
                     n = np.shape(f[0].data)[-1] # size of output images
 
@@ -110,7 +111,7 @@ def gen_starcube_nonoise(infile_fcn, outstem, nblockmax=100):
 
             if not exists(infile): continue
             # get WCS
-            with fits.open(infile) as f:
+            with ReadFile(infile) as f:
                 mywcs = wcs.WCS(f[0].header)
                 map = f[0].data[0,use_slice,:,:]
                 wt = np.sum(np.where(f['INWEIGHT'].data[0,:,:,:]>0.01, 1, 0), axis=0)

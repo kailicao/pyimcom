@@ -21,7 +21,7 @@ class MosaicImage(ReportSection):
 
     """
 
-    def build(self, nblockmax=100):
+    def build(self, nblockmax=100, srange=(-0.1,100.)):
         """
         Builds the mosaic image and associated LaTeX.
 
@@ -30,6 +30,8 @@ class MosaicImage(ReportSection):
         nblock : int, optional
             Maximum size of mosaic to build. If larger than the nblock in the
             configuration, builds the whole mosaic.
+        srange : (float, float), optional
+            Stretch scale to use for the mosaic image.
 
         Returns
         -------
@@ -51,7 +53,7 @@ class MosaicImage(ReportSection):
             self.datastem + '_mosaic.png',
             bounds=[0,n,0,n],
             binning=j,
-            srange=(-10.,1000.),
+            srange=srange,
             stretch='asinh')
 
         self.tex += '\\section{Mosaic image}\n'
