@@ -18,7 +18,7 @@ import sys
 from astropy.io import fits
 import time
 
-def InterpMatrix(Rsearch, samp, x_out, y_out, Cov, kappa=1.e-10, deweight=1.e24, verbose=False):
+def InterpMatrix(Rsearch, samp, x_out, y_out, Cov, epsilon=1.e-7, stest=1, verbose=False):
     """
     Constructs a reconvolution + interpolation matrix.
 
@@ -34,10 +34,10 @@ def InterpMatrix(Rsearch, samp, x_out, y_out, Cov, kappa=1.e-10, deweight=1.e24,
         Fractional pixel positions in y (0 to 1, inclusive), shape (Npts,).
     Cov : np.array of float
         Covariance matrix of extra smoothing. length 3, array-like [Cxx, Cxy, Cyy].
-    kappa : float, optional
-        Regularization parameter to prevent singular matrices.
-    deweight : float, optional
-        Parameter to de-weight points outside the search radius (no longer used, still accepted for legacy reasons).
+    epsilon : float, optional
+        Regularization parameter to prevent singular correlations.
+    stest : int, optional
+        Computes diagnostics for every stest-th point instead of every point (default is every point). Saves time.
     verbose : bool, optional
         Print timing information?
 
@@ -64,7 +64,7 @@ def InterpMatrix(Rsearch, samp, x_out, y_out, Cov, kappa=1.e-10, deweight=1.e24,
     t0 = time.time()
 
     # extract parameters
-    R = np.sqrt(np.ceil(Rsearch**2)+.01)
+    R = np.sqrt(np.ceil(Rsearch**2)+.01) # the 0.01 guarantees no 'edge cases' where a search depends on <= vs <
     N = int(np.ceil(R)+1)*2
     sigma = samp/np.sqrt(8*np.log(2))
     Npts = np.size(x_out)
@@ -78,60 +78,102 @@ def InterpMatrix(Rsearch, samp, x_out, y_out, Cov, kappa=1.e-10, deweight=1.e24,
     posx,posy = np.meshgrid(posx1D,posy1D)
     posx = posx.flatten()
     posy = posy.flatten()
-    g = np.where((posx-.5)**2+(posy-.5)**2<=(R+.5**.5)**2)
+    g = np.nonzero((np.abs(posx-.5)-.5)**2+(np.abs(posy-.5)-.5)**2<=R**2)[0] # select points in search radius
     posx = posx[g]
     posy = posy[g]
     NN = np.size(posx)
 
     # system matrix
+    sige = np.sqrt(1./2.)
     A = np.identity(NN)
     for i in range(1,NN):
         for j in range(i):
             A[j,i] = A[i,j] = np.exp(-(posx[i]-posx[j])**2/4./sigma**2) * np.exp(-(posy[i]-posy[j])**2/4./sigma**2)
+    # additional terms for regularization
+    Ad = A + epsilon*np.identity(NN)
+    for i in range(1,NN):
+        for j in range(i):
+            Ad[j,i] = Ad[i,j] = A[i,j] + epsilon * np.exp(-(posx[i]-posx[j])**2/4./sige**2) * np.exp(-(posy[i]-posy[j])**2/4./sige**2)
 
     # get overlap matrices
+    t1=time.time()
     detCT = (2*sigma**2+Cxx) * (2*sigma**2+Cyy) - Cxy**2
+    ratio_sqrtdet = np.sqrt((sigma**2+Cxx)*(sigma**2+Cyy)-Cxy**2)/sigma**2
     iCTxx = (2*sigma**2+Cyy)/detCT
     iCTxy =            -Cxy /detCT
     iCTyy = (2*sigma**2+Cxx)/detCT
-    dx = posx[:,None]-x_out[None,:]
-    dy = posy[:,None]-y_out[None,:]
-    ratio_sqrtdet = np.sqrt((sigma**2+Cxx)*(sigma**2+Cyy)-Cxy**2)/sigma**2
-    b = np.exp(-.5*(iCTxx*dx**2 + 2*iCTxy*dx*dy + iCTyy*dy**2)) * 2*sigma**2/np.sqrt(detCT)
+
+    # this is the simple algorithm, but we can do better
+    # dx = posx[:,None]-x_out[None,:]
+    # dy = posy[:,None]-y_out[None,:]
+    # b = np.exp(-.5*(iCTxx*dx**2 + 2*iCTxy*dx*dy + iCTyy*dy**2)) * 2*sigma**2/np.sqrt(detCT)
+    #
+    # instead, we note that
+    # .5*(iCTxx*dx**2 + 2*iCTxy*dx*dy + iCTyy*dy**2) = du**2 + dv**2
+    # where we complete the square:
+    # dv**2 = iCTyy/2.*(dy+iCTxy/iCTyy*dx)**2
+    # du**2 = (iCTxx-iCTxy**2/iCTyy)/2.*dx
+    a_ = np.sqrt((iCTxx-iCTxy**2/iCTyy)/2.)
+    c_ = np.sqrt(iCTyy/2.)
+    m_ = iCTxy/iCTyy
+    posu = a_*posx
+    u_out = a_*x_out
+    posv = c_*(posy+m_*posx)
+    v_out = c_*(y_out+m_*x_out)
+    du = posu[:,None]-u_out[None,:]
+    dv = posv[:,None]-v_out[None,:]
+    b = (2*sigma**2/np.sqrt(detCT)) * np.exp(-(du**2+dv**2))
+
+    # regularization
+    bp = np.copy(b)
+    detCT_ = (2*sige**2+Cxx) * (2*sige**2+Cyy) - Cxy**2
+    iCTxx_ = (2*sige**2+Cyy)/detCT_
+    iCTxy_ =           -Cxy /detCT_
+    iCTyy_ = (2*sige**2+Cxx)/detCT_
+    a_ = np.sqrt((iCTxx_-iCTxy_**2/iCTyy_)/2.)
+    c_ = np.sqrt(iCTyy_/2.)
+    m_ = iCTxy_/iCTyy_
+    posu = a_*posx
+    u_out = a_*x_out
+    posv = c_*(posy+m_*posx)
+    v_out = c_*(y_out+m_*x_out)
+    du = posu[:,None]-u_out[None,:]
+    dv = posv[:,None]-v_out[None,:]
+    bp += (epsilon * 2*sige**2/np.sqrt(detCT_)) * np.exp(-(du**2+dv**2))
 
     # the interpolation matrix is built from each of the corners, and then interpolated.
     # this ensures continuity of the weights across cell boundaries
-    T = np.zeros_like(b.T)
+    TT = np.zeros_like(b)
     xcorner = [0.,1.,0.,1.]
     ycorner = [0.,0.,1.,1.]
     weights = [ (1-x_out)*(1-y_out), x_out*(1-y_out), (1-x_out)*y_out, x_out*y_out] # list of arrays
-    # -- old algorithm was about 20% slower --
-    #for icorner in range(4):
-    #    wvec = np.zeros(NN)
-    #    wvec[:]  = deweight
-    #    g = np.where((posx-xcorner[icorner])**2+(posy-ycorner[icorner])**2<=R**2)
-    #    wvec[g] = kappa
-    #    Aw = A + np.diag(wvec)
-    #    Tw = np.linalg.solve(Aw,b).T
-    #    T[:,:] += Tw[:,:]*weights[icorner][:,None]
-    Ad = A + kappa*np.identity(np.shape(A)[0])
+    Ai = np.zeros_like(Ad)
     for icorner in range(4):
-        g = np.where((posx-xcorner[icorner])**2+(posy-ycorner[icorner])**2<=R**2)[0]
-        cs = scipy.linalg.cho_factor(Ad[g,:][:,g])
-        #T[:,g] += np.linalg.solve(Ad[g,:][:,g],b[g,:]).T * weights[icorner][:,None]
-        T[:,g] += scipy.linalg.cho_solve(cs,b[g,:],check_finite=False).T * weights[icorner][:,None]
-    T[:,:] /= np.sum(T,axis=1)[:,None]
+        # get list of pixels needed for each corner
+        g = np.nonzero((posx-xcorner[icorner])**2+(posy-ycorner[icorner])**2<=R**2)[0]
+        # Cholesky decomposition
+        if icorner==0:
+            Ad_ = Ad[g,:][:,g]
+            cs = scipy.linalg.cho_factor(Ad_)
+        #    # don't need to do this again, since it's always the same matrix
+        # get T-transpose, since this is faster to generate
+        # note overwrite_b is safe since b[g,:] is advanced indexing and always returns a copy
+        TT[g,:] += scipy.linalg.cho_solve(cs,bp[g,:],check_finite=False) * weights[icorner][None,:]
+        #TT[g,:] += np.linalg.solve(Ad[g,:][:,g],b[g,:]) * weights[icorner][None,:] # <-- this method was slower
+
+    # normalize, transpose back
+    T = TT.T/np.sum(TT,axis=0)[:,None]
 
     # want U[i] = 1./ratio_sqrtdet + np.dot(A@T[i,:]-2*b[:,i],T[i,:])
-    U = 1./ratio_sqrtdet + np.sum( (T@A - 2*b.T)*T, axis=1)
+    U = 1./ratio_sqrtdet + np.sum( (T[::stest,:]@A - 2*b[:,::stest].T)*T[::stest,:], axis=1)
     # Notes on this expression:
     # (T@A-2b.T)[i,j] = T[i,k]A[k,j]-2b[j,i]
     # then the sum is sum_j (T@A-2b.T)[i,j] * T[i,j] = sum_j T[i,k]A[k,j]T[i,j] -2 sum_j b[j,i]T[i,j]
 
     if verbose: print('InterpMatrix time =', time.time()-t0)
-    return np.round(posx).astype(np.int16), np.round(posy).astype(np.int16), T, U, np.sum(T**2,axis=1)
+    return np.round(posx).astype(np.int16), np.round(posy).astype(np.int16), T, U, np.sum(T[::stest,:]**2,axis=1)
 
-def MultiInterp(in_array, in_mask, out_size, out_origin, out_transform, Rsearch, samp, Cov, kappa=1.e-10, deweight=1.e24):
+def MultiInterp(in_array, in_mask, out_size, out_origin, out_transform, Rsearch, samp, Cov, epsilon=1.e-7, stest=1, blocksize=393216):
     """
     Interpolates from an input array to a regularly spaced output array, including some additional smoothing..
 
@@ -153,10 +195,12 @@ def MultiInterp(in_array, in_mask, out_size, out_origin, out_transform, Rsearch,
         Sampling rate of input image (samples per FWHM).
     Cov : np.array
         Covariance matrix of extra smoothing. length 3, flattened array-like [Cxx, Cxy, Cyy].
-    kappa : float, optional
-        Regularization parameter to prevent singular matrices.
-    deweight : float, optional
-        Parameter to de-weight points outside the search radius. Deprecated.
+    epsilon : float, optional
+        Regularization parameter to prevent singular correlations.
+    stest : int, optional
+        Computes diagnostics for every stest-th point instead of every point (default is every point). Saves time.
+    blocksize : int, optional
+        Number of points to compute at once (larger is slightly faster but uses more memory).
 
     Returns
     -------
@@ -199,7 +243,6 @@ def MultiInterp(in_array, in_mask, out_size, out_origin, out_transform, Rsearch,
     Smax = 0.
 
     # build output map in units of the block size
-    blocksize = 2**19
     istart = 0
     while istart<ny*nx:
         ngroup = blocksize
@@ -220,12 +263,13 @@ def MultiInterp(in_array, in_mask, out_size, out_origin, out_transform, Rsearch,
         y_in_frac = y_in - y_in_int
 
         # get interpolation weights (T_) and the associated offsets in x_in_offset and y_in_offset
-        x_in_offset, y_in_offset, T_, U_, S_ = InterpMatrix(Rsearch, samp, x_in_frac, y_in_frac, Cov, kappa=kappa, deweight=deweight)
+        x_in_offset, y_in_offset, T_, U_, S_ = InterpMatrix(Rsearch, samp, x_in_frac, y_in_frac, Cov, stest=stest)
         bb = max(-np.amin(x_in_offset), np.amax(x_in_offset-1), -np.amin(y_in_offset), np.amax(y_in_offset-1))
         if 2*bb>=min(nx_in,ny_in):
             break # this will return all zeros and mask everything
         Umax = max(Umax, np.amax(U_))
         Smax = max(Smax, np.amax(S_))
+        del U_, S_
 
         # two layers to output mask.
         # (1) are the pixels we need in the input array?
@@ -263,7 +307,7 @@ def MultiInterp(in_array, in_mask, out_size, out_origin, out_transform, Rsearch,
 def test():
     """Test for InterpMatrix."""
 
-    ### Test for InterpMatrix ###    
+    ### Test for InterpMatrix ###
     ng = 17
     delta = np.linspace(0, 1., ng)
     x_out, y_out = np.meshgrid(delta,delta)
@@ -273,9 +317,18 @@ def test():
     print('# U:', np.amin(U_), np.amax(U_))
     print(np.vstack((x_in,y_in)))
     fits.PrimaryHDU(T_).writeto('T.fits', overwrite=True)
+    print('Asymmetries:')
+    NN = len(x_in)
+    hflip = np.zeros(NN, dtype=np.int16)
+    for i in range(NN):
+        for j in range(NN):
+            if x_in[i]==1-x_in[j] and y_in[i]==y_in[j]: hflip[i]=j
+    for j in range(ng//2):
+         print(np.amax(np.abs(T_[j,:]-T_[-1-j,::-1])), np.amax(np.abs(T_[j,:]-T_[ng-1-j,hflip])))
+
 
     ### Test for MultiInterp ###
-    samp = 5.
+    samp = 4.5
     sigma = samp/np.sqrt(8*np.log(2))
     n = 1024
     x, y = np.meshgrid(np.linspace(0,n-1,n),np.linspace(0,n-1,n))
@@ -295,7 +348,7 @@ def test():
     eC = (mat@mat.T/sc**2 - np.identity(2)) * sigma**2
     C = [eC[0,0], eC[0,1], eC[1,1]]
     pos_offset = [6.,3.]
-    OutArr, OutMask, Umax, Smax = MultiInterp(InArr, InMask, (nout,nout), pos_offset, mat, 6., samp, C)
+    OutArr, OutMask, Umax, Smax = MultiInterp(InArr, InMask, (nout,nout), pos_offset, mat, 6., samp, C, stest=100)
     print('Umax =', Umax, 'Smax = ', Smax)
     fits.PrimaryHDU(InArr).writeto('InArr.fits', overwrite=True)
     fits.PrimaryHDU(OutArr).writeto('OutArr.fits', overwrite=True)

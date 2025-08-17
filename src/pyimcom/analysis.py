@@ -33,8 +33,8 @@ import healpy
 import galsim
 from .config import Timer, Settings as Stn, Config
 from .coadd import OutStamp, Block
+from .compress.compressutils import ReadFile
 from .diagnostics.outimage_utils.helper import HDU_to_bels
-
 
 class OutImage:
     """
@@ -111,7 +111,7 @@ class OutImage:
 
         cfg(); self.cfg = cfg
         if cfg is None:
-            with fits.open(fpath) as hdu_list:
+            with ReadFile(fpath) as hdu_list:
                 self.cfg = Config(''.join(hdu_list['CONFIG'].data['text'].tolist()))
 
         self.hdu_names = hdu_names
@@ -182,7 +182,7 @@ class OutImage:
 
         if load_mode:
             if not hasattr(self, 'hdu_list'):
-                self.hdu_list = fits.open(self.fpath)
+                self.hdu_list = ReadFile(self.fpath)
 
         else:
             if save_file:
@@ -225,7 +225,7 @@ class OutImage:
 
         data_loaded = hasattr(self, 'hdu_list')
         if not data_loaded:
-            self.hdu_list = fits.open(self.fpath)
+            self.hdu_list = ReadFile(self.fpath)
 
         if j_out is not None:
             data = (self.hdu_list['PRIMARY'].data[j_out, idx]).astype(np.float32)
@@ -260,7 +260,7 @@ class OutImage:
 
         data_loaded = hasattr(self, 'hdu_list')
         if not data_loaded:
-            self.hdu_list = fits.open(self.fpath)
+            self.hdu_list = ReadFile(self.fpath)
 
         if not flat:  # read T_hdu
             if j_out is not None:
@@ -328,7 +328,7 @@ class OutImage:
 
         data_loaded = hasattr(self, 'hdu_list')
         if not data_loaded:
-            self.hdu_list = fits.open(self.fpath)
+            self.hdu_list = ReadFile(self.fpath)
 
         coef = int(self.hdu_list[outmap].header.comments['UNIT'].partition('*')[0])
         slice_ = np.s_[j_out] if j_out is not None else np.s_[:]

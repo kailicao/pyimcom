@@ -31,6 +31,10 @@ class MetaMosaic:
     ----------
     fname : str
         File name of block to build (sub-mosaic will be a 3x3 block region centered on this).
+    bbox : list of int, optional
+        Boundaries [xmin, xmax, ymin, ymax]: accept only blocks with xmin<=x<xmax, ymin<=y<ymax.
+        Default is to read the whole mosaic.
+        This feature is useful if you haven't run the whole mosaic or pulled it to your disk.
     verbose : bool, optional
         Whether to print diagnostics.
 
@@ -48,6 +52,8 @@ class MetaMosaic:
         2D noise map
     in_mask : np.array of bool
         2D mask
+    wcs : astropy.wcs.WCS
+        The WCS for the mosaic.
 
     Methods
     -------
@@ -61,10 +67,12 @@ class MetaMosaic:
         Writes the mosaic object to a FITS file.
     shearimage
         Generate a sheared image.
+    noshearimage
+        Same format as `shearimage`, but doesn't do shear (just extracts subarrays).
 
     """
 
-    def __init__(self, fname, verbose=False):
+    def __init__(self, fname, bbox=None, verbose=False):
         """Build from an example file.
         """
 
@@ -77,6 +85,16 @@ class MetaMosaic:
             self.nlayer = np.shape(f['PRIMARY'].data)[-3]
             self.im_dtype = f['PRIMARY'].data.dtype
         self.cfg = Config(cf)
+
+        # set bounding box for which blocks we will use
+        if bbox is None:
+            xmin_ = ymin_ = 0
+            xmax_ = ymax_ = self.cfg.nblock
+        else :
+            xmin_ = bbox[0]
+            xmax_ = bbox[1]
+            ymin_ = bbox[2]
+            ymax_ = bbox[3]
 
         # get the file coordinates
         self.LegacyName = False
@@ -122,7 +140,7 @@ class MetaMosaic:
                 # Now get this input image if it is within the mosaic
                 in_x = self.ix+dx
                 in_y = self.iy+dy
-                if in_x>=0 and in_x<self.cfg.nblock and in_y>=0 and in_y<self.cfg.nblock:
+                if in_x>=xmin_ and in_x<xmax_ and in_y>=ymin_ and in_y<ymax_:
                     in_fname = self.stem + '_{:02d}_{:02d}'.format(in_x,in_y)
                     if self.LegacyName: in_fname += '_map'
                     if self.cprfitsgz: in_fname += '.cpr'
@@ -144,6 +162,14 @@ class MetaMosaic:
 
         # mask pixels that weren't covered at all
         self.in_mask |= self.in_fidelity==0
+
+        # generate the WCS
+        self.wcs = wcs.WCS(naxis=2)
+        self.wcs.wcs.crpix = [.5 - self.cfg.Nside*(self.ix-1-self.cfg.nblock//2), .5 - self.cfg.Nside*(self.iy-1-self.cfg.nblock//2)]
+        self.wcs.wcs.cdelt = [-self.cfg.dtheta, self.cfg.dtheta]
+        self.wcs.wcs.ctype = ["RA---STG", "DEC--STG"]
+        self.wcs.wcs.crval = [self.cfg.ra, self.cfg.dec]
+        self.wcs.wcs.lonpole = self.cfg.lonpole
 
     def maskpix(self, extramask):
         """
@@ -179,28 +205,21 @@ class MetaMosaic:
 
         """
 
-        # generate the WCS
-        outwcs = wcs.WCS(naxis=2)
-        outwcs.wcs.crpix = [.5 - self.cfg.Nside*(self.ix-1-self.cfg.nblock//2), .5 - self.cfg.Nside*(self.iy-1-self.cfg.nblock//2)]
-        outwcs.wcs.cdelt = [-self.cfg.dtheta, self.cfg.dtheta]
-        outwcs.wcs.ctype = ["RA---STG", "DEC--STG"]
-        outwcs.wcs.crval = [self.cfg.ra, self.cfg.dec]
-        outwcs.wcs.lonpole = self.cfg.lonpole
-
         # make the HDUs
-        primary = fits.PrimaryHDU(self.in_image, header=outwcs.to_header())
-        fidelity = fits.ImageHDU(self.in_fidelity, header=outwcs.to_header())
-        noise = fits.ImageHDU(self.in_noise, header=outwcs.to_header())
+        primary = fits.PrimaryHDU(self.in_image, header=self.wcs.to_header())
+        fidelity = fits.ImageHDU(self.in_fidelity, header=self.wcs.to_header())
+        noise = fits.ImageHDU(self.in_noise, header=self.wcs.to_header())
+        mask = fits.ImageHDU(self.in_mask.astype(np.uint8), header=self.wcs.to_header())
 
         primary.header['SOURCE'] = 'pyimcom.meta.distortimage.MetaMosaic.to_file'
         primary.header['IMTYPE'] = '3x3 block, undistorted'
         fidelity.header['UNIT'] = 'dB'
         noise.header['UNIT'] = 'dB'
 
-        fits.HDUList([primary, fidelity, noise]).writeto(fname, overwrite=True)
+        fits.HDUList([primary, fidelity, noise, mask]).writeto(fname, overwrite=True)
 
-    def shearimage(self, N, jac=None, psfgrow=1., oversamp=1., fidelity_min=30., Rsearch=6.,
-            select_layers=None,
+    def shearimage(self, N, jac=None, psfgrow=1., oversamp=1., fidelity_min=None, Rsearch=6.,
+            select_layers=None, stest=100,
             verbose=False):
         """
         Generates a sheared image and its WCS.
@@ -215,19 +234,22 @@ class MetaMosaic:
             Factor (in linear scale) by which to grow the PSF.
         oversamp : float, optional
             Up-sampling factor (e.g., 1 = preserve pixel scale).
-        fidelity_min : float, optional
+        fidelity_min : float or None, optional
             Fidelity cut (in dB) for which pixels to use.
         Rsearch : float, optional
             Search radius in interpolation, in units of coadded pixels.
         select_layers : np.array of int or None, optional
             If given, only process these layers.
+        stest : int, optional
+            Computes test diagnostics (leakage & noise for interpolation) every this
+            many output pixels. Set to 1 to do every output pixel (but this may be slower).
         verbose : bool, optional
             Print diagnostics to terminal.
 
         Returns
         -------
         im : dict
-            Image dictionary containing 'image', 'mask', 'wcs', 'pars', 'layers', and 'ref'..
+            Image dictionary containing 'image', 'mask', 'wcs', 'pars', 'layers', 'psf_fwhm', and 'ref'.
 
         Notes
         -----
@@ -237,6 +259,7 @@ class MetaMosaic:
         *   ``im['wcs']`` : astropy.wcs.WCS, world coordinate system object (appropriate for a FITS file)
         *   ``im['pars']`` : dict, parameter dictionary (can be turned into a FITS header)
         *   ``im['layers']`` : list of str, names of layers
+        *   ``im['psf_fwhm']`` : float, 1 sigma width of output PSF in arcsec
         *   ``im['ref']`` : (int, int), projection center (x,y), 0-offset convention
 
         The sense of `jac` is that the *output* is related to the *input* by:
@@ -291,7 +314,10 @@ class MetaMosaic:
         })
 
         #input mask
-        inmask = np.logical_or(self.in_fidelity<fidelity_min, self.in_mask)
+        if fidelity_min is not None:
+            inmask = np.logical_or(self.in_fidelity<fidelity_min, self.in_mask)
+        else:
+            inmask = self.in_mask
 
         # get smearing information
         sigma = self.cfg.sigmatarget * Settings.pixscale_native * (180./np.pi) / self.cfg.dtheta
@@ -361,7 +387,110 @@ class MetaMosaic:
             'CONV': (conv, 'convergence kappa')
         }
 
-        return {'image':image, 'mask':mask, 'wcs':outwcs, 'pars':pardict, 'layers':layerlist, 'ref':(xref-1,yref-1)}
+        return {'image':image, 'mask':mask, 'wcs':outwcs, 'pars':pardict, 'layers':layerlist,
+                'psf_fwhm':np.sqrt(8.*np.log(2))*pardict['SIGMAOUT'][0],
+                'ref':(xref-1,yref-1)}
+
+    def noshearimage(self, N, select_layers=None):
+        """
+        Like shearimage, but without applying the deconvolution/shear/reconvolution (so is faster).
+
+        Parameters
+        ----------
+        N : int
+            Size of the output image (shape will be (`N`, `N`)).
+        select_layers : np.array of int or None, optional
+            If given, only process these layers.
+
+        Returns
+        -------
+        im : dict
+            Image dictionary
+
+        See Also
+        --------
+        shearimage : Carries out a shear, same output format.
+
+        """
+
+        # check PSF type
+        if self.cfg.outpsf != 'GAUSSIAN':
+            raise ValueError('shearimage: only works on GAUSSIAN, received '+self.cfg.outpsf)
+
+        # parity check:
+        # dshift = 0 --> noshearimage is *centered* on the block
+        # dshift = 1 --> noshearimage is centered (-0.5,-0.5) pixels to the lower-left of the block center
+        dshift = (self.cfg.n1 * self.cfg.n2 + N)%2
+
+        # Figure out the geometrical mapping.
+        scale = self.cfg.dtheta
+        xref = (self.cfg.nblock/2 - self.ix - 0.5) * self.cfg.n1 * self.cfg.n2 + (N+dshift+1)/2
+        yref = (self.cfg.nblock/2 - self.iy - 0.5) * self.cfg.n1 * self.cfg.n2 + (N+dshift+1)/2
+
+        # offset of output array from imput array coordinates
+        opos_ = (3 * self.cfg.n1 * self.cfg.n2 - N - dshift)//2
+
+        # generate the WCS
+        outwcs = wcs.WCS({
+            'CTYPE1': "RA---STG",
+            'CUNIT1': 'deg',
+            'CRPIX1': xref,
+            'NAXIS1': N,
+            'CTYPE2': "DEC--STG",
+            'CUNIT2': 'deg',
+            'CRPIX2': yref,
+            'NAXIS2': N,
+            'CD1_1': -scale,
+            'CD1_2': 0.,
+            'CD2_1': 0.,
+            'CD2_2': scale,
+            'CRVAL1': self.cfg.ra,
+            'CRVAL2': self.cfg.dec,
+            'LONPOLE': self.cfg.lonpole
+        })
+
+        # layer selection
+        ul = np.arange(np.shape(self.in_image)[0]).astype(np.int64)
+        if select_layers is not None:
+            ul = np.array(select_layers).astype(np.int64)
+        layerlist = []
+        for i in range(len(ul)):
+            layerlist.append(self.cfg.extrainput[ul[i]])
+
+        # this one is just a subarray
+        if opos_<0 or opos_+N>3*self.cfg.n1 * self.cfg.n2:
+            raise ValueError('Requested image size too large (overfills 3 blocks)')
+        image = self.in_image[ul,opos_:opos_+N,opos_:opos_+N]
+        mask = np.copy(self.in_mask[opos_:opos_+N,opos_:opos_+N])
+
+        pardict = {
+            'STEM': (self.stem, 'stem for file name'),
+            'BLOCKX': (self.ix, 'x block index'),
+            'BLOCKY': (self.iy, 'y block index'),
+            'UMAX': (0., 'interp - max leakage (square norm)'),
+            'SMAX': (1., 'interp - max noise (square norm)'),
+            'JXX': (1., 'Jacobian x_in, x_out'),
+            'JXY': (0., 'Jacobian x_in, y_out'),
+            'JYX': (0., 'Jacobian y_in, x_out'),
+            'JYY': (1., 'Jacobian y_in, y_out'),
+            'COVXX': (0., 'smoothing covariance xx'),
+            'COVXY': (0., 'smoothing covariance xy'),
+            'COVYY': (0., 'smoothing covariance yy'),
+            'SIGMAOUT': (self.cfg.sigmatarget * Settings.pixscale_native * (180./np.pi) * 3600, 'arcsec'),
+            'PIXSCALE': (self.cfg.dtheta*3600, 'arcsec'),
+            'OVERSAMP': (1., 'oversampling implemented in shearimage'),
+            'MU': (1., 'amplification applied'),
+            'ETA1': (0., 'shear component 1'),
+            'ETA2': (0., 'shear component 2'),
+            'JROTATE': (0., 'rotation angle, CCW in-->out, radians'),
+            'G1': (0., 'reduced shear component 1'),
+            'G2': (0., 'reduced shear component 2'),
+            'CONV': (0., 'convergence kappa')
+        }
+
+        return {'image':image, 'mask':mask, 'wcs':outwcs, 'pars':pardict, 'layers':layerlist,
+                'psf_fwhm':np.sqrt(8.*np.log(2))*pardict['SIGMAOUT'][0],
+                'ref':(xref-1,yref-1)}
 
 def shearimage_to_fits(im, fname, layers=None, overwrite=False):
     """
@@ -370,7 +499,7 @@ def shearimage_to_fits(im, fname, layers=None, overwrite=False):
     Parameters
     ----------
     im : dict
-        Image dictionary from MetaMosaic.shearimage.
+        Image dictionary from MetaMosaic.shearimage or MetaMosaic.noshearimage.
     fname : str
         File name for output.
     layers : np.array of int, optional
