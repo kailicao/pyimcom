@@ -63,12 +63,20 @@ Attributes
 
 The ``MetaMosaic`` class has the following attributes:
 
-- ``cfg`` : The configuration file as an instance of the ``pyimcom.config.Config`` class
-- ``Nside`` : The side length of the image (must be square)
-- ``in_image`` : The 3D image cube, pre-shear
-- ``in_mask`` : The 2D mask, pre-shear (False = OK, True = masked)
-- ``in_fidelity`` : The fidelity of the coadded image (in dB)
-- ``in_noise`` : The inverse noise amplification of the coadded image (in dB)
+- ``cfg`` : pyimcom.config.Config;
+  the configuration file.
+- ``Nside`` : int;
+  the side length of the image (must be square).
+- ``in_image`` : np.array of float;
+  the 3D image cube, pre-shear.
+- ``in_mask`` : np.array of bool;
+  the 2D mask, pre-shear (False = OK, True = masked).
+- ``in_fidelity`` : np.array of float;
+  the fidelity of the coadded image (in dB).
+- ``in_noise`` : np.array of float;
+  the inverse noise amplification of the coadded image (in dB).
+- ``wcs`` : astropy.wcs.WCS;
+  the World Coordinate System.
 
 Masking an image
 ------------------
@@ -129,6 +137,12 @@ The arguments provided are:
 | ``Rsearch``, *float*.    | Search radius (in coadded pixels) when building|
 | (default=6.)             | the interpolation kernel.                      |
 +--------------------------+------------------------------------------------+
+| ``select_layers``,       | Which layers to extract. Default is None       |
+| *list of int* (optional).| (extract all layers).                          |
++--------------------------+------------------------------------------------+
+| ``stest``, *int*         | Test interpolation quality every this many     |
+| (default=100)            | pixels (set to 1 for every pixel).             | 
++--------------------------+------------------------------------------------+
 | ``verbose``, *bool*      | Print extra outputs.                           |
 | (default=False)          |                                                |
 +--------------------------+------------------------------------------------+
@@ -136,12 +150,18 @@ The arguments provided are:
 
 The output dictionary has the following keys:
 
-- ``image``: The image as a 3D numpy array (layer, y, x)
-- ``mask``: The mask as a 2D numpy array (y,x)
-- ``wcs``: The WCS of the output image (if you have implemented a shear, then the WCS is also sheared: the RA and Dec of an object in the WCS corresponds to its true position)
-- ``pars``: A dictionary of parameters associated with the sheared image (including provenance data and the applied shear)
-- ``layers``: The names of the layers (copied from the ``extrainput`` used to generate the mosaic.)
-- ``ref``: The projection center location (x,y) (tuple, 0-offset convention)
+- ``image``: The image as a 3D numpy array (layer, y, x).
+- ``mask``: The mask as a 2D numpy array (y,x). A pixel in the sheared image is masked if any of the pixels it depends on (i.e., within the radius ``Rsearch`` in the initial image) is masked.
+- ``wcs``: The WCS of the output image (if you have implemented a shear, then the WCS is also sheared: the RA and Dec of an object in the WCS corresponds to its true position).
+- ``pars``: A dictionary of parameters associated with the sheared image (including provenance data and the applied shear).
+- ``layers``: The names of the layers (copied from the ``extrainput`` used to generate the mosaic).
+- ``psf_fwhm``: The full width at half maximum of the PSF, in arcsec.
+- ``ref``: The projection center location (x,y) (tuple, 0-offset convention).
+
+You can return an equivalent dictionary without any shearing/reconvolution using ``noshearimage``::
+
+    im = mosaic.noshearimage(3200) # all layers
+    im = mosaic.noshearimage(3200, select_layers=[0,2]) # select layers 0 (SCI) and 2.
 
 Writing to a file
 ====================
