@@ -48,6 +48,8 @@ Running PyIMCOM
 Post-processing of PyIMCOM outputs
 ----------------------------------
 
+- `Options for interacting with the PyIMCOM output files <docs/output_README.rst>`_
+
 - Instructions for using the `meta post-processing module <docs/meta_README.rst>`_
 
 Information relevant to various runs we have done in the past
