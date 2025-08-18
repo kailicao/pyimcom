@@ -109,10 +109,11 @@ class OutImage:
         self.fpath = fpath
         self.ibx, self.iby = map(int, Path(fpath).stem.split('_')[-2:])
 
-        cfg(); self.cfg = cfg
+        self.cfg = cfg
         if cfg is None:
             with ReadFile(fpath) as hdu_list:
                 self.cfg = Config(''.join(hdu_list['CONFIG'].data['text'].tolist()))
+        self.cfg() # update configuration parameters
 
         self.hdu_names = hdu_names
         if hdu_names is None:
