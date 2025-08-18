@@ -61,6 +61,12 @@ class MetaMosaic:
         Constructor.
     maskpix
         Masks an additional set of pixels.
+    mask_fidelity_cut
+        Implements a mask based on PyIMCOM fidelity.
+    mask_noise_cut
+        Implements a mask based on PyIMCOM noise.
+    mask_caps
+        Implements a mask based on a catalog of circles.
     in_mask
         Boolean mask for input data (False = OK, True = masked).
     to_file
@@ -189,6 +195,112 @@ class MetaMosaic:
         """
 
         self.in_mask = np.logical_or(extramask, self.in_mask)
+
+    def mask_fidelity_cut(self, fidelitymin):
+        """
+        Masks pixels with fidelity below the cut.
+
+        For example, ``mosaic.mask_fidelity_cut(40)`` will cut pixels with leakage worse than 40 dB
+        (i.e. U/C>1e-4).
+
+        Parameters
+        ----------
+        fidelitymin : float
+            The fidelity cut in dB.
+
+        Returns
+        -------
+        None
+
+        """
+
+        self.in_mask = np.logical_or(self.in_fidelity<fidelitymin, self.in_mask)
+
+    def mask_noise_cut(self, noisemax):
+        """
+        Masks pixels with noise metric worse than the cut.
+
+        For example, ``mosaic.mask_noise_cut(3)`` will cut pixels whose noise suppression is less than 3 dB
+        relative to input (i.e., Sigma>10**(-0.3)).
+
+        Parameters
+        ----------
+        noisemax : float
+            The noise cut in dB.
+
+        Returns
+        -------
+        None
+
+        """
+
+        self.in_mask = np.logical_or(self.in_noise<noisemax, self.in_mask)
+
+    def mask_caps(self, ra, dec, radius):
+        """
+        Masks circular regions around an input catalog.
+
+        Each of `ra`, `dec`, and `radius` should be an array-like object of the same length N
+        (`radius` is permitted to be a scalar).
+
+        Parameters
+        ----------
+        ra : np.array of float
+            The right ascensions of the objects to mask (in degrees).
+        dec : np.array of float
+            The declinations of the objects to mask (in degrees).
+        radius : float or np.array of float
+            The radius to mask around each object (in degrees). If a scalar value is given,
+            uses the same radius for all objects.
+
+        Returns
+        -------
+        None
+
+        """
+
+        degree = np.pi/180. # unit
+
+        # convert inputs
+        ra = np.array(ra).ravel().astype(np.float64)
+        dec = np.array(dec).ravel().astype(np.float64)
+        radius = np.array(radius).ravel().astype(np.float64)
+        if len(radius)==1:
+            radius = np.zeros_like(ra) + radius[0]
+
+        # select inputs near block center
+        ns = np.shape(self.in_mask)[-1]
+        ra_ctr, dec_ctr = self.wcs.all_pix2world((ns-1)/2, (ns-1)/2, 0)
+        dx = np.cos(dec*degree)*np.cos((ra-ra_ctr)*degree) - np.cos(dec_ctr*degree)
+        dy = np.cos(dec*degree)*np.sin((ra-ra_ctr)*degree)
+        dz = np.sin(dec*degree) - np.sin(dec_ctr*degree)
+        sep = np.sqrt(dx**2+dy**2+dz**2)/degree # in degrees --- only accurate in mosaic, but that's where we care
+        del dx, dy, dz
+        searchrad = 0.75*ns*self.cfg.dtheta + radius
+        consider_stars = np.nonzero(sep<=searchrad)
+
+        # shorten the arrays to only consider stars close enough to be masked
+        ra = ra[consider_stars]
+        dec = dec[consider_stars]
+        radius = radius[consider_stars]
+        N = len(ra)
+
+        # get positions on the plane in 0-index coordinates
+        pixcrd2 = self.wcs.all_world2pix(np.vstack((ra,dec)).T, 0)
+        x_ = pixcrd2[:,0]
+        y_ = pixcrd2[:,1]
+        r_ = radius/self.cfg.dtheta
+
+        # now loop over objects. make a rectangular cutout and mask the circle within it
+        for j in range(N):
+            xmin = max( int(np.floor(x_[j]-r_[j]))  , 0 )
+            xmax = min( int(np.ceil (x_[j]+r_[j]))+1, ns)
+            ymin = max( int(np.floor(y_[j]-r_[j]))  , 0 )
+            ymax = min( int(np.ceil (y_[j]+r_[j]))+1, ns)
+            #print((x_[j], y_[j]), r_[j], [xmin,xmax,ymin,ymax])
+            if xmax<=xmin or ymax<=ymin: continue
+            erx, ery = np.meshgrid(np.linspace(xmin,xmax-1,xmax-xmin)-x_[j], np.linspace(ymin,ymax-1,ymax-ymin)-y_[j])
+            self.in_mask[ymin:ymax,xmin:xmax] |= np.hypot(erx,ery)<r_[j]
 
     def to_file(self, fname):
         """
