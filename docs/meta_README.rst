@@ -81,9 +81,22 @@ The ``MetaMosaic`` class has the following attributes:
 Masking an image
 ------------------
 
-The mask can be updated with the ``maskpix`` method, e.g., to mask pixels that are over 1.0e4 in the science image::
+The most general way to update the mask is with the ``maskpix`` method. For example, to mask pixels that are over 1.0e4 in the science image::
 
     mosaic.maskpix(mosaic.in_image[0,:,:]>1.0e4)
+
+There are also stand-alone masking functions for the fidelity and noise images. For example, you can mask pixels where the PyIMCOM fidelity is worse than 40 dB (i.e., U/C>1e-4) or the noise suppression is less than 3 dB (i.e., output noise variance is more than 10^(-0.3) of an input pixel)::
+
+    mosaic.mask_fidelity_cut(40.)
+    mosaic.mask_noise_cut(3.)
+
+Finally, you could mask a bunch of circular regions (e.g., around a star catalog) using the ``mask_caps`` method::
+
+    ra_mask = np.array([9.60, 9.70, 9.80]) # all coordinates in degrees
+    dec_mask = np.array([-44.10, -44.20, -44.30])
+    mosaic.mask_caps(ra_mask, dec_mask, 20./3600.) # this masks a 20 arcsec radius
+    radius_mask = np.array([20., 25., 30.])/3600.
+    mosaic.mask_caps(ra_mask, dec_mask, radius_mask) # this masks a different radius for each object
 
 Shearing an image
 ==================
@@ -162,6 +175,8 @@ You can return an equivalent dictionary without any shearing/reconvolution using
 
     im = mosaic.noshearimage(3200) # all layers
     im = mosaic.noshearimage(3200, select_layers=[0,2]) # select layers 0 (SCI) and 2.
+
+(This will be **much** faster, since it is generating a subarray rather than a grid, but of course then any Meta-like shearing is the responsibility of a downstream module.)
 
 Writing to a file
 ====================
