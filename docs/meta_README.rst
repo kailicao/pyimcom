@@ -171,10 +171,10 @@ The output dictionary has the following keys:
 - ``psf_fwhm``: The full width at half maximum of the PSF, in arcsec.
 - ``ref``: The projection center location (x,y) (tuple, 0-offset convention).
 
-You can return an equivalent dictionary without any shearing/reconvolution using ``noshearimage``::
+You can return an equivalent dictionary without any shearing/reconvolution using ``origimage``::
 
-    im = mosaic.noshearimage(3200) # all layers
-    im = mosaic.noshearimage(3200, select_layers=[0,2]) # select layers 0 (SCI) and 2.
+    im = mosaic.origimage(3200) # all layers
+    im = mosaic.origimage(3200, select_layers=[0,2]) # select layers 0 (SCI) and 2.
 
 (This will be **much** faster, since it is generating a subarray rather than a grid, but of course then any Meta-like shearing is the responsibility of a downstream module.)
 

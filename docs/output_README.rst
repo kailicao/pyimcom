@@ -30,6 +30,6 @@ There are several options for reading PyIMCOM output files. From "lowest" to "hi
     from pyimcom.meta import distortimage
     # here fout is the file name that we want to read
     mosaic = distortimage.MetaMosaic(fout)
-    im = mosaic.noshearimage(4000) # 4000x4000 subarray
+    im = mosaic.origimage(4000) # 4000x4000 subarray
 
   Detailed instructions for this class are on the `Meta Readme <meta_README.rst>`_.

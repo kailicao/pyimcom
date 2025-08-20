@@ -73,8 +73,8 @@ class MetaMosaic:
         Writes the mosaic object to a FITS file.
     shearimage
         Generate a sheared image.
-    noshearimage
-        Same format as `shearimage`, but doesn't do shear (just extracts subarrays).
+    origimage
+        Same format as `shearimage`, but doesn't do shear/reconvolution (just extracts subarrays).
 
     """
 
@@ -503,7 +503,7 @@ class MetaMosaic:
                 'psf_fwhm':np.sqrt(8.*np.log(2))*pardict['SIGMAOUT'][0],
                 'ref':(xref-1,yref-1)}
 
-    def noshearimage(self, N, select_layers=None):
+    def origimage(self, N, select_layers=None):
         """
         Like shearimage, but without applying the deconvolution/shear/reconvolution (so is faster).
 
@@ -530,8 +530,8 @@ class MetaMosaic:
             raise ValueError('shearimage: only works on GAUSSIAN, received '+self.cfg.outpsf)
 
         # parity check:
-        # dshift = 0 --> noshearimage is *centered* on the block
-        # dshift = 1 --> noshearimage is centered (-0.5,-0.5) pixels to the lower-left of the block center
+        # dshift = 0 --> image is *centered* on the block
+        # dshift = 1 --> image is centered (-0.5,-0.5) pixels to the lower-left of the block center
         dshift = (self.cfg.n1 * self.cfg.n2 + N)%2
 
         # Figure out the geometrical mapping.
@@ -611,7 +611,7 @@ def shearimage_to_fits(im, fname, layers=None, overwrite=False):
     Parameters
     ----------
     im : dict
-        Image dictionary from MetaMosaic.shearimage or MetaMosaic.noshearimage.
+        Image dictionary from MetaMosaic.shearimage or MetaMosaic.origimage.
     fname : str
         File name for output.
     layers : np.array of int, optional
