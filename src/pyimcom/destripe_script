@@ -1,7 +1,6 @@
 #!/bin/bash
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=95
-#SBATCH --mem=500G
+#SBATCH --ntasks-per-node=90
+#SBATCH --mem=420G
 #SBATCH --time=48:00:00
 #SBATCH --job-name=imdestripe_H_mosaicminitest
 #SBATCH --mail-type=BEGIN,END,FAIL
