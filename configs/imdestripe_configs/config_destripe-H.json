@@ -42,15 +42,15 @@
     "EXTRASMOOTH": 0.934253980316821,
     "PMASK": "/users/PCON0003/cond0007/imcom/coadd-test-fall2022/permanent_mask_220730.fits",
     "CMASK": 0.00077,
-    "TEMPFILE": "/fs/scratch/PCON0003/klaliotis/imdestripe/inputs/",
+    "TEMPFILE": "/fs/scratch/PCON0003/cond0007/anl-run-in-prod/simple/",
     "DSMODEL": "constant",
     "DSOBSFILE": "/fs/scratch/PCON0003/cond0007/anl-run-in-prod/simple/Roman_WAS_simple_model_",
     "DSINDATA": "/fs/scratch/PCON0003/cond0007/anl-run-in-prod/labnoise/slope_",
-    "DSOUT": ["/fs/scratch/PCON0003/klaliotis/imdestripe/med_test/",
+    "DSOUT": ["/fs/scratch/PCON0003/klaliotis/imdestripe/mosaic_mini_test/",
         "_ds_out.txt"
     ],
     "CGMODEL": ["PR",
-        12,
+        2,
         1e-3
         ],
     "DSCOST": ["quadratic",
