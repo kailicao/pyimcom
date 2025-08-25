@@ -278,6 +278,20 @@ def run_imsubtract(config_file, display=None):
             print(window[block_length - overlap],window[block_length - overlap-2], window[block_length - overlap]+window[block_length - overlap-2])
 
             # find the 'Bounding Box'
+            # create mesh grid for output block
+            block_arr = np.arange(block_length)
+            x_out, y_out = np.meshgrid(block_arr, block_arr)
+            # convert to ra and dec using block wcs
+            ra_sca,dec_sca = block_wcs.pixel_to_world_values(x_out, y_out,0) 
+            print("ra, dec: ", ra_sca[0::2663,0::2663], dec_sca[0::2663,0::2663])
+            # convert into coordinates in the SCA
+            x_in, y_in = sca_wcs.all_world2pix(ra_sca, dec_sca, 0)
+            print("x_in, y_in: ", x_in[0::2663,0::2663], y_in[0::2663,0::2663])
+            # get the bounding box from the max and min values
+            left = np.min(x_in)
+            right = np.max(x_in)
+            bottom = np.min(y_in)
+            top = np.max(y_in) 
         
 
 if __name__ == '__main__':
