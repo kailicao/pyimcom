@@ -35,6 +35,8 @@ class MetaMosaic:
         Boundaries [xmin, xmax, ymin, ymax]: accept only blocks with xmin<=x<xmax, ymin<=y<ymax.
         Default is to read the whole mosaic.
         This feature is useful if you haven't run the whole mosaic or pulled it to your disk.
+    extpix : int, optional
+        Number of pixels to extend beyond the block boundary. Uses full 3x3 submosaic if not given.
     verbose : bool, optional
         Whether to print diagnostics.
 
@@ -78,7 +80,7 @@ class MetaMosaic:
 
     """
 
-    def __init__(self, fname, bbox=None, verbose=False):
+    def __init__(self, fname, bbox=None, extpix=None, verbose=False):
         """Build from an example file.
         """
 
@@ -115,8 +117,14 @@ class MetaMosaic:
         self.ix = int(tail[1:3])
         self.iy = int(tail[4:6])
 
+        # how many pixels to truncate around all the edges of the 3x3 region?
+        if extpix is None:
+            self.trunc = 0
+        else:
+            self.trunc = max(self.cfg.n1*self.cfg.n2 - extpix, 0)
+
         # build maps
-        self.Nside = 3*self.cfg.n1*self.cfg.n2
+        self.Nside = 3*self.cfg.n1*self.cfg.n2 - 2*self.trunc
         self.in_image = np.zeros((self.nlayer, self.Nside, self.Nside), dtype=self.im_dtype)
         self.in_fidelity = np.zeros((self.Nside, self.Nside), dtype=np.float32)
         self.in_noise = np.zeros((self.Nside, self.Nside), dtype=np.float32)
@@ -127,7 +135,8 @@ class MetaMosaic:
         xpad = [self.ix==0, self.ix==self.cfg.nblock-1]
         ypad = [self.iy==0, self.iy==self.cfg.nblock-1]
         for dx in range(-1,2):
-            cx = self.cfg.n1*self.cfg.n2*(1+dx) - self.cfg.postage_pad*self.cfg.n2
+            # lower-left corner in block is (cx,cy) in the mosaic
+            cx = self.cfg.n1*self.cfg.n2*(1+dx) - self.cfg.postage_pad*self.cfg.n2 - self.trunc
             sxmin = self.cfg.postage_pad*self.cfg.n2
             sxmax = sxmin + self.cfg.n1*self.cfg.n2
             if xpad[0]: sxmin -= self.cfg.postage_pad*self.cfg.n2
@@ -135,7 +144,7 @@ class MetaMosaic:
             if cx+sxmin<0: sxmin=-cx
             if cx+sxmax>self.Nside: sxmax=self.Nside-cx
             for dy in range(-1,2):
-                cy = self.cfg.n1*self.cfg.n2*(1+dy) - self.cfg.postage_pad*self.cfg.n2
+                cy = self.cfg.n1*self.cfg.n2*(1+dy) - self.cfg.postage_pad*self.cfg.n2 - self.trunc
                 symin = self.cfg.postage_pad*self.cfg.n2
                 symax = symin + self.cfg.n1*self.cfg.n2
                 if ypad[0]: symin -= self.cfg.postage_pad*self.cfg.n2
@@ -171,7 +180,8 @@ class MetaMosaic:
 
         # generate the WCS
         self.wcs = wcs.WCS(naxis=2)
-        self.wcs.wcs.crpix = [.5 - self.cfg.Nside*(self.ix-1-self.cfg.nblock//2), .5 - self.cfg.Nside*(self.iy-1-self.cfg.nblock//2)]
+        self.wcs.wcs.crpix = [.5 - self.cfg.Nside*(self.ix-1-self.cfg.nblock//2) - self.trunc,
+                              .5 - self.cfg.Nside*(self.iy-1-self.cfg.nblock//2) - self.trunc]
         self.wcs.wcs.cdelt = [-self.cfg.dtheta, self.cfg.dtheta]
         self.wcs.wcs.ctype = ["RA---STG", "DEC--STG"]
         self.wcs.wcs.crval = [self.cfg.ra, self.cfg.dec]
@@ -401,8 +411,8 @@ class MetaMosaic:
 
         # origin position in the input array
         opos = J@np.asarray([1-xref,1-yref]) # recall the lower-left corner is (1,1) in FITS
-        opos[0] += (self.cfg.nblock/2 - self.ix + 1) * self.cfg.n1 * self.cfg.n2 - .5
-        opos[1] += (self.cfg.nblock/2 - self.iy + 1) * self.cfg.n1 * self.cfg.n2 - .5
+        opos[0] += (self.cfg.nblock/2 - self.ix + 1) * self.cfg.n1 * self.cfg.n2 - .5 - self.trunc
+        opos[1] += (self.cfg.nblock/2 - self.iy + 1) * self.cfg.n1 * self.cfg.n2 - .5 - self.trunc
         # the "-0.5" is because the lower-left corner of the pixel is at (-.5,-.5)
         # and have the +1 since the lower-left corner of the image is in the block (ix-1,iy-1)
 
@@ -540,7 +550,7 @@ class MetaMosaic:
         yref = (self.cfg.nblock/2 - self.iy - 0.5) * self.cfg.n1 * self.cfg.n2 + (N+dshift+1)/2
 
         # offset of output array from imput array coordinates
-        opos_ = (3 * self.cfg.n1 * self.cfg.n2 - N - dshift)//2
+        opos_ = (3 * self.cfg.n1 * self.cfg.n2 - N - dshift)//2 - self.trunc
 
         # generate the WCS
         outwcs = wcs.WCS({

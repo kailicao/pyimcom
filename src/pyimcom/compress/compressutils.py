@@ -39,6 +39,8 @@ class CompressedOutput:
        File name for uncompressed file.
    format : str or None, optional
        Compression format.
+   extraargs : dict, optional
+       Extra arguments for astropy.io.fits.
 
    Attributes
    ----------
@@ -83,7 +85,7 @@ class CompressedOutput:
 
    """
 
-   def __init__(self, fname, format=None):
+   def __init__(self, fname, format=None, extraargs={}):
 
       self.origfile = fname
 
@@ -96,7 +98,7 @@ class CompressedOutput:
          # right now supports fits files
          if pref[-5:]=='.fits':
             self.ftype = 'fits'
-            self.hdul = fits.open(fname, mode='readonly', decompress_in_memory=True)
+            self.hdul = fits.open(fname, mode='readonly', decompress_in_memory=True, **extraargs)
 
             if 'CPRSTYPE' in self.hdul[0].header:
                self.cprstype = self.hdul[0].header['CPRSTYPE']
@@ -364,13 +366,14 @@ def _parser(fname):
    parts = fname.split('^')
    sub = parts[1].split('.')
    coordstring = sub[0]
-   m = re.match('_(\d+)_(\d+)', coordstring)
+   m = re.match('_(\d+)_(\d+)(\D*)', coordstring)
    if m is not None:
        ix = int(m.group(1))
        iy = int(m.group(2))
-   suffix = '.'.join(sub[1:])
+       term = m.group(3)
+   suffix = term + '.' + '.'.join(sub[1:])
    outname = '^'.join(parts[:-1])
-   outname = outname.format(ix,iy) + '.' + suffix
+   outname = outname.format(ix,iy) + suffix
    return outname
 
 def ReadFile(fname):
@@ -406,17 +409,22 @@ def ReadFile(fname):
 
    fname = _parser(fname) # if the file name is a regular expression.
 
+   # extra arguments for remote files.
+   extraargs = {}
+   if fname[:8] == 'https://':
+      extraargs['use_fsspec'] = True
+
    # if this file hasn't been compressed, just pass the handle:
-   f = fits.open(fname)
+   f = fits.open(fname, **extraargs)
    if 'CPRESS' not in [hdu.name for hdu in f]:
       return f
    else:
       f.close()
 
    # otherwise, make a decompressed version
-   x = CompressedOutput(fname)
-   x.decompress()
-   return fits.HDUList(x.hdul)
+   with CompressedOutput(fname, extraargs=extraargs) as x:
+      x.decompress()
+      return fits.HDUList(x.hdul)
 
 ### Test functions below here ###
 
