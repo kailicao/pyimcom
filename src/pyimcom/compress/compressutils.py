@@ -422,9 +422,9 @@ def ReadFile(fname):
       f.close()
 
    # otherwise, make a decompressed version
-   with CompressedOutput(fname, extraargs=extraargs) as x:
-      x.decompress()
-      return fits.HDUList(x.hdul)
+   x = CompressedOutput(fname, extraargs=extraargs)
+   x.decompress()
+   return fits.HDUList(x.hdul)
 
 ### Test functions below here ###
 
