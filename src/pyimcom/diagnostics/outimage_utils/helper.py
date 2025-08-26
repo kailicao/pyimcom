@@ -13,7 +13,6 @@ HDU_to_bels
 # may need to add more packages here in the future
 import numpy as np
 import re
-from astropy.io import fits
 
 def UNIT_to_bels(unitstring):
    """

@@ -21,6 +21,7 @@ from os.path import exists
 import json
 import re
 from .outimage_utils.helper import HDU_to_bels
+from ..compress.compressutils import ReadFile
 
 def gen_dynrange_data(inpath, outstem, rpix_try=50, nblockmax=100):
     """Takes files from inpath and writes histograms to outstem.
@@ -94,7 +95,7 @@ def gen_dynrange_data(inpath, outstem, rpix_try=50, nblockmax=100):
             if is_first:
                 is_first = False
                 config = ''
-                with fits.open(infile) as f:
+                with ReadFile(infile) as f:
                     for g in f['CONFIG'].data['text'].tolist(): config += g+' '
                 configStruct = json.loads(config)
 
@@ -125,7 +126,7 @@ def gen_dynrange_data(inpath, outstem, rpix_try=50, nblockmax=100):
                 print('# rs=', rs)
 
             # now we know this file exists
-            with fits.open(infile) as f:
+            with ReadFile(infile) as f:
                 n = np.shape(f[0].data)[-1]
                 mywcs = wcs.WCS(f[0].header)
                 starmap = f[0].data[0,framenumber,:,:]
