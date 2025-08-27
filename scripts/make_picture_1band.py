@@ -3,7 +3,7 @@ Stand-alone script to make a display PNG image from a mosaic.
 
 Calling format::
 
-   python -m pyimcom.pictures.make_picture_1band /fs/scratch/PCON0003/cond0007/itertest2-out/itertest2_F\
+   python -m make_picture_1band /fs/scratch/PCON0003/cond0007/itertest2-out/itertest2_F\
        xstart ystart n out.png
 
 if the output images are in ``/fs/scratch/PCON0003/cond0007/itertest2-out/itertest2_F_DD_DD.fits``
@@ -17,8 +17,7 @@ import sys
 import numpy as np
 from astropy.io import fits
 from PIL import Image
-
-from ..config import Config
+from pyimcom.config import Config
 
 # extract the file name (without the '_DD_DD.fits')
 fn = sys.argv[1]
