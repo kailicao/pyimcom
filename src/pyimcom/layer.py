@@ -44,7 +44,7 @@ from .config import fpaCoords
 try:
     from pyimcom_croutines import iD5512C
 except ImportError:
-    from .src.pyimcom.routine import iD5512C
+    from .routine import iD5512C
 
 from .wcsutil import PyIMCOM_WCS, local_partial_pixel_derivatives2
 
