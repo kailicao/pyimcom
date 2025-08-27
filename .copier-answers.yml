@@ -1,0 +1,24 @@
+# Changes here will be overwritten by Copier
+_commit: v2.0.7
+_src_path: gh:lincc-frameworks/python-project-template
+author_email: cao.1191@osu.edu
+author_name: Kaili Cao
+create_example_module: false
+custom_install: true
+enforce_style:
+- ruff_lint
+- ruff_format
+failure_notification: []
+include_benchmarks: false
+include_docs: true
+include_notebooks: false
+mypy_type_checking: none
+package_name: pyimcom
+project_license: none
+project_name: pyimcom
+project_organization: Roman-HLIS-Cosmology-PIT
+python_versions:
+- '3.11'
+- '3.12'
+- '3.13'
+test_lowest_version: none
