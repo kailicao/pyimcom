@@ -82,6 +82,7 @@ ignore = [
     "UP006", # Allow non standard library generics in type hints
     "UP007", # Allow Union in type hints
     "SIM114", # Allow if with same arms
+    "B006", # Allow {} as default
     "B028", # Allow default warning level
     "SIM117", # Allow nested with
     "UP015", # Allow redundant open parameters

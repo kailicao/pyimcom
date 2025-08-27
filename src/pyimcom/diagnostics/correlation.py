@@ -188,9 +188,7 @@ def _compute_GG_corr(ra, dec, g1, g2, out_f, xy=False):
 
     gg = treecorr.GGCorrelation(bin_config)
     if xy:
-        cat = treecorr.Catalog(
-            x=xy[0], y=xy[1], x_units="arcsec", y_units="arcsec", g1=g1, g2=g2, patch_centers=f_pc
-        )
+        cat = treecorr.Catalog(x=xy[0], y=xy[1], x_units="arcsec", y_units="arcsec", g1=g1, g2=g2, npatch=32)
     else:
         cat = treecorr.Catalog(
             ra=ra, dec=dec, ra_units="deg", dec_units="deg", g1=g1, g2=g2, patch_centers=patchcat

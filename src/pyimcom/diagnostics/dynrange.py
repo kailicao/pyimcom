@@ -86,7 +86,7 @@ def gen_dynrange_data(inpath, outstem, rpix_try=50, nblockmax=100):
                 infile = inpath(ibx, iby)
                 if not exists(infile):
                     continue
-            except:
+            except FileNotFoundError:
                 continue
 
             # if this is the first block we find, get the configuration file
@@ -148,7 +148,7 @@ def gen_dynrange_data(inpath, outstem, rpix_try=50, nblockmax=100):
                         )
                     tnoise = tnoise + np.size(sigma_)
                     tnoise_gt = tnoise_gt + np.count_nonzero(sigma_ >= d_noise * N_noise)
-                except:
+                except KeyError:
                     warnings.warn("No valid noise frame: " + infile)
 
                 try:
@@ -161,7 +161,7 @@ def gen_dynrange_data(inpath, outstem, rpix_try=50, nblockmax=100):
                         )
                     tneff = tneff + np.size(neff_)
                     tneff_gt = tneff_gt + np.count_nonzero(neff_ >= d_neff * N_neff)
-                except:
+                except KeyError:
                     warnings.warn("No valid coverage frame: " + infile)
 
                 # identify which HEALpix positions we have
@@ -253,7 +253,7 @@ if __name__ == "__main__":
     Format: python3 -m dynrange <file stem> <output filename>
     """
 
-    def fn(ibx, iby):
+    def fn(ibx, iby):  # noqa: D103
         return sys.argv[1] + f"_{ibx:02d}_{iby:02d}.fits"
 
     output = gen_dynrange_data(fn, sys.argv[2])

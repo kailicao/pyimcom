@@ -58,7 +58,7 @@ def gen_starcube_nonoise(infile_fcn, outstem, nblockmax=100):
         print("# n2 =", n2_)
         if n2_ < bd:
             bd = n2_
-    except:
+    except FileNotFoundError:
         pass
 
     ncol = 22  # number of columns in star catalog
@@ -74,7 +74,7 @@ def gen_starcube_nonoise(infile_fcn, outstem, nblockmax=100):
         for iby in range(nblockmax):
             try:
                 infile = infile_fcn(ibx, iby)
-            except:
+            except FileNotFoundError:
                 continue
 
             # extract information from the header of the first file
@@ -192,7 +192,7 @@ def gen_starcube_nonoise(infile_fcn, outstem, nblockmax=100):
                 # PSF shape
                 try:
                     moms = galsim.Image(newimage[k, :, :]).FindAdaptiveMom()
-                except:
+                except (RuntimeError, galsim.errors.GalSimHSMError):
                     continue
                 newpos[k, 10] = moms.moments_amp
                 newpos[k, 11] = moms.moments_centroid.x - bd - dx[k]

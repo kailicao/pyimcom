@@ -3,7 +3,8 @@ Stand-alone script to make a display PNG image from a mosaic.
 
 Calling format::
 
-   python -m pyimcom.pictures.make_picture_1band /fs/scratch/PCON0003/cond0007/itertest2-out/itertest2_F xstart ystart n out.png
+   python -m pyimcom.pictures.make_picture_1band /fs/scratch/PCON0003/cond0007/itertest2-out/itertest2_F\
+       xstart ystart n out.png
 
 if the output images are in ``/fs/scratch/PCON0003/cond0007/itertest2-out/itertest2_F_DD_DD.fits``
 (where ``DD`` = x & y block indices)
@@ -52,6 +53,8 @@ cube = np.zeros((n * nint, n * nint, 3), dtype=np.uint8)
 
 # color mapping, input --> output on 0-255 scale
 def cmapscale(inarray, lsmin=-8.0, lsmax=600.0):
+    """Color mapping: asinh scale."""
+
     medarray = np.clip(inarray, lsmin, lsmax)
     outarray = (np.arcsinh(medarray / np.abs(lsmin)) - np.arcsinh(-1)) / (
         np.arcsinh(lsmax / np.abs(lsmin)) - np.arcsinh(-1)

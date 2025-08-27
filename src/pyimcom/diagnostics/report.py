@@ -340,7 +340,7 @@ class ValidationReport:
                 self.compileproc = subprocess.run(
                     ["pdflatex", "-interaction=nonstopmode", tail + "_main.tex"], capture_output=True
                 )
-            except:
+            except subprocess.CalledProcessError:
                 print("ERROR *** LaTeX failed to compile! ***\n")
                 sys.stdout.flush()
         os.chdir(pwd)

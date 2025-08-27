@@ -63,7 +63,7 @@ def gen_truthcats(pars):
     # bd2 = 8
 
     nblockmax = 100  # maximum
-    ncol = 22
+    # ncol = 22 # <-- legacy number of columns
     nstart = 0
 
     filter = pars[1]
@@ -127,9 +127,9 @@ def gen_truthcats(pars):
                     / 180
                 )  # radians
                 rs = 1.5 * blocksize / numpy.sqrt(2.0)  # search radius
-                n2 = int(configStruct["OUTSIZE"][1])  # will be used for coverage
+                # n2 = int(configStruct["OUTSIZE"][1])  # will be used for coverage
 
-                outscale = float(configStruct["OUTSIZE"][2])  # in arcsec
+                # outscale = float(configStruct["OUTSIZE"][2])  # in arcsec
                 # force_scale = .40 / outscale  # in output pixels <-- not used
 
                 # padding region around the edge
@@ -215,7 +215,6 @@ def gen_truthcats(pars):
                 y = y[grp]
                 npix = len(x)
 
-                newpos = numpy.zeros((npix, ncol))
                 xi = numpy.rint(x).astype(numpy.int16)
                 yi = numpy.rint(y).astype(numpy.int16)
 
@@ -234,8 +233,8 @@ def gen_truthcats(pars):
                 blockTable["y"] = y
                 blockTable["xi"] = xi
                 blockTable["yi"] = yi
-                blockTable["dx"] = dx = x - xi
-                blockTable["dy"] = dy = y - yi
+                blockTable["dx"] = x - xi
+                blockTable["dy"] = y - yi
 
                 # orientation angle (computed by finite difference @ +/- 1 arcsec)
                 if mywcs.pixel_n_dim == 4:
@@ -344,8 +343,8 @@ def gen_truthcats(pars):
     print(f"Time elapsed: {time.time() - t0}")
 
 
-# usage from configuration file
 def gen_truthcats_from_cfg(cfg):
+    """Usage from configuration file."""
     gen_truthcats([None, cfg.use_filter, cfg.outstem, None])
 
 

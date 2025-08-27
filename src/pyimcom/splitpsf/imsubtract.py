@@ -153,7 +153,7 @@ def run_imsubtract(config_file, display=None):
     exps = []
 
     # find all the fits files and add them to the list
-    for roots, dirs, files in os.walk(path):
+    for _, _, files in os.walk(path):
         for file in files:
             if file.startswith(exp) and file.endswith(".fits") and file[-6].isdigit():
                 exps.append(file)
@@ -174,7 +174,7 @@ def run_imsubtract(config_file, display=None):
         # inlayercache data --- changed to context manager structure
         with fits.open(exp) as hdul:
             # read in the input image, I
-            I = np.copy(hdul[0].data)  # this is I
+            I_input = np.copy(hdul[0].data)  # this is I # noqa: F841
 
         # get wcs information from fits file (or asdf if indicated)
         mywcs = get_wcs(exp)
@@ -220,8 +220,8 @@ def run_imsubtract(config_file, display=None):
 
         # convert to eta and xi (block coordinates)
         block_coords = coeff * np.matmul(rot, v_convert)
-        xi = block_coords[0]
-        eta = block_coords[1]
+        xi = block_coords[0]  # noqa: F841
+        eta = block_coords[1]  # noqa: F841
 
         # find theta in original coordinates, convert to block coordinates
         theta = (
@@ -256,7 +256,7 @@ def run_imsubtract(config_file, display=None):
         print("list of blocks: \n", block_list)
 
         # loop over the blocks in the list
-        count = 0
+        count = 0  # noqa: F841
         for ix, iy in block_list:
             print("BLOCK: ", ix, iy)
 
@@ -273,7 +273,7 @@ def run_imsubtract(config_file, display=None):
             # first to the last point, so 1 less than the length
             window = tukey(block_length, alpha=a1)
             # apply window function to block data
-            block = block_data[0] * window
+            block = block_data[0] * window  # noqa: F841
 
             # check the window function
             plt.plot(np.arange(len(window)), window, color="indigo")

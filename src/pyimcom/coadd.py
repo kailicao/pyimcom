@@ -2132,7 +2132,7 @@ class Block:
                 try:
                     with importlib.import_module(package) as m:
                         config_hdu.header[keyword] = (str(m.__version), f"Current version of {package}")
-                except:
+                except (ModuleNotFoundError, ImportError):
                     config_hdu.header[keyword] = ("N/A", f"{package} had no version number")
         inlist_hdu = fits.BinTableHDU.from_columns(
             [

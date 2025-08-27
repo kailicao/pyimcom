@@ -84,10 +84,10 @@ class OutPSF:
             (1 - n) / 2 / sigmax : (n - 1) / 2 / sigmax : n * 1j,
         ]
 
-        I = np.exp(-0.5 * (np.square(x) + np.square(y))) / (2.0 * np.pi * sigmax * sigmay)
+        I_ = np.exp(-0.5 * (np.square(x) + np.square(y))) / (2.0 * np.pi * sigmax * sigmay)
         del y, x
 
-        return I
+        return I_
 
     @staticmethod
     def psf_simple_airy(
@@ -139,7 +139,7 @@ class OutPSF:
         r = np.sqrt(np.square(x) + np.square(y)) / ldp  # r in units of ldp
 
         # make Airy spot
-        I = (
+        I_ = (
             np.square(
                 jv(0, np.pi * r)
                 + jv(2, np.pi * r)
@@ -151,7 +151,7 @@ class OutPSF:
         del y, x, r
 
         # now convolve
-        It = numpy_fft.rfft2(I)
+        It = numpy_fft.rfft2(I_)
         uxa = np.linspace(0, 1 - 1 / npad, npad)
         uxa[-(npad // 2) :] -= 1
         ux = np.tile(uxa[None, : npad // 2 + 1], (npad, 1))
@@ -161,10 +161,10 @@ class OutPSF:
             * np.sinc(ux * tophat_conv)
             * np.sinc(uy * tophat_conv)
         )
-        I = numpy_fft.irfft2(It, s=(npad, npad))
+        I_ = numpy_fft.irfft2(It, s=(npad, npad))
         del It, uxa, ux, uy
 
-        return I[kp:-kp, kp:-kp]
+        return I_[kp:-kp, kp:-kp]
 
     @staticmethod
     def psf_cplx_airy(
@@ -219,32 +219,32 @@ class OutPSF:
                 * np.sinc(L1 * r * np.cos(phi + t * np.pi / 6.0))
                 * np.sinc(L2 * r * np.sin(phi + t * np.pi / 6.0))
             )
-        I = II**2 / (4.0 * ldp**2 * (1 - 6 * f)) * np.pi
+        I_ = II**2 / (4.0 * ldp**2 * (1 - 6 * f)) * np.pi
         del r, phi, II
 
         if features & 1:  # features % 2 == 1
             rp = np.sqrt(np.square(x - 1 * ldp) + np.square(y + 2 * ldp)) / (2.0 * ldp)
             II = jv(0, np.pi * rp) + jv(2, np.pi * rp)
-            I *= 0.8
-            I += 0.2 * II**2 / (4.0 * (2.0 * ldp) ** 2) * np.pi
+            I_ *= 0.8
+            I_ += 0.2 * II**2 / (4.0 * (2.0 * ldp) ** 2) * np.pi
             del rp, II
         del y, x
 
         if features & 2:  # (features//2) % 2 == 1
-            Icopy = np.copy(I)
-            I *= 0.85
-            I[:-8, :] += 0.15 * Icopy[8:, :]
+            Icopy = np.copy(I_)
+            I_ *= 0.85
+            I_[:-8, :] += 0.15 * Icopy[8:, :]
             del Icopy
 
         if features & 4:  # (features//4) % 2 == 1
-            Icopy = np.copy(I)
-            I *= 0.8
-            I[:-4, :-4] += 0.1 * Icopy[4:, 4:]
-            I[4:, :-4] += 0.1 * Icopy[:-4, 4:]
+            Icopy = np.copy(I_)
+            I_ *= 0.8
+            I_[:-4, :-4] += 0.1 * Icopy[4:, 4:]
+            I_[4:, :-4] += 0.1 * Icopy[:-4, 4:]
             del Icopy
 
         # now convolve
-        It = numpy_fft.rfft2(I)
+        It = numpy_fft.rfft2(I_)
         uxa = np.linspace(0, 1 - 1 / npad, npad)
         uxa[-(npad // 2) :] -= 1
         ux = np.tile(uxa[None, : npad // 2 + 1], (npad, 1))
@@ -254,10 +254,10 @@ class OutPSF:
             * np.sinc(ux * tophat_conv)
             * np.sinc(uy * tophat_conv)
         )
-        I = numpy_fft.irfft2(It, s=(npad, npad))
+        I_ = numpy_fft.irfft2(It, s=(npad, npad))
         del It, uxa, ux, uy
 
-        return I[kp:-kp, kp:-kp]
+        return I_[kp:-kp, kp:-kp]
 
     @staticmethod
     def iD5512C_getw(w: np.array, fh: float) -> None:
@@ -555,8 +555,8 @@ class PSFGrp:
     def __init__(
         self,
         in_or_out: bool = True,
-        inst: "coadd.InStamp" = None,
-        blk: "coadd.Block" = None,
+        inst=None,
+        blk=None,
         verbose: bool = False,
         visualize: bool = False,
     ) -> None:
@@ -643,9 +643,7 @@ class PSFGrp:
         format_axis(ax, False)
         plt.show()
 
-    def _sample_psf(
-        self, idx: int, psf: np.array, outpix2world2inpix: "method" = None, visualize: bool = False
-    ) -> None:
+    def _sample_psf(self, idx, psf, outpix2world2inpix=None, visualize=False):
         """
         Perform interpolations to sample a single PSF or a set of PSFs.
 
@@ -1285,9 +1283,9 @@ class PSFOvl:
 
     def __call__(
         self,
-        st1: "coadd.InStamp",
-        st2: "coadd.InStamp, coadd.OutStamp or None" = None,
-        visualize: bool = False,
+        st1,
+        st2=None,
+        visualize=False,
     ) -> np.array:
         """
         Wrapper for the C interpolators.
@@ -1320,7 +1318,7 @@ class PSFOvl:
             # this method never deals with output self-overlap!
             return self._call_ii_self(st1, st2, visualize)
 
-    def _call_ii_cross(self, st1: "coadd.InStamp", st2: "coadd.InStamp", visualize: bool = False) -> np.array:
+    def _call_ii_cross(self, st1, st2, visualize=False) -> np.array:
         """
         Interpolations in the input-input cross-overlap case.
 
@@ -1414,9 +1412,7 @@ class PSFOvl:
 
         return res
 
-    def _call_io_cross(
-        self, st1: "coadd.InStamp", st2: "coadd.OutStamp", visualize: bool = False
-    ) -> np.array:
+    def _call_io_cross(self, st1, st2, visualize=False):
         """
         Interpolations in the input-output cross-overlap case.
 
@@ -1513,7 +1509,7 @@ class PSFOvl:
 
         return res
 
-    def _call_ii_self(self, st1: "coadd.InStamp", st2: "coadd.InStamp", visualize: bool = False) -> np.array:
+    def _call_ii_self(self, st1, st2, visualize=False):
         """
         Interpolations in the input-input self-overlap case.
 
@@ -1700,7 +1696,7 @@ class SysMatA:
 
     """
 
-    def __init__(self, blk: "coadd.Block") -> None:
+    def __init__(self, blk):
         self.blk = blk
 
         # dictionary of A submatrices; ii stands for input-input
@@ -2010,7 +2006,7 @@ class SysMatB:
 
     """
 
-    def __init__(self, blk: "coadd.Block") -> None:
+    def __init__(self, blk):
         self.blk = blk
 
         # dictionary of input-output PSFOvl's; io stands for input-output

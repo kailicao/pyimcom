@@ -336,7 +336,7 @@ class Config:
             try:
                 with open(self.cfg_file) as f:
                     cfg_dict = json.load(f)
-            except:
+            except FileNotFoundError:
                 cfg_dict = json.loads(self.cfg_file)
             self._from_dict(cfg_dict)
 

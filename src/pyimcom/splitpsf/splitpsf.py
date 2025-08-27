@@ -16,6 +16,32 @@ from ..wcsutil import PyIMCOM_WCS, local_partial_pixel_derivatives2
 
 
 class SplitPSF:
+    """
+    Class for splitting the PSF into short- and long-range parts.
+
+    Methods
+    -------
+    Window_integratedBlackman
+        Integrated Blackman window.
+    Window_2D_integratedBlackman
+        2D version of integrated Blackman.
+    Truncate_2D_integratedBlackman
+        2D version of integrated Blackman.
+    padft2d
+        2D pad and Fourier transform for a square array.
+    tophatfilter
+       Smooth 3D array in each of the last 2 planes with a tophat of the given width.
+    gauss_deconv
+        Deconvolve a Gaussian, matrix C is 2x2 covariance.
+    gauss_stamp
+        Makes nxn array of a Gaussian with given covariance, centered at the image center.
+    __init__
+        Constructor.
+    build
+        Builds the short/long range decomposition for this SplitPSF.
+
+    """
+
     @staticmethod
     def Window_integratedBlackman(x):
         """Integrated Blackman window.
@@ -73,7 +99,7 @@ class SplitPSF:
 
         X_ = np.ones((n,))
         X_[:m] = SplitPSF.Window_integratedBlackman(np.linspace(-1.0, 1.0, m + 2))[1:-1]
-        X_[-m:] = X[m - 1 :: -1]
+        X_[-m:] = X_[m - 1 :: -1]
         return np.outer(X_, X_)
 
     @staticmethod
@@ -218,9 +244,9 @@ class SplitPSF:
 
         # Checks
         if self.smallstamp_size % 2 != 0 or self.largestamp_size % 2 != 0:
-            raise "SplitPSF requires even dimension"
+            raise ValueError("SplitPSF requires even dimension")
         if (self.lorder + 1) ** 2 != self.npoly:
-            raise "SplitPSF Legendre polynomial dimension error"
+            raise ValueError("SplitPSF Legendre polynomial dimension error")
 
     def build(self):
         """Builds the short/long range decomposition for this SplitPSF."""
@@ -261,7 +287,7 @@ class SplitPSF:
                 self.Cov[i, :, :] = var_ref * np.identity(2)
             else:
                 compute_point_pix = [self.nside / 2.0 * (1 + xg[i]), self.nside / 2.0 * (1 + yg[i])]
-                globalpos = self.wcs_.all_pix2world(np.array([compute_point_pix]), 0)[0]
+                # globalpos = self.wcs_.all_pix2world(np.array([compute_point_pix]), 0)[0]
                 jac = local_partial_pixel_derivatives2(self.wcs_, *compute_point_pix)
                 self.Cov[i, :, :] = var_ref * np.linalg.inv(jac.T @ jac) * (self.ref_pixscale / 3600) ** 2
 
@@ -345,7 +371,7 @@ def split_psf_to_fits(psf_file, wcs_format, pars, outfile):
                 with asdf.open(wcs_format.format(isca)) as f:
                     this_wcs_ = PyIMCOM_WCS(f["roman"]["meta"]["wcs"])
             prim.header[f"INWCS{isca:02d}"] = wcs_format.format(isca)
-        except:
+        except RuntimeError:
             prim.header[f"INWCS{isca:02d}"] = "/dev/null"
             this_wcs_ = None
 
@@ -416,11 +442,11 @@ if __name__ == "__main__":
     print("")
 
     if "INLAYERCACHE" not in cfg_dict:
-        raise "Couldn't find INLAYERCACHE."
+        raise KeyError("Couldn't find INLAYERCACHE.")
 
     # get target PSF properties
     if cfg_dict["OUTPSF"] != "GAUSSIAN":
-        raise "SplitPSF currently only works for Gaussians."
+        raise ValueError("SplitPSF currently only works for Gaussians.")
     sigma = float(cfg_dict["EXTRASMOOTH"])
     print("PSF sigma (input pixels) -->", sigma)
 
