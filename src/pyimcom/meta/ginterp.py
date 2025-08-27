@@ -69,7 +69,7 @@ def InterpMatrix(Rsearch, samp, x_out, y_out, Cov, kappa=1.0e-10, deweight=1.0e2
     R = np.sqrt(np.ceil(Rsearch**2) + 0.01)
     N = int(np.ceil(R) + 1) * 2
     sigma = samp / np.sqrt(8 * np.log(2))
-    Npts = np.size(x_out)
+    # Npts = np.size(x_out) # <-- not needed
     Cxx = float(Cov[0])
     Cxy = float(Cov[1])
     Cyy = float(Cov[2])

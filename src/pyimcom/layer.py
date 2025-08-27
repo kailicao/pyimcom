@@ -818,7 +818,7 @@ class Mask:
             )
 
     @staticmethod
-    def load_permanent_mask(block: "coadd.Block"):
+    def load_permanent_mask(block):
         """
         Builds a permanent mask from a FITS file referenced in the configuration.
 
@@ -890,7 +890,7 @@ class Mask:
         return np.ones((Stn.sca_nside, Stn.sca_nside), dtype=bool)
 
     @staticmethod
-    def load_cr_mask(inimage: "coadd.InImage"):
+    def load_cr_mask(inimage):
         """
         Generates a cosmic ray mask for an image (including lab noise CRs, if labnoise is used).
 
@@ -914,7 +914,7 @@ class Mask:
 
             try:
                 idx = config.extrainput.index("labnoise")
-            except:
+            except KeyError:
                 pass
             else:
                 cr_mask = np.logical_and(cr_mask, np.abs(inimage.indata[idx]) < config.labnoisethreshold)
@@ -1040,7 +1040,7 @@ def check_if_idsca_exists(cfg, obsdata, idsca):
     return exists_, fname
 
 
-def get_all_data(inimage: "coadd.InImage"):
+def get_all_data(inimage):
     """
     Makes a 3D array of all the layers of an input image.
 
@@ -1164,7 +1164,7 @@ def get_all_data(inimage: "coadd.InImage"):
                 with fits.open(filename) as f:
                     try:
                         inimage.indata[i, :, :] = f[0].data
-                    except:
+                    except (KeyError, ValueError, RuntimeError):
                         inimage.indata[i, :, :] = f[0].data[4:4092, 4:4092]
                         print(
                             "  -> pulled out 4088x4088 subregion: 10th & 90th percentiles = "

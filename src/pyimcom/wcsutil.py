@@ -511,21 +511,19 @@ class PyIMCOM_WCS:
         """
         An astropy-like function to go from pixel to world coordinates.
 
-        This has both a 2-argument or a 3-argument format.
+        This has both a 2-argument ``(pos, origin)`` or a 3-argument ``(pos, pos2, origin)`` format.
 
         In 2-argument format, `pos` is a shape (N, 2) array and the return is also a shape (N, 2) array.
 
         In 3-argument format, `pos` is a shape (N,) array of pixel x, `pos2` is a shape (N,) array of
         pixel y, and the return valus is ra, dec, both shape (N,) arrays. For N=1, you may use scalars.
 
+        In both cases, `origin` is an integer indicating the index of the lower-left pixel (0 or 1).
+
         Parameters
         ----------
-        pos : np.array
-            Pixel coordinates.
-        pos2 : np.array, optional
-            2nd pixel coordinates array.
-        origin: int
-            Offset of lower-left pixel, should be 0 or 1.
+        *args : variable
+            See description.
 
         Returns
         -------
@@ -572,7 +570,7 @@ class PyIMCOM_WCS:
             pos1 = np.copy(pos2)
             # 3 iterations is overkill but we want to be sure.
             # also we want to avoid slight discontinuities
-            for k in range(3):
+            for _ in range(3):
                 dp = np.vstack((self.err[0](pos1[::-1, :]), self.err[1](pos1[::-1, :]))).T.astype(np.float64)
                 pos1 = pos2 - dp
             return pos1
@@ -586,21 +584,19 @@ class PyIMCOM_WCS:
         """
         An astropy-like function to go from pixel to world coordinates.
 
-        This has both a 2-argument or a 3-argument format.
+        This has both a 2-argument ``(pos,origin)`` or a 3-argument ``(pos,pos2,origin)`` format.
 
         In 2-argument format, `pos` is a shape (N, 2) array and the return is also a shape (N, 2) array.
 
         In 3-argument format, `pos` is a shape (N,) array of ra, `pos2` is a shape (N,) array of
         dec, and the return valus is x, y, both shape (N,) arrays. For N=1, you may use scalars.
 
+        In both cases, `origin` is an integer indicating the index of the lower-left pixel (0 or 1).
+
         Parameters
         ----------
-        pos : np.array
-            World coordinates.
-        pos2 : np.array, optional
-            2nd world coordinates array.
-        origin: int
-            Offset of lower-left pixel, should be 0 or 1.
+        *args : variable
+            See description.
 
         Returns
         -------

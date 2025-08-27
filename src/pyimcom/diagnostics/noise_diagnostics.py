@@ -175,12 +175,12 @@ class NoiseReport(ReportSection):
 
         """
 
-        pars = []  # list of parameters, replaces global construction when wrapped
+        # pars = []  # list of parameters, replaces global construction when wrapped
 
         # Set useful constants for te lab noise data
         tfr = 3.08  # sec
         gain = 1.458  # electrons/DN
-        ABstd = 3.631e-20  # erg/cm^2
+        # ABstd = 3.631e-20  # erg/cm^2
         h_erg = 6.62607015e-27  # erg/Hz
         h_jy = h_erg * 1e29  # microJy*cm^2*s
         s_in = Settings.pixscale_native * 648000.0 / np.pi  # arcsec # updated to refer back to Settings
@@ -219,21 +219,21 @@ class NoiseReport(ReportSection):
                     is_first = False
 
                     with ReadFile(infile) as f:
-                        n = np.shape(f[0].data)[-1]  # size of output images
+                        # n = np.shape(f[0].data)[-1]  # size of output images
                         config = ""
                         for g in f["CONFIG"].data["text"].tolist():
                             config += g + " "
                         configStruct = json.loads(config)
                         configdata = f["CONFIG"].data
 
-                    blocksize = (
-                        int(configStruct["OUTSIZE"][0])
-                        * int(configStruct["OUTSIZE"][1])
-                        * float(configStruct["OUTSIZE"][2])
-                        / 3600.0
-                        * np.pi
-                        / 180
-                    )  # block size in radians
+                    # blocksize = (
+                    #     int(configStruct["OUTSIZE"][0])
+                    #     * int(configStruct["OUTSIZE"][1])
+                    #     * float(configStruct["OUTSIZE"][2])
+                    #     / 3600.0
+                    #     * np.pi
+                    #     / 180
+                    # )  # block size in radians
                     L = self.L = int(configStruct["OUTSIZE"][0]) * int(
                         configStruct["OUTSIZE"][1]
                     )  # side length in px
@@ -578,10 +578,10 @@ class NoiseReport(ReportSection):
             if iblock == 0:
                 with ReadFile(infile) as f:
                     n = np.shape(f["PRIMARY"])[0]
-                    l = (f["P1D_TABLE"].data).shape[0]
+                    ll = (f["P1D_TABLE"].data).shape[0]
                     total_2D = np.zeros(np.shape(np.transpose(f["PRIMARY"].data, (1, 2, 0))))
-                    total_1D = np.zeros((l, 4))
-                    header = np.copy(f["PRIMARY"].header)
+                    total_1D = np.zeros((ll, 4))
+                    # header = np.copy(f["PRIMARY"].header)
 
             if not exists(infile):
                 continue
@@ -592,7 +592,7 @@ class NoiseReport(ReportSection):
 
             for k in range(0, n):
                 total_2D[:, :, k] += indata_2D[:, :, k]
-            for k in range(0, l):
+            for k in range(0, ll):
                 for m in range(0, 4):
                     total_1D[k, m] += indata_1D[k][m]
 

@@ -184,7 +184,7 @@ def str2dirstem(st):
     """
 
     if st is None:
-        raise ("called str2dirstem with None")
+        raise TypeError("called str2dirstem with None")
     parts = re.split("/", st)
     N = len(parts)
     if N == 1:

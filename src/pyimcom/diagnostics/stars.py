@@ -298,6 +298,8 @@ class SimulatedStar(ReportSection):
     """
 
     def build(self, nblockmax=100):
+        """Builds the simulated star report section."""
+
         nblock = min(nblockmax, self.cfg.nblock)
 
         # The runs
@@ -396,7 +398,7 @@ class SimulatedStar(ReportSection):
         outdict["BLK_SIMSTAR_G50PCT"] = g50
         outdict["BLK_SIMSTAR_G90PCT"] = g90
         print("percentiles of the binned median:", g50, g90)
-        im2 = S.quiver(
+        im2 = S.quiver(  # noqa: F841
             X,
             Y,
             v * np.cos(phi),

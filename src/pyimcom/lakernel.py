@@ -34,7 +34,7 @@ from warnings import warn
 import numpy as np
 from astropy import units as u
 from numba import njit
-from scipy.linalg import cho_solve, cholesky
+from scipy.linalg import LinAlgError, cho_solve, cholesky
 
 from .config import Settings as Stn
 
@@ -62,7 +62,7 @@ class _LAKernel:
 
     """
 
-    def __init__(self, outst: "coadd.OutStamp") -> None:
+    def __init__(self, outst):
         self.outst = outst
         cfg = outst.blk.cfg  # shortcut
 
@@ -258,7 +258,7 @@ class CholKernel(_LAKernel):
 
         try:
             L = cholesky(AA, lower=True, check_finite=False)
-        except:
+        except LinAlgError:
             # if matrix is not quite positive definite, we can rectify it
             w, v = np.linalg.eigh(A)
             # AA[di] += kappa_arr[j] + np.abs(w[0])
