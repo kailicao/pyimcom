@@ -258,7 +258,7 @@ class CholKernel(_LAKernel):
 
         try:
             L = cholesky(AA, lower=True, check_finite=False)
-        except Exception:
+        except:
             # if matrix is not quite positive definite, we can rectify it
             w, v = np.linalg.eigh(A)
             # AA[di] += kappa_arr[j] + np.abs(w[0])

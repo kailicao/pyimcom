@@ -914,7 +914,7 @@ class Mask:
 
             try:
                 idx = config.extrainput.index("labnoise")
-            except Exception:
+            except:
                 pass
             else:
                 cr_mask = np.logical_and(cr_mask, np.abs(inimage.indata[idx]) < config.labnoisethreshold)
@@ -1164,7 +1164,7 @@ def get_all_data(inimage: "coadd.InImage"):
                 with fits.open(filename) as f:
                     try:
                         inimage.indata[i, :, :] = f[0].data
-                    except Exception:
+                    except:
                         inimage.indata[i, :, :] = f[0].data[4:4092, 4:4092]
                         print(
                             "  -> pulled out 4088x4088 subregion: 10th & 90th percentiles = "
