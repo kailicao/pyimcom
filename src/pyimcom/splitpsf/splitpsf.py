@@ -371,7 +371,7 @@ def split_psf_to_fits(psf_file, wcs_format, pars, outfile):
                 with asdf.open(wcs_format.format(isca)) as f:
                     this_wcs_ = PyIMCOM_WCS(f["roman"]["meta"]["wcs"])
             prim.header[f"INWCS{isca:02d}"] = wcs_format.format(isca)
-        except RuntimeError:
+        except (RuntimeError, FileNotFoundError):
             prim.header[f"INWCS{isca:02d}"] = "/dev/null"
             this_wcs_ = None
 
