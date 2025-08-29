@@ -27,23 +27,21 @@ _assign_subvector
 
 """
 
+import sys
+import time
 from warnings import warn
 
-import sys
-import os
-from pathlib import Path
-import time
 import numpy as np
-import subprocess
-from scipy.linalg import cholesky, cho_solve
 from astropy import units as u
-
 from numba import njit
+from scipy.linalg import LinAlgError, cho_solve, cholesky
+
 from .config import Settings as Stn
+
 try:
-    from pyimcom_croutines import lakernel1, build_reduced_T_wrap
-except:
-    from .routine import lakernel1, build_reduced_T_wrap
+    from pyimcom_croutines import build_reduced_T_wrap, lakernel1
+except ImportError:
+    from .routine import build_reduced_T_wrap, lakernel1
 
 
 class _LAKernel:
@@ -64,13 +62,13 @@ class _LAKernel:
 
     """
 
-    def __init__(self, outst: 'coadd.OutStamp') -> None:
-
+    def __init__(self, outst):
         self.outst = outst
         cfg = outst.blk.cfg  # shortcut
 
         # get parameters
-        self.n_out = cfg.n_out; self.m = cfg.n2f ** 2
+        self.n_out = cfg.n_out
+        self.m = cfg.n2f**2
         self.n = self.outst.inpix_cumsum[-1]  # number of input pixels
         self.n2f = cfg.n2f
 
@@ -107,17 +105,21 @@ class _LAKernel:
 
         # special handling for n=0 (no input pixels in this postage stamp)
         if self.n == 0:
-            self.outst.T     = np.zeros((self.n_out, self.m, 0), dtype=np.float32)
-            self.outst.UC    = np.ones (shape, dtype=np.float32)  # leakage metric U=C since the 'true' output PSF is zero
+            self.outst.T = np.zeros((self.n_out, self.m, 0), dtype=np.float32)
+            self.outst.UC = np.ones(
+                shape, dtype=np.float32
+            )  # leakage metric U=C since the 'true' output PSF is zero
             self.outst.Sigma = np.zeros(shape, dtype=np.float32)  # all zeros, no noise
-            self.outst.kappa = np.ones (shape, dtype=np.float32)  # not relevant but will fill with 1's to avoid log errors
+            self.outst.kappa = np.ones(
+                shape, dtype=np.float32
+            )  # not relevant but will fill with 1's to avoid log errors
             return
 
         # outputs
         self.outst.T = np.zeros((self.n_out, self.m, self.n), dtype=np.float32)
-        self.UC_     = np.zeros((self.n_out, self.m), dtype=np.float32)
-        self.Sigma_  = np.zeros((self.n_out, self.m), dtype=np.float32)
-        self.kappa_  = np.zeros((self.n_out, self.m), dtype=np.float32)
+        self.UC_ = np.zeros((self.n_out, self.m), dtype=np.float32)
+        self.Sigma_ = np.zeros((self.n_out, self.m), dtype=np.float32)
+        self.kappa_ = np.zeros((self.n_out, self.m), dtype=np.float32)
 
         if self.nv == 1:
             self._call_single_kappa()
@@ -125,9 +127,12 @@ class _LAKernel:
             self._call_multi_kappa()
 
         # post processing
-        self.outst.UC    = self.UC_.   reshape(shape); del self.UC_
-        self.outst.Sigma = self.Sigma_.reshape(shape); del self.Sigma_
-        self.outst.kappa = self.kappa_.reshape(shape); del self.kappa_
+        self.outst.UC = self.UC_.reshape(shape)
+        del self.UC_
+        self.outst.Sigma = self.Sigma_.reshape(shape)
+        del self.Sigma_
+        self.outst.kappa = self.kappa_.reshape(shape)
+        del self.kappa_
 
 
 class EigenKernel(_LAKernel):
@@ -156,10 +161,10 @@ class EigenKernel(_LAKernel):
 
         for k in range(self.n_out):
             my_kappa = self.kappaC_arr[0] * C[k]
-            self.kappa_ [k, :] = my_kappa
-            self.Sigma_ [k, :] = np.sum((mPhalf[k] / (lam+my_kappa))**2, axis=1)
-            self.UC_    [k, :] = 1 - (lam+2*my_kappa) / (lam+my_kappa)**2 @ mPhalf[k].T**2 / C[k]
-            self.outst.T[k, :, :] = mPhalf[k] / (lam+my_kappa) @ Q.T
+            self.kappa_[k, :] = my_kappa
+            self.Sigma_[k, :] = np.sum((mPhalf[k] / (lam + my_kappa)) ** 2, axis=1)
+            self.UC_[k, :] = 1 - (lam + 2 * my_kappa) / (lam + my_kappa) ** 2 @ mPhalf[k].T ** 2 / C[k]
+            self.outst.T[k, :, :] = mPhalf[k] / (lam + my_kappa) @ Q.T
 
         del lam, Q, mPhalf
 
@@ -184,7 +189,8 @@ class EigenKernel(_LAKernel):
         """
 
         # get parameters and arrays
-        kCmin = self.kappaC_arr[0]; kCmax = self.kappaC_arr[-1]  # range of kappa/C to test
+        kCmin = self.kappaC_arr[0]
+        kCmax = self.kappaC_arr[-1]  # range of kappa/C to test
         A = self.outst.sysmata  # system matrix, shape = (n, n)
         mBhalf = self.outst.mhalfb  # target overlap matrix, shape = (n_out, m, n)
         C = self.outst.outovlc  # target normalization, shape = (n_out,)
@@ -195,9 +201,22 @@ class EigenKernel(_LAKernel):
 
         for k in range(n_out):
             # using kCmin*C[k], kCmax*C[k] instead of kCmin, kCmax produces reasonable results
-            lakernel1(lam, Q, mBhalf[k, :, :] @ Q, C[k], self.ucmin, kCmin*C[k], kCmax*C[k], nbis,
-                      self.kappa_[k, :], self.Sigma_[k, :], self.UC_[k, :], tt, self.smax)
-            self.kappa_ [k, :] *= C[k]
+            lakernel1(
+                lam,
+                Q,
+                mBhalf[k, :, :] @ Q,
+                C[k],
+                self.ucmin,
+                kCmin * C[k],
+                kCmax * C[k],
+                nbis,
+                self.kappa_[k, :],
+                self.Sigma_[k, :],
+                self.UC_[k, :],
+                tt,
+                self.smax,
+            )
+            self.kappa_[k, :] *= C[k]
             self.outst.T[k, :, :] = tt @ Q.T
 
 
@@ -217,8 +236,7 @@ class CholKernel(_LAKernel):
     """
 
     @staticmethod
-    def _cholesky_wrapper(AA: np.array, di: (np.array, np.array),
-                          A: np.array) -> np.array:
+    def _cholesky_wrapper(AA: np.array, di: tuple[np.array, np.array], A: np.array) -> np.array:
         """
         Wrapper for cholesky, rectifies negative eigenvalue(s) if needed.
 
@@ -240,15 +258,18 @@ class CholKernel(_LAKernel):
 
         try:
             L = cholesky(AA, lower=True, check_finite=False)
-        except:
+        except LinAlgError:
             # if matrix is not quite positive definite, we can rectify it
             w, v = np.linalg.eigh(A)
             # AA[di] += kappa_arr[j] + np.abs(w[0])
             AA[di] += np.abs(w[0]) + 1e-16  # KC: this seems right
-            print('repair w', w[:8]); sys.stdout.flush()
+            print("repair w", w[:8])
+            sys.stdout.flush()
             del v
-            warn('Warning: pyimcom_lakernel Cholesky decomposition failed; '
-                 'fixed negative eigenvalue {:19.12e}'.format(w[0]))
+            warn(
+                "Warning: pyimcom_lakernel Cholesky decomposition failed; "
+                f"fixed negative eigenvalue {w[0]:19.12e}"
+            )
             L = cholesky(AA, lower=True, check_finite=False)
             AA[di] -= np.abs(w[0]) + 1e-16  # KC: let's recover AA
 
@@ -268,10 +289,12 @@ class CholKernel(_LAKernel):
             t0 = time.time()
 
             # Cholesky decomposition for the only eigenvalue node
-            AA = np.copy(A); di = np.diag_indices(n)
+            AA = np.copy(A)
+            di = np.diag_indices(n)
             my_kappa = self.kappaC_arr[0] * C[j_out]
 
-            if my_kappa: AA[di] += my_kappa
+            if my_kappa:
+                AA[di] += my_kappa
             t1 = time.time()
             L = self._cholesky_wrapper(AA, di, A)
             t2 = time.time()
@@ -280,18 +303,21 @@ class CholKernel(_LAKernel):
             del AA, di, L
 
             # build values at node
-            D = np.einsum('ai,ai->a', mBhalf[j_out, :, :], Ti)
-            N = np.einsum('ai,ai->a', Ti, Ti)
+            D = np.einsum("ai,ai->a", mBhalf[j_out, :, :], Ti)
+            N = np.einsum("ai,ai->a", Ti, Ti)
             t4 = time.time()
 
             # make outputs
-            self.kappa_ [j_out, :] = my_kappa
-            self.Sigma_ [j_out, :] = N
-            self.UC_    [j_out, :] = 1.0 - (my_kappa*N + D)/C[j_out]
+            self.kappa_[j_out, :] = my_kappa
+            self.Sigma_[j_out, :] = N
+            self.UC_[j_out, :] = 1.0 - (my_kappa * N + D) / C[j_out]
             self.outst.T[j_out, :, :] = Ti
             del D, N, Ti
             t5 = time.time()
-            print('Cholesky timing -> {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f}'.format(t1-t0, t2-t0, t3-t0, t4-t0, t5-t0))
+            print(
+                "Cholesky timing -> "
+                f"{t1 - t0:5.2f} {t2 - t0:5.2f} {t3 - t0:5.2f} {t4 - t0:5.2f} {t5 - t0:5.2f}"
+            )
 
     def _call_multi_kappa(self) -> None:
         """
@@ -318,47 +344,55 @@ class CholKernel(_LAKernel):
         #
         # loop over output PSFs
         for j_out in range(self.n_out):
-
             # Cholesky decomposition for each eigenvalue node
-            AA = np.copy(A); di = np.diag_indices(n)
+            AA = np.copy(A)
+            di = np.diag_indices(n)
             kappa_arr = self.kappaC_arr * C[j_out]
 
             for j in range(nv):
-                AA[di] += kappa_arr[j] - (kappa_arr[j-1] if j > 0 else 0)
+                AA[di] += kappa_arr[j] - (kappa_arr[j - 1] if j > 0 else 0)
                 L = CholKernel._cholesky_wrapper(AA, di, A)
                 Tpi[j, :, :] = cho_solve((L, True), mBhalf[j_out, :, :].T, check_finite=False).T
             del AA, di, L
 
             # build values at nodes
-            Dp = np.einsum('ai,pai->ap', mBhalf[j_out, :, :], Tpi)
-            Npq = np.einsum('pai,qai->apq', Tpi, Tpi)
+            Dp = np.einsum("ai,pai->ap", mBhalf[j_out, :, :], Tpi)
+            Npq = np.einsum("pai,qai->apq", Tpi, Tpi)
             Epq = np.zeros((m, nv, nv))
             for p in range(nv):
                 for q in range(p):
-                    Epq[:, q, p] = Epq[:, p, q] = Dp[:, q] - kappa_arr[p]*Npq[:, p, q]
-                Epq[:, p, p] = Dp[:, p] - kappa_arr[p]*Npq[:, p, p]
+                    Epq[:, q, p] = Epq[:, p, q] = Dp[:, q] - kappa_arr[p] * Npq[:, p, q]
+                Epq[:, p, p] = Dp[:, p] - kappa_arr[p] * Npq[:, p, p]
 
             # now make outputs and call C function
             out_kappa = np.zeros((m,))
             out_Sigma = np.zeros((m,))
-            out_UC    = np.zeros((m,))
-            out_w     = np.zeros((m*nv,))
+            out_UC = np.zeros((m,))
+            out_w = np.zeros((m * nv,))
             build_reduced_T_wrap(
-                Npq.flatten(), Dp.flatten()/C[j_out], Epq.flatten()/C[j_out],
-                self.kappaC_arr, self.ucmin, self.smax, out_kappa, out_Sigma, out_UC, out_w)
+                Npq.flatten(),
+                Dp.flatten() / C[j_out],
+                Epq.flatten() / C[j_out],
+                self.kappaC_arr,
+                self.ucmin,
+                self.smax,
+                out_kappa,
+                out_Sigma,
+                out_UC,
+                out_w,
+            )
             del Dp, Npq, Epq
 
             # make outputs
-            self.kappa_ [j_out, :] = out_kappa * C[j_out]
-            self.Sigma_ [j_out, :] = out_Sigma
-            self.UC_    [j_out, :] = out_UC
-            self.outst.T[j_out, :, :] = np.einsum('pai,ap->ai', Tpi, out_w.reshape((m, nv)))
+            self.kappa_[j_out, :] = out_kappa * C[j_out]
+            self.Sigma_[j_out, :] = out_Sigma
+            self.UC_[j_out, :] = out_UC
+            self.outst.T[j_out, :, :] = np.einsum("pai,ap->ai", Tpi, out_w.reshape((m, nv)))
             del out_kappa, out_Sigma, out_UC, out_w
 
 
 @njit
-def conjugate_gradient(A: np.array, b: np.array, rtol: float = 1.5e-3,
-                       maxiter: int = 30) -> np.array:
+def conjugate_gradient(A: np.array, b: np.array, rtol: float = 1.5e-3, maxiter: int = 30) -> np.array:
     """
     Simplified version of scipy.sparse.linalg.cg.
 
@@ -390,7 +424,7 @@ def conjugate_gradient(A: np.array, b: np.array, rtol: float = 1.5e-3,
 
     for iteration in range(maxiter):
         rho_cur = np.dot(r, r)
-        if rho_cur ** 0.5 < atol:  # Are we done?
+        if rho_cur**0.5 < atol:  # Are we done?
             break
 
         if iteration > 0:
@@ -431,10 +465,11 @@ def _extract_submatrix(mat_orig: np.array, selection: np.array) -> np.array:
     for j_, j in enumerate(selection):
         for i_, i in enumerate(selection):
             mat_copy[j_, i_] = mat_orig[j, i]
-            if i_ > j_: break
+            if i_ > j_:
+                break
 
     for j_ in range(n_):
-        for i_ in range(j_+1, n_):
+        for i_ in range(j_ + 1, n_):
             mat_copy[j_, i_] = mat_copy[i_, j_]
 
     return mat_copy
@@ -469,8 +504,7 @@ def _extract_subvector(vec_orig: np.array, selection: np.array) -> np.array:
 
 
 @njit
-def _assign_subvector(vec_left: np.array, vec_right: np.array,
-                      selection: np.array) -> None:
+def _assign_subvector(vec_left: np.array, vec_right: np.array, selection: np.array) -> None:
     """
     Assign values to a subvector of a vector.
 
@@ -510,8 +544,9 @@ class IterKernel(_LAKernel):
 
     @staticmethod
     @njit
-    def _iterative_wrapper(AA: np.array, mBhalf: np.array, relevant_matrix: np.array,
-                           rtol: float = 1.5e-3, maxiter: int = 30) -> np.array:
+    def _iterative_wrapper(
+        AA: np.array, mBhalf: np.array, relevant_matrix: np.array, rtol: float = 1.5e-3, maxiter: int = 30
+    ) -> np.array:
         """
         Wrapper for conjugate gradient method.
 
@@ -541,13 +576,15 @@ class IterKernel(_LAKernel):
         # loop over output pixels
         for a in range(m):
             selection = np.nonzero(relevant_matrix[a])[0]
-            _assign_subvector(Ti[a], conjugate_gradient(
-                _extract_submatrix(AA, selection),
-                _extract_subvector(mBhalf[a], selection),
-                rtol, maxiter), selection)
+            _assign_subvector(
+                Ti[a],
+                conjugate_gradient(
+                    _extract_submatrix(AA, selection), _extract_subvector(mBhalf[a], selection), rtol, maxiter
+                ),
+                selection,
+            )
 
         return Ti
-
 
     def _call_single_kappa(self, exact_UC: bool = False) -> None:
         """
@@ -575,36 +612,41 @@ class IterKernel(_LAKernel):
         mddy = self.outst.yx_val[0].ravel()[:, None] - self.outst.iny_val[None, :]
         mddx = self.outst.yx_val[1].ravel()[:, None] - self.outst.inx_val[None, :]
         cfg = self.outst.blk.cfg  # shortcut
-        rho_acc = (cfg.instamp_pad / Stn.arcsec) / (cfg.dtheta * u.degree.to('arcsec'))
-        relevant_matrix = (np.hypot(mddy, mddx) < rho_acc); del mddy, mddx
+        rho_acc = (cfg.instamp_pad / Stn.arcsec) / (cfg.dtheta * u.degree.to("arcsec"))
+        relevant_matrix = np.hypot(mddy, mddx) < rho_acc
+        del mddy, mddx
 
         # loop over output PSFs
         for j_out in range(self.n_out):
-
             # iterative method for the only eigenvalue node
-            AA = np.copy(A); di = np.diag_indices(n)
+            AA = np.copy(A)
+            di = np.diag_indices(n)
             my_kappa = self.kappaC_arr[0] * C[j_out]
 
-            if my_kappa: AA[di] += my_kappa
-            Ti = IterKernel._iterative_wrapper(AA, mBhalf[j_out], relevant_matrix,
-                                               cfg.iter_rtol, cfg.iter_max)
+            if my_kappa:
+                AA[di] += my_kappa
+            Ti = IterKernel._iterative_wrapper(
+                AA, mBhalf[j_out], relevant_matrix, cfg.iter_rtol, cfg.iter_max
+            )
 
             # build values at node
-            D = np.einsum('ai,ai->a', mBhalf[j_out, :, :], Ti)
-            N = np.einsum('ai,ai->a', Ti, Ti)
-            if exact_UC: E = np.einsum('ij,ai,aj->a', A, Ti, Ti)
+            D = np.einsum("ai,ai->a", mBhalf[j_out, :, :], Ti)
+            N = np.einsum("ai,ai->a", Ti, Ti)
+            if exact_UC:
+                E = np.einsum("ij,ai,aj->a", A, Ti, Ti)
 
             # make outputs
-            self.kappa_ [j_out, :] = my_kappa
-            self.Sigma_ [j_out, :] = N
+            self.kappa_[j_out, :] = my_kappa
+            self.Sigma_[j_out, :] = N
             if exact_UC:
-                self.UC_[j_out, :] = 1.0 + (E - 2*D)/C[j_out]
+                self.UC_[j_out, :] = 1.0 + (E - 2 * D) / C[j_out]
             else:
-                self.UC_[j_out, :] = 1.0 - (my_kappa*N + D)/C[j_out]
+                self.UC_[j_out, :] = 1.0 - (my_kappa * N + D) / C[j_out]
             self.outst.T[j_out, :, :] = Ti
 
             del D, N, Ti
-            if exact_UC: del E
+            if exact_UC:
+                del E
 
         del relevant_matrix
 
@@ -635,54 +677,65 @@ class IterKernel(_LAKernel):
         mddy = self.outst.yx_val[0].ravel()[:, None] - self.outst.iny_val[None, :]
         mddx = self.outst.yx_val[1].ravel()[:, None] - self.outst.inx_val[None, :]
         cfg = self.outst.blk.cfg  # shortcut
-        rho_acc = (cfg.instamp_pad / Stn.arcsec) / (cfg.dtheta * u.degree.to('arcsec'))
-        relevant_matrix = (np.hypot(mddy, mddx) < rho_acc); del mddy, mddx
+        rho_acc = (cfg.instamp_pad / Stn.arcsec) / (cfg.dtheta * u.degree.to("arcsec"))
+        relevant_matrix = np.hypot(mddy, mddx) < rho_acc
+        del mddy, mddx
 
         Tpi = np.zeros((nv, m, n))
         #
         # loop over output PSFs
         for j_out in range(self.n_out):
-
             # iterative method for each eigenvalue node
-            AA = np.copy(A); di = np.diag_indices(n)
+            AA = np.copy(A)
+            di = np.diag_indices(n)
             kappa_arr = self.kappaC_arr * C[j_out]
 
             for j in range(nv):
-                AA[di] += kappa_arr[j] - (kappa_arr[j-1] if j > 0 else 0)
-                Tpi[j] = IterKernel._iterative_wrapper(AA, mBhalf[j_out], relevant_matrix,
-                                                       cfg.iter_rtol, cfg.iter_max)
+                AA[di] += kappa_arr[j] - (kappa_arr[j - 1] if j > 0 else 0)
+                Tpi[j] = IterKernel._iterative_wrapper(
+                    AA, mBhalf[j_out], relevant_matrix, cfg.iter_rtol, cfg.iter_max
+                )
             del AA, di
 
             # build values at nodes
-            Dp = np.einsum('ai,pai->ap', mBhalf[j_out, :, :], Tpi)
-            Npq = np.einsum('pai,qai->apq', Tpi, Tpi)
+            Dp = np.einsum("ai,pai->ap", mBhalf[j_out, :, :], Tpi)
+            Npq = np.einsum("pai,qai->apq", Tpi, Tpi)
             Epq = np.zeros((m, nv, nv))
             for p in range(nv):
                 for q in range(p):
                     if exact_UC:
-                        Epq[:, q, p] = Epq[:, p, q] = np.einsum('ij,ai,aj->a', A, Tpi[p], Tpi[q])
+                        Epq[:, q, p] = Epq[:, p, q] = np.einsum("ij,ai,aj->a", A, Tpi[p], Tpi[q])
                     else:
-                        Epq[:, q, p] = Epq[:, p, q] = Dp[:, q] - kappa_arr[p]*Npq[:, p, q]
+                        Epq[:, q, p] = Epq[:, p, q] = Dp[:, q] - kappa_arr[p] * Npq[:, p, q]
                 if exact_UC:
-                    Epq[:, p, p] = np.einsum('ij,ai,aj->a', A, Tpi[p], Tpi[p])
+                    Epq[:, p, p] = np.einsum("ij,ai,aj->a", A, Tpi[p], Tpi[p])
                 else:
-                    Epq[:, p, p] = Dp[:, p] - kappa_arr[p]*Npq[:, p, p]
+                    Epq[:, p, p] = Dp[:, p] - kappa_arr[p] * Npq[:, p, p]
 
             # now make outputs and call C function
             out_kappa = np.zeros((m,))
             out_Sigma = np.zeros((m,))
-            out_UC    = np.zeros((m,))
-            out_w     = np.zeros((m*nv,))
+            out_UC = np.zeros((m,))
+            out_w = np.zeros((m * nv,))
             build_reduced_T_wrap(
-                Npq.flatten(), Dp.flatten()/C[j_out], Epq.flatten()/C[j_out],
-                self.kappaC_arr, self.ucmin, self.smax, out_kappa, out_Sigma, out_UC, out_w)
+                Npq.flatten(),
+                Dp.flatten() / C[j_out],
+                Epq.flatten() / C[j_out],
+                self.kappaC_arr,
+                self.ucmin,
+                self.smax,
+                out_kappa,
+                out_Sigma,
+                out_UC,
+                out_w,
+            )
             del Dp, Npq, Epq
 
             # make outputs
-            self.kappa_ [j_out, :] = out_kappa * C[j_out]
-            self.Sigma_ [j_out, :] = out_Sigma
-            self.UC_    [j_out, :] = out_UC
-            self.outst.T[j_out, :, :] = np.einsum('pai,ap->ai', Tpi, out_w.reshape((m, nv)))
+            self.kappa_[j_out, :] = out_kappa * C[j_out]
+            self.Sigma_[j_out, :] = out_Sigma
+            self.UC_[j_out, :] = out_UC
+            self.outst.T[j_out, :, :] = np.einsum("pai,ap->ai", Tpi, out_w.reshape((m, nv)))
             del out_kappa, out_Sigma, out_UC, out_w
 
         del relevant_matrix
@@ -707,9 +760,10 @@ class EmpirKernel(_LAKernel):
         mddy = self.outst.yx_val[0].ravel()[:, None] - self.outst.iny_val[None, :]
         mddx = self.outst.yx_val[1].ravel()[:, None] - self.outst.inx_val[None, :]
         cfg = self.outst.blk.cfg  # shortcut
-        rho_acc = (cfg.instamp_pad / Stn.arcsec) / (cfg.dtheta * u.degree.to('arcsec'))
+        rho_acc = (cfg.instamp_pad / Stn.arcsec) / (cfg.dtheta * u.degree.to("arcsec"))
 
-        Ti = np.maximum(rho_acc - np.hypot(mddy, mddx), 0); del mddy, mddx
+        Ti = np.maximum(rho_acc - np.hypot(mddy, mddx), 0)
+        del mddy, mddx
         Ti_view = np.moveaxis(Ti, -1, 0)
         Ti_view /= np.sum(Ti, axis=-1)[None]
 
@@ -729,14 +783,14 @@ class EmpirKernel(_LAKernel):
             my_kappa = self.kappaC_arr[0] * C[j_out]
 
             # build values at node
-            D = np.einsum('ai,ai->a', mBhalf[j_out, :, :], Ti)
-            N = np.einsum('ai,ai->a', Ti, Ti)
-            E = np.einsum('ij,ai,aj->a', A, Ti, Ti)
+            D = np.einsum("ai,ai->a", mBhalf[j_out, :, :], Ti)
+            N = np.einsum("ai,ai->a", Ti, Ti)
+            E = np.einsum("ij,ai,aj->a", A, Ti, Ti)
 
             # make outputs
-            self.kappa_ [j_out, :] = my_kappa
-            self.Sigma_ [j_out, :] = N
-            self.UC_    [j_out, :] = 1.0 + (E - 2*D)/C[j_out]
+            self.kappa_[j_out, :] = my_kappa
+            self.Sigma_[j_out, :] = N
+            self.UC_[j_out, :] = 1.0 + (E - 2 * D) / C[j_out]
             self.outst.T[j_out, :, :] = Ti
             del D, N
 

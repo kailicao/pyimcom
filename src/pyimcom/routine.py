@@ -45,41 +45,85 @@ def iD5512C_getw(w: np.array, fh: float) -> None:
     """
 
     fh2 = fh * fh
-    e_ =  (((+1.651881673372979740E-05*fh2 - 3.145538007199505447E-04)*fh2 +
-          1.793518183780194427E-03)*fh2 - 2.904014557029917318E-03)*fh2 + 6.187591260980151433E-04
-    o_ = ((((-3.486978652054735998E-06*fh2 + 6.753750285320532433E-05)*fh2 -
-          3.871378836550175566E-04)*fh2 + 6.279918076641771273E-04)*fh2 - 1.338434614116611838E-04)*fh
+    e_ = (
+        ((+1.651881673372979740e-05 * fh2 - 3.145538007199505447e-04) * fh2 + 1.793518183780194427e-03) * fh2
+        - 2.904014557029917318e-03
+    ) * fh2 + 6.187591260980151433e-04
+    o_ = (
+        (
+            ((-3.486978652054735998e-06 * fh2 + 6.753750285320532433e-05) * fh2 - 3.871378836550175566e-04)
+            * fh2
+            + 6.279918076641771273e-04
+        )
+        * fh2
+        - 1.338434614116611838e-04
+    ) * fh
     w[0] = e_ + o_
     w[9] = e_ - o_
-    e_ =  (((-1.146756217210629335E-04*fh2 + 2.883845374976550142E-03)*fh2 -
-          1.857047531896089884E-02)*fh2 + 3.147734488597204311E-02)*fh2 - 6.753293626461192439E-03
-    o_ = ((((+3.121412120355294799E-05*fh2 - 8.040343683015897672E-04)*fh2 +
-          5.209574765466357636E-03)*fh2 - 8.847326408846412429E-03)*fh2 + 1.898674086370833597E-03)*fh
+    e_ = (
+        ((-1.146756217210629335e-04 * fh2 + 2.883845374976550142e-03) * fh2 - 1.857047531896089884e-02) * fh2
+        + 3.147734488597204311e-02
+    ) * fh2 - 6.753293626461192439e-03
+    o_ = (
+        (
+            ((+3.121412120355294799e-05 * fh2 - 8.040343683015897672e-04) * fh2 + 5.209574765466357636e-03)
+            * fh2
+            - 8.847326408846412429e-03
+        )
+        * fh2
+        + 1.898674086370833597e-03
+    ) * fh
     w[1] = e_ + o_
     w[8] = e_ - o_
-    e_ =  (((+3.256838096371517067E-04*fh2 - 9.702063770653997568E-03)*fh2 +
-          8.678848026470635524E-02)*fh2 - 1.659182651092198924E-01)*fh2 + 3.620560878249733799E-02
-    o_ = ((((-1.243658986204533102E-04*fh2 + 3.804930695189636097E-03)*fh2 -
-          3.434861846914529643E-02)*fh2 + 6.581033749134083954E-02)*fh2 - 1.436476114189205733E-02)*fh
+    e_ = (
+        ((+3.256838096371517067e-04 * fh2 - 9.702063770653997568e-03) * fh2 + 8.678848026470635524e-02) * fh2
+        - 1.659182651092198924e-01
+    ) * fh2 + 3.620560878249733799e-02
+    o_ = (
+        (
+            ((-1.243658986204533102e-04 * fh2 + 3.804930695189636097e-03) * fh2 - 3.434861846914529643e-02)
+            * fh2
+            + 6.581033749134083954e-02
+        )
+        * fh2
+        - 1.436476114189205733e-02
+    ) * fh
     w[2] = e_ + o_
     w[7] = e_ - o_
-    e_ =  (((-4.541830837949564726E-04*fh2 + 1.494862093737218955E-02)*fh2 -
-          1.668775957435094937E-01)*fh2 + 5.879306056792649171E-01)*fh2 - 1.367845996704077915E-01
-    o_ = ((((+2.894406669584551734E-04*fh2 - 9.794291009695265532E-03)*fh2 +
-          1.104231510875857830E-01)*fh2 - 3.906954914039130755E-01)*fh2 + 9.092432925988773451E-02)*fh
+    e_ = (
+        ((-4.541830837949564726e-04 * fh2 + 1.494862093737218955e-02) * fh2 - 1.668775957435094937e-01) * fh2
+        + 5.879306056792649171e-01
+    ) * fh2 - 1.367845996704077915e-01
+    o_ = (
+        (
+            ((+2.894406669584551734e-04 * fh2 - 9.794291009695265532e-03) * fh2 + 1.104231510875857830e-01)
+            * fh2
+            - 3.906954914039130755e-01
+        )
+        * fh2
+        + 9.092432925988773451e-02
+    ) * fh
     w[3] = e_ + o_
     w[6] = e_ - o_
-    e_ =  (((+2.266560930061513573E-04*fh2 - 7.815848920941316502E-03)*fh2 +
-          9.686607348538181506E-02)*fh2 - 4.505856722239036105E-01)*fh2 + 6.067135256905490381E-01
-    o_ = ((((-4.336085507644610966E-04*fh2 + 1.537862263741893339E-02)*fh2 -
-          1.925091434770601628E-01)*fh2 + 8.993141455798455697E-01)*fh2 - 1.213035309579723942E+00)*fh
+    e_ = (
+        ((+2.266560930061513573e-04 * fh2 - 7.815848920941316502e-03) * fh2 + 9.686607348538181506e-02) * fh2
+        - 4.505856722239036105e-01
+    ) * fh2 + 6.067135256905490381e-01
+    o_ = (
+        (
+            ((-4.336085507644610966e-04 * fh2 + 1.537862263741893339e-02) * fh2 - 1.925091434770601628e-01)
+            * fh2
+            + 8.993141455798455697e-01
+        )
+        * fh2
+        - 1.213035309579723942e00
+    ) * fh
     w[4] = e_ + o_
     w[5] = e_ - o_
 
 
 @njit
-def iD5512C(infunc: np.array, xpos: np.array, ypos: np.array,
-            fhatout: np.array) -> None:
+def iD5512C(infunc: np.array, xpos: np.array, ypos: np.array, fhatout: np.array) -> None:
     """
     2D, 10x10 kernel interpolation for high accuracy
 
@@ -119,11 +163,12 @@ def iD5512C(infunc: np.array, xpos: np.array, ypos: np.array,
         yi = np.int32(y)
 
         # point off the grid, don't interpolate
-        if xi < 4 or xi >= ngx-5 or yi < 4 or yi >= ngy-5: continue
+        if xi < 4 or xi >= ngx - 5 or yi < 4 or yi >= ngy - 5:
+            continue
 
         # note 'xfh' and 'yfh' have 1/2 subtracted
-        iD5512C_getw(wx, x-xi-.5)
-        iD5512C_getw(wy, y-yi-.5)
+        iD5512C_getw(wx, x - xi - 0.5)
+        iD5512C_getw(wy, y - yi - 0.5)
 
         # and the outputs; Numba does not support np.einsum
         for ilayer in range(nlayer):
@@ -131,14 +176,13 @@ def iD5512C(infunc: np.array, xpos: np.array, ypos: np.array,
             for i in range(10):
                 interp_vstrip = 0.0
                 for j in range(10):
-                    interp_vstrip += wx[j] * infunc[ilayer, yi-4+i, xi-4+j]
+                    interp_vstrip += wx[j] * infunc[ilayer, yi - 4 + i, xi - 4 + j]
                 out += interp_vstrip * wy[i]
             fhatout[ilayer, ipos] = out
 
 
 @njit
-def iD5512C_sym(infunc: np.array, xpos: np.array, ypos: np.array,
-                fhatout: np.array) -> None:
+def iD5512C_sym(infunc: np.array, xpos: np.array, ypos: np.array, fhatout: np.array) -> None:
     """
     2D, 10x10 kernel interpolation for high accuracy
 
@@ -167,7 +211,7 @@ def iD5512C_sym(infunc: np.array, xpos: np.array, ypos: np.array,
     # extract dimensions
     nlayer, ngy, ngx = infunc.shape
     nout = xpos.size
-    sqnout = np.int32(np.sqrt(nout+1))
+    sqnout = np.int32(np.sqrt(nout + 1))
 
     wx = np.zeros((10,))
     wy = np.zeros((10,))
@@ -184,11 +228,12 @@ def iD5512C_sym(infunc: np.array, xpos: np.array, ypos: np.array,
             yi = np.int32(y)
 
             # point off the grid, don't interpolate
-            if xi < 4 or xi >= ngx-5 or yi < 4 or yi >= ngy-5: continue
+            if xi < 4 or xi >= ngx - 5 or yi < 4 or yi >= ngy - 5:
+                continue
 
             # note 'xfh' and 'yfh' have 1/2 subtracted
-            iD5512C_getw(wx, x-xi-.5)
-            iD5512C_getw(wy, y-yi-.5)
+            iD5512C_getw(wx, x - xi - 0.5)
+            iD5512C_getw(wy, y - yi - 0.5)
 
             # and the outputs; Numba does not support np.einsum
             for ilayer in range(nlayer):
@@ -196,7 +241,7 @@ def iD5512C_sym(infunc: np.array, xpos: np.array, ypos: np.array,
                 for i in range(10):
                     interp_vstrip = 0.0
                     for j in range(10):
-                        interp_vstrip += wx[j] * infunc[ilayer, yi-4+i, xi-4+j]
+                        interp_vstrip += wx[j] * infunc[ilayer, yi - 4 + i, xi - 4 + j]
                     out += interp_vstrip * wy[i]
                 fhatout[ilayer, ipos] = out
 
@@ -209,8 +254,7 @@ def iD5512C_sym(infunc: np.array, xpos: np.array, ypos: np.array,
 
 
 @njit
-def gridD5512C(infunc: np.array, xpos: np.array, ypos: np.array,
-               fhatout: np.array) -> None:
+def gridD5512C(infunc: np.array, xpos: np.array, ypos: np.array, fhatout: np.array) -> None:
     """
     2D, 10x10 kernel interpolation for high accuracy
 
@@ -260,12 +304,12 @@ def gridD5512C(infunc: np.array, xpos: np.array, ypos: np.array,
             xi[ix] = np.int32(x)
 
             # point off the grid, don't interpolate
-            if xi[ix] < 4 or xi[ix] >= ngx-5:
+            if xi[ix] < 4 or xi[ix] >= ngx - 5:
                 xi[ix] = 4
                 wx_ar[ix] = 0.0
                 continue
-    
-            iD5512C_getw(wx_ar[ix], x-xi[ix]-.5)
+
+            iD5512C_getw(wx_ar[ix], x - xi[ix] - 0.5)
 
         # ... and now in y
         for iy in range(nyo):
@@ -273,12 +317,12 @@ def gridD5512C(infunc: np.array, xpos: np.array, ypos: np.array,
             yi[iy] = np.int32(y)
 
             # point off the grid, don't interpolate
-            if yi[iy] < 4 or yi[iy] >= ngy-5:
+            if yi[iy] < 4 or yi[iy] >= ngy - 5:
                 yi[iy] = 4
                 wy_ar[iy] = 0.0
                 continue
-    
-            iD5512C_getw(wy_ar[iy], y-yi[iy]-.5)
+
+            iD5512C_getw(wy_ar[iy], y - yi[iy] - 0.5)
 
         # ... and now we can do the interpolation
         ipos = 0
@@ -288,16 +332,28 @@ def gridD5512C(infunc: np.array, xpos: np.array, ypos: np.array,
                 for i in range(10):
                     interp_vstrip = 0.0
                     for j in range(10):
-                        interp_vstrip += wx_ar[ix, j] * infunc[yi[iy]-4+i, xi[ix]-4+j]
+                        interp_vstrip += wx_ar[ix, j] * infunc[yi[iy] - 4 + i, xi[ix] - 4 + j]
                     out += interp_vstrip * wy_ar[iy, i]
                 fhatout[i_in, ipos] = out
                 ipos += 1
 
 
 @njit
-def lakernel1(lam: np.array, Q: np.array, mPhalf: np.array,
-              C: float, targetleak: float, kCmin: float, kCmax: float, nbis: int,
-              kappa: np.array, Sigma: np.array, UC: np.array, T: np.array, smax: float) -> None:
+def lakernel1(
+    lam: np.array,
+    Q: np.array,
+    mPhalf: np.array,
+    C: float,
+    targetleak: float,
+    kCmin: float,
+    kCmax: float,
+    nbis: int,
+    kappa: np.array,
+    Sigma: np.array,
+    UC: np.array,
+    T: np.array,
+    smax: float,
+) -> None:
     """
     PyIMCOM linear algebra kernel (eigendecomposition).
 
@@ -348,30 +404,30 @@ def lakernel1(lam: np.array, Q: np.array, mPhalf: np.array,
 
     # now loop over pixels
     for a in range(m):
-        factor = np.sqrt(kCmax/kCmin)
-        kap = np.sqrt(kCmax*kCmin)
+        factor = np.sqrt(kCmax / kCmin)
+        kap = np.sqrt(kCmax * kCmin)
 
-        for ib in range(nbis):
+        for _ in range(nbis):
             sum_ = sum2 = 0.0
             for i in range(n):
-                var = mPhalf[a, i] / (lam[i]+kap)
-                sum2 += var*var
-                sum_ += (lam[i]+2.0*kap) * var*var
+                var = mPhalf[a, i] / (lam[i] + kap)
+                sum2 += var * var
+                sum_ += (lam[i] + 2.0 * kap) * var * var
 
-            udc = 1.0 - sum_/C
+            udc = 1.0 - sum_ / C
             factor = np.sqrt(factor)
-            kap *= 1.0/factor if (udc > targetleak and sum2 < smax) else factor
+            kap *= 1.0 / factor if (udc > targetleak and sum2 < smax) else factor
 
         # report final results
         sum_ = sum2 = 0.0
         for i in range(n):
-            T[a, i] = var = mPhalf[a, i] / (lam[i]+kap)
-            sum2 += var*var
-            sum_ += (lam[i]+2.0*kap) * var*var
+            T[a, i] = var = mPhalf[a, i] / (lam[i] + kap)
+            sum2 += var * var
+            sum_ += (lam[i] + 2.0 * kap) * var * var
 
         Sigma[a] = sum2
         kappa[a] = kap
-        UC[a] = 1.0 - sum_/C
+        UC[a] = 1.0 - sum_ / C
 
 
 @njit
@@ -381,7 +437,7 @@ def lsolve_sps(N: int, A: np.array, x: np.array, b: np.array) -> None:
 
     Only the lower triangle of A is ever used (the rest need not even be allocated).
     The matrix A is destroyed.
- 
+
     Parameters
     ----------
     N : int
@@ -404,12 +460,12 @@ def lsolve_sps(N: int, A: np.array, x: np.array, b: np.array) -> None:
         for j in range(i):
             sum_ = 0.0
             for k in range(j):
-                sum_ += A[i, k]*A[j, k]
-            A[i, j] = (A[i, j]-sum_) / A[j, j]
+                sum_ += A[i, k] * A[j, k]
+            A[i, j] = (A[i, j] - sum_) / A[j, j]
         sum_ = 0.0
         for k in range(i):
-            sum_ += A[i, k]*A[i, k]
-        A[i, i] = np.sqrt(A[i, i]-sum_)
+            sum_ += A[i, k] * A[i, k]
+        A[i, i] = np.sqrt(A[i, i] - sum_)
     # ... now the lower part of A is the Cholesky decomposition L: A = LL^T
 
     # now get p1 = LT-1 b
@@ -417,21 +473,30 @@ def lsolve_sps(N: int, A: np.array, x: np.array, b: np.array) -> None:
     for i in range(N):
         sum_ = 0.0
         for j in range(i):
-            sum_ += A[i, j]*p1[j]
-        p1[i] = (b[i]-sum_) / A[i, i]
+            sum_ += A[i, j] * p1[j]
+        p1[i] = (b[i] - sum_) / A[i, i]
 
     # ... and x = L^-1 p1
-    for i in range(N-1, -1, -1):
+    for i in range(N - 1, -1, -1):
         sum_ = 0.0
-        for j in range(i+1, N):
-            sum_ += A[j, i]*x[j]
-        x[i] = (p1[i]-sum_) / A[i, i]
+        for j in range(i + 1, N):
+            sum_ += A[j, i] * x[j]
+        x[i] = (p1[i] - sum_) / A[i, i]
 
 
 @njit
-def build_reduced_T_wrap(Nflat: np.array, Dflat: np.array, Eflat: np.array, kappa: np.array,
-                         ucmin: float, smax: float, out_kappa: np.array,
-                         out_Sigma: np.array, out_UC: np.array, out_w: np.array) -> None:
+def build_reduced_T_wrap(
+    Nflat: np.array,
+    Dflat: np.array,
+    Eflat: np.array,
+    kappa: np.array,
+    ucmin: float,
+    smax: float,
+    out_kappa: np.array,
+    out_Sigma: np.array,
+    out_UC: np.array,
+    out_w: np.array,
+) -> None:
     """
     Intermediate quantities to build coaddition matrix T from a reduced space.
 
@@ -445,7 +510,7 @@ def build_reduced_T_wrap(Nflat: np.array, Dflat: np.array, Eflat: np.array, kapp
     Dflat : np.array
         Input 1st order signal D/C. Shape (m*nv,). Flattened version of (m,nv).
     Eflat : np.array
-        Input 2nd order signal E/C. Shape (m*nv*nv,). Flattened version of (m,nv,nv). 
+        Input 2nd order signal E/C. Shape (m*nv*nv,). Flattened version of (m,nv,nv).
     kappa : np.array
         List of eigenvalues, must be sorted ascending. Shape (nv,).
     ucmin : float
@@ -460,7 +525,7 @@ def build_reduced_T_wrap(Nflat: np.array, Dflat: np.array, Eflat: np.array, kapp
         Output "U/C". Shape (m,).
     out_w : np.array
         Output weights for each eigenvalue and each output pixel.
-        Shape (m*nv,). Flattened version of (m,nv). 
+        Shape (m*nv,). Flattened version of (m,nv).
 
     Returns
     -------
@@ -471,7 +536,7 @@ def build_reduced_T_wrap(Nflat: np.array, Dflat: np.array, Eflat: np.array, kapp
     # dimensions
     nv = kappa.size  # number of 'node' eigenvalues (must be >=2)
     m = out_kappa.size  # number of output pixels
-    nv2 = nv*nv
+    nv2 = nv * nv
 
     # allocate memory
     M2d = np.empty((nv, nv))
@@ -480,40 +545,41 @@ def build_reduced_T_wrap(Nflat: np.array, Dflat: np.array, Eflat: np.array, kapp
     # loop over output pixels
     for a in range(m):
         # first figure out the range of kappa
-        iv = nv-1
-        UC = ucmin*10; S = smax/10  # do {...}
-        while iv > 0 and UC > ucmin and S < smax:
+        iv = nv - 1
+        UC = ucmin * 10
+        S = smax / 10  # do {...}
+        while iv > 0 and ucmin < UC and smax > S:
             iv -= 1
-            S = Nflat[a*nv2 + iv*(nv+1)]  # diagonal noises
-            UC = 1.0 - 2.0*Dflat[a*nv + iv] + Eflat[a*nv2 + iv*(nv+1)]  # diagonal U/C
+            S = Nflat[a * nv2 + iv * (nv + 1)]  # diagonal noises
+            UC = 1.0 - 2.0 * Dflat[a * nv + iv] + Eflat[a * nv2 + iv * (nv + 1)]  # diagonal U/C
 
         # kappa should be in the range kappa[iv] .. kappa[iv+1]
-        kappamid = np.sqrt(kappa[iv]*kappa[iv+1])
-        factor = np.power(kappa[iv+1]/kappa[iv], 0.25)
+        kappamid = np.sqrt(kappa[iv] * kappa[iv + 1])
+        factor = np.power(kappa[iv + 1] / kappa[iv], 0.25)
 
         # iterative loop to find 'best' kappa
-        for ik in range(12):
+        for _ in range(12):
             # build matrix for this kappa
             for iv in range(nv):
-                for jv in range(iv+1):
-                    M2d[iv, jv] = Eflat[a*nv2 + iv+nv*jv] + kappamid*Nflat[a*nv2 + iv+nv*jv]
+                for jv in range(iv + 1):
+                    M2d[iv, jv] = Eflat[a * nv2 + iv + nv * jv] + kappamid * Nflat[a * nv2 + iv + nv * jv]
             # ... and get weights
-            lsolve_sps(nv, M2d, w, Dflat[a*nv:(a+1)*nv])
-            out_w[a*nv:(a+1)*nv] = w  # pointer to weights for this pixel
+            lsolve_sps(nv, M2d, w, Dflat[a * nv : (a + 1) * nv])
+            out_w[a * nv : (a + 1) * nv] = w  # pointer to weights for this pixel
 
             # now get the UC and the S
             S = 0.0
             for iv in range(nv):
                 sum_ = 0.0
                 for jv in range(nv):
-                    sum_ += Nflat[a*nv2 + iv+nv*jv] * w[jv]
+                    sum_ += Nflat[a * nv2 + iv + nv * jv] * w[jv]
                 S += sum_ * w[iv]
-            UC = 1.0 - kappamid*S
+            UC = 1.0 - kappamid * S
             for iv in range(nv):
-                UC -= Dflat[a*nv + iv] * w[iv]
+                UC -= Dflat[a * nv + iv] * w[iv]
 
             # updates to kappa
-            kappamid *= 1.0/factor if UC > ucmin and S < smax else factor
+            kappamid *= 1.0 / factor if ucmin < UC and smax > S else factor
             factor = np.sqrt(factor)
 
         # output other information
