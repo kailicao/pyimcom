@@ -95,7 +95,7 @@ class ReportSection:
             in_fname += ".fits"
             return in_fname
         else:
-            raise Exception("pyimcom.validation.report.ReportSection: infile: block selection out of range")
+            raise ValueError("pyimcom.validation.report.ReportSection: infile: block selection out of range")
 
     def build(self, nblockmax=100):
         """

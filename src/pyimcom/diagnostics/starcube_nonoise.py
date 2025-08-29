@@ -58,7 +58,7 @@ def gen_starcube_nonoise(infile_fcn, outstem, nblockmax=100):
         print("# n2 =", n2_)
         if n2_ < bd:
             bd = n2_
-    except FileNotFoundError:
+    except (FileNotFoundError, ValueError):
         pass
 
     ncol = 22  # number of columns in star catalog
@@ -74,7 +74,7 @@ def gen_starcube_nonoise(infile_fcn, outstem, nblockmax=100):
         for iby in range(nblockmax):
             try:
                 infile = infile_fcn(ibx, iby)
-            except FileNotFoundError:
+            except (FileNotFoundError, ValueError):
                 continue
 
             # extract information from the header of the first file

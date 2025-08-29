@@ -86,7 +86,7 @@ def gen_dynrange_data(inpath, outstem, rpix_try=50, nblockmax=100):
                 infile = inpath(ibx, iby)
                 if not exists(infile):
                     continue
-            except FileNotFoundError:
+            except (FileNotFoundError, ValueError):
                 continue
 
             # if this is the first block we find, get the configuration file
