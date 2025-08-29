@@ -300,7 +300,9 @@ class InImage:
                 try:
                     with lock.acquire(timeout=300):
                         print("saving input mask >>", inlayer_mask_filepath)
-                        fits.PrimaryHDU(np.where(mask, 1, 0).astype(np.uint8)).writeto(inlayer_mask_filepath)
+                        fits.PrimaryHDU(np.where(mask, 1, 0).astype(np.uint8)).writeto(
+                            inlayer_mask_filepath, overwrite=True
+                        )
                 except Timeout:
                     raise Exception("timeout while waiting for file:", inlayer_mask_filepath) from None
         sys.stdout.flush()
