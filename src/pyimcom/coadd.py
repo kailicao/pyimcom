@@ -16,17 +16,19 @@ Block
 
 import datetime
 import gc
-import importlib
 import sys
 from itertools import combinations, product
 from os.path import exists
 from pathlib import Path
 
+# F401-flagged imports are important for getting a version number
 import asdf
+import astropy  # noqa: F401
 import fitsio
 import matplotlib.pyplot as plt
 import numpy as np
 import pytz
+import scipy  # noqa: F401
 from astropy import units as u
 from astropy import wcs
 from astropy.io import fits
@@ -2129,12 +2131,17 @@ class Block:
         )
         config_hdu.header["EXTNAME"] = "CONFIG"
         if is_final:
-            for package in ["numpy", "scipy", "astropy", "fitsio"]:
+            for package in ["numpy", "scipy", "astropy", "fitsio", "asdf"]:
                 keyword = "V" + package.upper()[:7]
+                pkgname = package
+                if package == "numpy":
+                    pkgname = "np"
                 try:
-                    with importlib.import_module(package) as m:
-                        config_hdu.header[keyword] = (str(m.__version), f"Current version of {package}")
-                except (ModuleNotFoundError, ImportError):
+                    config_hdu.header[keyword] = (
+                        str(globals()[pkgname].__version__),
+                        f"Current version of {package}",
+                    )
+                except (KeyError, AttributeError):
                     config_hdu.header[keyword] = ("N/A", f"{package} had no version number")
         inlist_hdu = fits.BinTableHDU.from_columns(
             [
