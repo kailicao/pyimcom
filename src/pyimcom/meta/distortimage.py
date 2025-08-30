@@ -14,14 +14,14 @@ shearimage_to_fits
 """
 
 import numpy as np
-import os
-from astropy.io import fits
 from astropy import wcs
-from . import ginterp
-from ..compress.compressutils import ReadFile
+from astropy.io import fits
 
+from ..compress.compressutils import ReadFile
 from ..config import Config, Settings
 from ..diagnostics.outimage_utils.helper import HDU_to_bels
+from . import ginterp
+
 
 class MetaMosaic:
     """
@@ -81,24 +81,21 @@ class MetaMosaic:
     """
 
     def __init__(self, fname, bbox=None, extpix=None, verbose=False):
-        """Build from an example file.
-        """
-
         with ReadFile(fname) as f:
-            c = f['CONFIG'].data['text']
+            c = f["CONFIG"].data["text"]
             n = len(c)
-            cf = ''
+            cf = ""
             for j in range(n):
-                cf += c[j]+'\n'
-            self.nlayer = np.shape(f['PRIMARY'].data)[-3]
-            self.im_dtype = f['PRIMARY'].data.dtype
+                cf += c[j] + "\n"
+            self.nlayer = np.shape(f["PRIMARY"].data)[-3]
+            self.im_dtype = f["PRIMARY"].data.dtype
         self.cfg = Config(cf)
 
         # set bounding box for which blocks we will use
         if bbox is None:
             xmin_ = ymin_ = 0
             xmax_ = ymax_ = self.cfg.nblock
-        else :
+        else:
             xmin_ = bbox[0]
             xmax_ = bbox[1]
             ymin_ = bbox[2]
@@ -107,13 +104,16 @@ class MetaMosaic:
         # get the file coordinates
         self.LegacyName = False
         self.cprfitsgz = False
-        self.stem = fname[:-11]; tail = fname[-11:]
-        if fname[-9:]=='_map.fits':
+        self.stem = fname[:-11]
+        tail = fname[-11:]
+        if fname[-9:] == "_map.fits":
             self.LegacyName = True
-            self.stem = fname[:-15]; tail = fname[-15:]
-        if fname[-12:]=='.cpr.fits.gz':
+            self.stem = fname[:-15]
+            tail = fname[-15:]
+        if fname[-12:] == ".cpr.fits.gz":
             self.cprfitsgz = True
-            self.stem = fname[:-18]; tail = fname[-18:]
+            self.stem = fname[:-18]
+            tail = fname[-18:]
         self.ix = int(tail[1:3])
         self.iy = int(tail[4:6])
 
@@ -121,10 +121,10 @@ class MetaMosaic:
         if extpix is None:
             self.trunc = 0
         else:
-            self.trunc = max(self.cfg.n1*self.cfg.n2 - extpix, 0)
+            self.trunc = max(self.cfg.n1 * self.cfg.n2 - extpix, 0)
 
         # build maps
-        self.Nside = 3*self.cfg.n1*self.cfg.n2 - 2*self.trunc
+        self.Nside = 3 * self.cfg.n1 * self.cfg.n2 - 2 * self.trunc
         self.in_image = np.zeros((self.nlayer, self.Nside, self.Nside), dtype=self.im_dtype)
         self.in_fidelity = np.zeros((self.Nside, self.Nside), dtype=np.float32)
         self.in_noise = np.zeros((self.Nside, self.Nside), dtype=np.float32)
@@ -132,56 +132,80 @@ class MetaMosaic:
 
         # Load the data. A lot of logic in here to pull out which portions we need
         # (including handling of boundary effects)
-        xpad = [self.ix==0, self.ix==self.cfg.nblock-1]
-        ypad = [self.iy==0, self.iy==self.cfg.nblock-1]
-        for dx in range(-1,2):
+        xpad = [self.ix == 0, self.ix == self.cfg.nblock - 1]
+        ypad = [self.iy == 0, self.iy == self.cfg.nblock - 1]
+        for dx in range(-1, 2):
             # lower-left corner in block is (cx,cy) in the mosaic
-            cx = self.cfg.n1*self.cfg.n2*(1+dx) - self.cfg.postage_pad*self.cfg.n2 - self.trunc
-            sxmin = self.cfg.postage_pad*self.cfg.n2
-            sxmax = sxmin + self.cfg.n1*self.cfg.n2
-            if xpad[0]: sxmin -= self.cfg.postage_pad*self.cfg.n2
-            if xpad[1]: sxmax += self.cfg.postage_pad*self.cfg.n2
-            if cx+sxmin<0: sxmin=-cx
-            if cx+sxmax>self.Nside: sxmax=self.Nside-cx
-            for dy in range(-1,2):
-                cy = self.cfg.n1*self.cfg.n2*(1+dy) - self.cfg.postage_pad*self.cfg.n2 - self.trunc
-                symin = self.cfg.postage_pad*self.cfg.n2
-                symax = symin + self.cfg.n1*self.cfg.n2
-                if ypad[0]: symin -= self.cfg.postage_pad*self.cfg.n2
-                if ypad[1]: symax += self.cfg.postage_pad*self.cfg.n2
-                if cy+symin<0: symin=-cy
-                if cy+symax>self.Nside: symax=self.Nside-cy
+            cx = self.cfg.n1 * self.cfg.n2 * (1 + dx) - self.cfg.postage_pad * self.cfg.n2 - self.trunc
+            sxmin = self.cfg.postage_pad * self.cfg.n2
+            sxmax = sxmin + self.cfg.n1 * self.cfg.n2
+            if xpad[0]:
+                sxmin -= self.cfg.postage_pad * self.cfg.n2
+            if xpad[1]:
+                sxmax += self.cfg.postage_pad * self.cfg.n2
+            if cx + sxmin < 0:
+                sxmin = -cx
+            if cx + sxmax > self.Nside:
+                sxmax = self.Nside - cx
+            for dy in range(-1, 2):
+                cy = self.cfg.n1 * self.cfg.n2 * (1 + dy) - self.cfg.postage_pad * self.cfg.n2 - self.trunc
+                symin = self.cfg.postage_pad * self.cfg.n2
+                symax = symin + self.cfg.n1 * self.cfg.n2
+                if ypad[0]:
+                    symin -= self.cfg.postage_pad * self.cfg.n2
+                if ypad[1]:
+                    symax += self.cfg.postage_pad * self.cfg.n2
+                if cy + symin < 0:
+                    symin = -cy
+                if cy + symax > self.Nside:
+                    symax = self.Nside - cy
 
                 # Now get this input image if it is within the mosaic
-                in_x = self.ix+dx
-                in_y = self.iy+dy
-                if in_x>=xmin_ and in_x<xmax_ and in_y>=ymin_ and in_y<ymax_:
-                    in_fname = self.stem + '_{:02d}_{:02d}'.format(in_x,in_y)
-                    if self.LegacyName: in_fname += '_map'
-                    if self.cprfitsgz: in_fname += '.cpr'
-                    in_fname += '.fits'
-                    if self.cprfitsgz: in_fname += '.gz'
+                in_x = self.ix + dx
+                in_y = self.iy + dy
+                if in_x >= xmin_ and in_x < xmax_ and in_y >= ymin_ and in_y < ymax_:
+                    in_fname = self.stem + f"_{in_x:02d}_{in_y:02d}"
+                    if self.LegacyName:
+                        in_fname += "_map"
+                    if self.cprfitsgz:
+                        in_fname += ".cpr"
+                    in_fname += ".fits"
+                    if self.cprfitsgz:
+                        in_fname += ".gz"
                     if verbose:
-                        print('IN {:2d},{:2d} [{:4d}:{:4d},{:4d}:{:4d}] offset x={:5d} y={:5d}'.format(in_x, in_y, symin, symax, sxmin, sxmax, cx, cy))
-                        print('  <<', in_fname)
+                        print(
+                            f"IN {in_x:2d},{in_y:2d} [{symin:4d}:{symax:4d},{sxmin:4d}:{sxmax:4d}] "
+                            f"offset x={cx:5d} y={cy:5d}"
+                        )
+                        print("  <<", in_fname)
 
                     with ReadFile(in_fname) as f:
                         # the map
-                        self.in_image[:,symin+cy:symax+cy,sxmin+cx:sxmax+cx] = f['PRIMARY'].data[0,:,symin:symax,sxmin:sxmax]
+                        self.in_image[:, symin + cy : symax + cy, sxmin + cx : sxmax + cx] = f[
+                            "PRIMARY"
+                        ].data[0, :, symin:symax, sxmin:sxmax]
                         # fidelity, converted to dB
-                        self.in_fidelity[symin+cy:symax+cy,sxmin+cx:sxmax+cx] = f['FIDELITY'].data[0,symin:symax,sxmin:sxmax].astype(np.float32)\
-                            * HDU_to_bels(f['FIDELITY'])/.1
+                        self.in_fidelity[symin + cy : symax + cy, sxmin + cx : sxmax + cx] = (
+                            f["FIDELITY"].data[0, symin:symax, sxmin:sxmax].astype(np.float32)
+                            * HDU_to_bels(f["FIDELITY"])
+                            / 0.1
+                        )
                         # noise, converted to dB
-                        self.in_noise[symin+cy:symax+cy,sxmin+cx:sxmax+cx] = f['SIGMA'].data[0,symin:symax,sxmin:sxmax].astype(np.float32)\
-                            * HDU_to_bels(f['SIGMA'])/.1
+                        self.in_noise[symin + cy : symax + cy, sxmin + cx : sxmax + cx] = (
+                            f["SIGMA"].data[0, symin:symax, sxmin:sxmax].astype(np.float32)
+                            * HDU_to_bels(f["SIGMA"])
+                            / 0.1
+                        )
 
         # mask pixels that weren't covered at all
-        self.in_mask |= self.in_fidelity==0
+        self.in_mask |= self.in_fidelity == 0
 
         # generate the WCS
         self.wcs = wcs.WCS(naxis=2)
-        self.wcs.wcs.crpix = [.5 - self.cfg.Nside*(self.ix-1-self.cfg.nblock//2) - self.trunc,
-                              .5 - self.cfg.Nside*(self.iy-1-self.cfg.nblock//2) - self.trunc]
+        self.wcs.wcs.crpix = [
+            0.5 - self.cfg.Nside * (self.ix - 1 - self.cfg.nblock // 2) - self.trunc,
+            0.5 - self.cfg.Nside * (self.iy - 1 - self.cfg.nblock // 2) - self.trunc,
+        ]
         self.wcs.wcs.cdelt = [-self.cfg.dtheta, self.cfg.dtheta]
         self.wcs.wcs.ctype = ["RA---STG", "DEC--STG"]
         self.wcs.wcs.crval = [self.cfg.ra, self.cfg.dec]
@@ -224,7 +248,7 @@ class MetaMosaic:
 
         """
 
-        self.in_mask = np.logical_or(self.in_fidelity<fidelitymin, self.in_mask)
+        self.in_mask = np.logical_or(self.in_fidelity < fidelitymin, self.in_mask)
 
     def mask_noise_cut(self, noisemax):
         """
@@ -244,7 +268,7 @@ class MetaMosaic:
 
         """
 
-        self.in_mask = np.logical_or(self.in_noise<noisemax, self.in_mask)
+        self.in_mask = np.logical_or(self.in_noise < noisemax, self.in_mask)
 
     def mask_caps(self, ra, dec, radius):
         """
@@ -269,25 +293,27 @@ class MetaMosaic:
 
         """
 
-        degree = np.pi/180. # unit
+        degree = np.pi / 180.0  # unit
 
         # convert inputs
         ra = np.array(ra).ravel().astype(np.float64)
         dec = np.array(dec).ravel().astype(np.float64)
         radius = np.array(radius).ravel().astype(np.float64)
-        if len(radius)==1:
+        if len(radius) == 1:
             radius = np.zeros_like(ra) + radius[0]
 
         # select inputs near block center
         ns = np.shape(self.in_mask)[-1]
-        ra_ctr, dec_ctr = self.wcs.all_pix2world((ns-1)/2, (ns-1)/2, 0)
-        dx = np.cos(dec*degree)*np.cos((ra-ra_ctr)*degree) - np.cos(dec_ctr*degree)
-        dy = np.cos(dec*degree)*np.sin((ra-ra_ctr)*degree)
-        dz = np.sin(dec*degree) - np.sin(dec_ctr*degree)
-        sep = np.sqrt(dx**2+dy**2+dz**2)/degree # in degrees --- only accurate in mosaic, but that's where we care
+        ra_ctr, dec_ctr = self.wcs.all_pix2world((ns - 1) / 2, (ns - 1) / 2, 0)
+        dx = np.cos(dec * degree) * np.cos((ra - ra_ctr) * degree) - np.cos(dec_ctr * degree)
+        dy = np.cos(dec * degree) * np.sin((ra - ra_ctr) * degree)
+        dz = np.sin(dec * degree) - np.sin(dec_ctr * degree)
+        sep = (
+            np.sqrt(dx**2 + dy**2 + dz**2) / degree
+        )  # in degrees --- only accurate in mosaic, but that's where we care
         del dx, dy, dz
-        searchrad = 0.75*ns*self.cfg.dtheta + radius
-        consider_stars = np.nonzero(sep<=searchrad)
+        searchrad = 0.75 * ns * self.cfg.dtheta + radius
+        consider_stars = np.nonzero(sep <= searchrad)
 
         # shorten the arrays to only consider stars close enough to be masked
         ra = ra[consider_stars]
@@ -296,21 +322,25 @@ class MetaMosaic:
         N = len(ra)
 
         # get positions on the plane in 0-index coordinates
-        pixcrd2 = self.wcs.all_world2pix(np.vstack((ra,dec)).T, 0)
-        x_ = pixcrd2[:,0]
-        y_ = pixcrd2[:,1]
-        r_ = radius/self.cfg.dtheta
+        pixcrd2 = self.wcs.all_world2pix(np.vstack((ra, dec)).T, 0)
+        x_ = pixcrd2[:, 0]
+        y_ = pixcrd2[:, 1]
+        r_ = radius / self.cfg.dtheta
 
         # now loop over objects. make a rectangular cutout and mask the circle within it
         for j in range(N):
-            xmin = max( int(np.floor(x_[j]-r_[j]))  , 0 )
-            xmax = min( int(np.ceil (x_[j]+r_[j]))+1, ns)
-            ymin = max( int(np.floor(y_[j]-r_[j]))  , 0 )
-            ymax = min( int(np.ceil (y_[j]+r_[j]))+1, ns)
-            #print((x_[j], y_[j]), r_[j], [xmin,xmax,ymin,ymax])
-            if xmax<=xmin or ymax<=ymin: continue
-            erx, ery = np.meshgrid(np.linspace(xmin,xmax-1,xmax-xmin)-x_[j], np.linspace(ymin,ymax-1,ymax-ymin)-y_[j])
-            self.in_mask[ymin:ymax,xmin:xmax] |= np.hypot(erx,ery)<r_[j]
+            xmin = max(int(np.floor(x_[j] - r_[j])), 0)
+            xmax = min(int(np.ceil(x_[j] + r_[j])) + 1, ns)
+            ymin = max(int(np.floor(y_[j] - r_[j])), 0)
+            ymax = min(int(np.ceil(y_[j] + r_[j])) + 1, ns)
+            # print((x_[j], y_[j]), r_[j], [xmin,xmax,ymin,ymax])
+            if xmax <= xmin or ymax <= ymin:
+                continue
+            erx, ery = np.meshgrid(
+                np.linspace(xmin, xmax - 1, xmax - xmin) - x_[j],
+                np.linspace(ymin, ymax - 1, ymax - ymin) - y_[j],
+            )
+            self.in_mask[ymin:ymax, xmin:xmax] |= np.hypot(erx, ery) < r_[j]
 
     def to_file(self, fname):
         """
@@ -327,22 +357,41 @@ class MetaMosaic:
 
         """
 
+        # generate the WCS
+        outwcs = wcs.WCS(naxis=2)
+        outwcs.wcs.crpix = [
+            0.5 - self.cfg.Nside * (self.ix - 1 - self.cfg.nblock // 2),
+            0.5 - self.cfg.Nside * (self.iy - 1 - self.cfg.nblock // 2),
+        ]
+        outwcs.wcs.cdelt = [-self.cfg.dtheta, self.cfg.dtheta]
+        outwcs.wcs.ctype = ["RA---STG", "DEC--STG"]
+        outwcs.wcs.crval = [self.cfg.ra, self.cfg.dec]
+        outwcs.wcs.lonpole = self.cfg.lonpole
+
         # make the HDUs
         primary = fits.PrimaryHDU(self.in_image, header=self.wcs.to_header())
         fidelity = fits.ImageHDU(self.in_fidelity, header=self.wcs.to_header())
         noise = fits.ImageHDU(self.in_noise, header=self.wcs.to_header())
         mask = fits.ImageHDU(self.in_mask.astype(np.uint8), header=self.wcs.to_header())
 
-        primary.header['SOURCE'] = 'pyimcom.meta.distortimage.MetaMosaic.to_file'
-        primary.header['IMTYPE'] = '3x3 block, undistorted'
-        fidelity.header['UNIT'] = 'dB'
-        noise.header['UNIT'] = 'dB'
+        primary.header["SOURCE"] = "pyimcom.meta.distortimage.MetaMosaic.to_file"
+        primary.header["IMTYPE"] = "3x3 block, undistorted"
+        fidelity.header["UNIT"] = "dB"
+        noise.header["UNIT"] = "dB"
 
         fits.HDUList([primary, fidelity, noise, mask]).writeto(fname, overwrite=True)
 
-    def shearimage(self, N, jac=None, psfgrow=1., oversamp=1., fidelity_min=None, Rsearch=6.,
-            select_layers=None, stest=100,
-            verbose=False):
+    def shearimage(
+        self,
+        N,
+        jac=None,
+        psfgrow=1.0,
+        oversamp=1.0,
+        fidelity_min=None,
+        Rsearch=6.0,
+        select_layers=None,
+        verbose=False,
+    ):
         """
         Generates a sheared image and its WCS.
 
@@ -392,68 +441,78 @@ class MetaMosaic:
         """
 
         # check PSF type
-        if self.cfg.outpsf != 'GAUSSIAN':
-            raise ValueError('shearimage: only works on GAUSSIAN, received '+self.cfg.outpsf)
+        if self.cfg.outpsf != "GAUSSIAN":
+            raise ValueError("shearimage: only works on GAUSSIAN, received " + self.cfg.outpsf)
 
         # Figure out the geometrical mapping. First the scale:
-        if jac is None:
-            J = np.identity(2)
-        else:
-            J = np.asarray(jac)
+        J = np.identity(2) if jac is None else np.asarray(jac)
         J_orig = np.copy(J)
-        J = J/oversamp
+        J = J / oversamp
         scale = self.cfg.dtheta
         # ... and now the projection center in block coordinates (Q)
-        Q_orig = np.asarray([self.cfg.nblock/2 - self.ix - .5, self.cfg.nblock/2 - self.iy - .5]) * self.cfg.n1 * self.cfg.n2
-        Q_new = np.linalg.solve(J,Q_orig)
-        xref = np.round(Q_new[0] + 1e-7)+.5 + N/2 # rounds to nearest half integer for even N
-        yref = np.round(Q_new[1] + 1e-7)+.5 + N/2
+        Q_orig = (
+            np.asarray([self.cfg.nblock / 2 - self.ix - 0.5, self.cfg.nblock / 2 - self.iy - 0.5])
+            * self.cfg.n1
+            * self.cfg.n2
+        )
+        Q_new = np.linalg.solve(J, Q_orig)
+        xref = np.round(Q_new[0] + 1e-7) + 0.5 + N / 2  # rounds to nearest half integer for even N
+        yref = np.round(Q_new[1] + 1e-7) + 0.5 + N / 2
 
         # origin position in the input array
-        opos = J@np.asarray([1-xref,1-yref]) # recall the lower-left corner is (1,1) in FITS
-        opos[0] += (self.cfg.nblock/2 - self.ix + 1) * self.cfg.n1 * self.cfg.n2 - .5 - self.trunc
-        opos[1] += (self.cfg.nblock/2 - self.iy + 1) * self.cfg.n1 * self.cfg.n2 - .5 - self.trunc
+        opos = J @ np.asarray([1 - xref, 1 - yref])  # recall the lower-left corner is (1,1) in FITS
+        opos[0] += (self.cfg.nblock / 2 - self.ix + 1) * self.cfg.n1 * self.cfg.n2 - 0.5 - self.trunc
+        opos[1] += (self.cfg.nblock / 2 - self.iy + 1) * self.cfg.n1 * self.cfg.n2 - 0.5 - self.trunc
         # the "-0.5" is because the lower-left corner of the pixel is at (-.5,-.5)
         # and have the +1 since the lower-left corner of the image is in the block (ix-1,iy-1)
 
         # generate the WCS
-        outwcs = wcs.WCS({
-            'CTYPE1': "RA---STG",
-            'CUNIT1': 'deg',
-            'CRPIX1': xref,
-            'NAXIS1': N,
-            'CTYPE2': "DEC--STG",
-            'CUNIT2': 'deg',
-            'CRPIX2': yref,
-            'NAXIS2': N,
-            'CD1_1': -J[0,0]*scale,
-            'CD1_2': -J[0,1]*scale,
-            'CD2_1':  J[1,0]*scale,
-            'CD2_2':  J[1,1]*scale,
-            'CRVAL1': self.cfg.ra,
-            'CRVAL2': self.cfg.dec,
-            'LONPOLE': self.cfg.lonpole
-        })
+        outwcs = wcs.WCS(
+            {
+                "CTYPE1": "RA---STG",
+                "CUNIT1": "deg",
+                "CRPIX1": xref,
+                "NAXIS1": N,
+                "CTYPE2": "DEC--STG",
+                "CUNIT2": "deg",
+                "CRPIX2": yref,
+                "NAXIS2": N,
+                "CD1_1": -J[0, 0] * scale,
+                "CD1_2": -J[0, 1] * scale,
+                "CD2_1": J[1, 0] * scale,
+                "CD2_2": J[1, 1] * scale,
+                "CRVAL1": self.cfg.ra,
+                "CRVAL2": self.cfg.dec,
+                "LONPOLE": self.cfg.lonpole,
+            }
+        )
 
-        #input mask
+        # input mask
         if fidelity_min is not None:
-            inmask = np.logical_or(self.in_fidelity<fidelity_min, self.in_mask)
+            inmask = np.logical_or(self.in_fidelity < fidelity_min, self.in_mask)
         else:
             inmask = self.in_mask
 
         # get smearing information
-        sigma = self.cfg.sigmatarget * Settings.pixscale_native * (180./np.pi) / self.cfg.dtheta
-            # recall: pixscale_native is in radians, but dtheta is in degrees, hence the conversion
-        dCov = sigma**2 * ( psfgrow**2*J_orig@J_orig.T - np.identity(2) )
-        C = [dCov[0,0], dCov[0,1], dCov[1,1]]
+        sigma = self.cfg.sigmatarget * Settings.pixscale_native * (180.0 / np.pi) / self.cfg.dtheta
+        # recall: pixscale_native is in radians, but dtheta is in degrees, hence the conversion
+        dCov = sigma**2 * (psfgrow**2 * J_orig @ J_orig.T - np.identity(2))
+        C = [dCov[0, 0], dCov[0, 1], dCov[1, 1]]
 
         if verbose:
-            print('Q_orig', Q_orig)
-            print('Q_new', Q_new)
-            print('opos', opos)
-            print('sigmatarget', self.cfg.sigmatarget, 'dtheta', self.cfg.dtheta, 'pixscale_native', Settings.pixscale_native)
-            print('sigma', sigma)
-            print('C', C)
+            print("Q_orig", Q_orig)
+            print("Q_new", Q_new)
+            print("opos", opos)
+            print(
+                "sigmatarget",
+                self.cfg.sigmatarget,
+                "dtheta",
+                self.cfg.dtheta,
+                "pixscale_native",
+                Settings.pixscale_native,
+            )
+            print("sigma", sigma)
+            print("C", C)
 
         # layer selection
         ul = np.arange(np.shape(self.in_image)[0]).astype(np.int64)
@@ -463,55 +522,66 @@ class MetaMosaic:
         for i in range(len(ul)):
             layerlist.append(self.cfg.extrainput[ul[i]])
 
-        image, mask, Umax, Smax = ginterp.MultiInterp(self.in_image[ul,:,:], inmask, (N,N), opos, J, Rsearch, sigma*np.sqrt(8*np.log(2)), C) 
-            # could add kappa, deweight
+        image, mask, Umax, Smax = ginterp.MultiInterp(
+            self.in_image[ul, :, :], inmask, (N, N), opos, J, Rsearch, sigma * np.sqrt(8 * np.log(2)), C
+        )
+        # could add kappa, deweight
 
         # SVD of the Jacobian
-        z = J_orig[0,0]+J_orig[1,1]+1j*(J_orig[1,0]-J_orig[0,1])
+        z = J_orig[0, 0] + J_orig[1, 1] + 1j * (J_orig[1, 0] - J_orig[0, 1])
         cpd = np.abs(z)
         apx = np.angle(z)
-        z = J_orig[0,0]-J_orig[1,1]+1j*(J_orig[1,0]+J_orig[0,1])
+        z = J_orig[0, 0] - J_orig[1, 1] + 1j * (J_orig[1, 0] + J_orig[0, 1])
         cmd = np.abs(z)
         amx = np.angle(z)
-        Eig1 = (cpd+cmd)/2.
-        Eig2 = (cpd-cmd)/2.
-        alpha = (apx+amx)/2.
-        mu = 1./(Eig1*Eig2)
-        eta = -np.log(Eig1/Eig2)
-        eta1 = eta*np.cos(2*alpha)
-        eta2 = eta*np.sin(2*alpha)
-        g1 = np.tanh(eta/2.)*np.cos(2*alpha)
-        g2 = np.tanh(eta/2.)*np.sin(2*alpha)
-        conv = 1. - (Eig1+Eig2)/2.
+        Eig1 = (cpd + cmd) / 2.0
+        Eig2 = (cpd - cmd) / 2.0
+        alpha = (apx + amx) / 2.0
+        mu = 1.0 / (Eig1 * Eig2)
+        eta = -np.log(Eig1 / Eig2)
+        eta1 = eta * np.cos(2 * alpha)
+        eta2 = eta * np.sin(2 * alpha)
+        g1 = np.tanh(eta / 2.0) * np.cos(2 * alpha)
+        g2 = np.tanh(eta / 2.0) * np.sin(2 * alpha)
+        conv = 1.0 - (Eig1 + Eig2) / 2.0
 
         pardict = {
-            'STEM': (self.stem, 'stem for file name'),
-            'BLOCKX': (self.ix, 'x block index'),
-            'BLOCKY': (self.iy, 'y block index'),
-            'UMAX': (Umax, 'interp - max leakage (square norm)'),
-            'SMAX': (Smax, 'interp - max noise (square norm)'),
-            'JXX': (J_orig[0,0], 'Jacobian x_in, x_out'),
-            'JXY': (J_orig[0,1], 'Jacobian x_in, y_out'),
-            'JYX': (J_orig[1,0], 'Jacobian y_in, x_out'),
-            'JYY': (J_orig[1,1], 'Jacobian y_in, y_out'),
-            'COVXX': (C[0], 'smoothing covariance xx'),
-            'COVXY': (C[1], 'smoothing covariance xy'),
-            'COVYY': (C[2], 'smoothing covariance yy'),
-            'SIGMAOUT': (self.cfg.sigmatarget * Settings.pixscale_native * (180./np.pi) * 3600 * psfgrow, 'arcsec'),
-            'PIXSCALE': (self.cfg.dtheta*3600/oversamp, 'arcsec'),
-            'OVERSAMP': (oversamp, 'oversampling implemented in shearimage'),
-            'MU': (mu, 'amplification applied'),
-            'ETA1': (eta1, 'shear component 1'),
-            'ETA2': (eta2, 'shear component 2'),
-            'JROTATE': (apx, 'rotation angle, CCW in-->out, radians'),
-            'G1': (g1, 'reduced shear component 1'),
-            'G2': (g2, 'reduced shear component 2'),
-            'CONV': (conv, 'convergence kappa')
+            "STEM": (self.stem, "stem for file name"),
+            "BLOCKX": (self.ix, "x block index"),
+            "BLOCKY": (self.iy, "y block index"),
+            "UMAX": (Umax, "interp - max leakage (square norm)"),
+            "SMAX": (Smax, "interp - max noise (square norm)"),
+            "JXX": (J_orig[0, 0], "Jacobian x_in, x_out"),
+            "JXY": (J_orig[0, 1], "Jacobian x_in, y_out"),
+            "JYX": (J_orig[1, 0], "Jacobian y_in, x_out"),
+            "JYY": (J_orig[1, 1], "Jacobian y_in, y_out"),
+            "COVXX": (C[0], "smoothing covariance xx"),
+            "COVXY": (C[1], "smoothing covariance xy"),
+            "COVYY": (C[2], "smoothing covariance yy"),
+            "SIGMAOUT": (
+                self.cfg.sigmatarget * Settings.pixscale_native * (180.0 / np.pi) * 3600 * psfgrow,
+                "arcsec",
+            ),
+            "PIXSCALE": (self.cfg.dtheta * 3600 / oversamp, "arcsec"),
+            "OVERSAMP": (oversamp, "oversampling implemented in shearimage"),
+            "MU": (mu, "amplification applied"),
+            "ETA1": (eta1, "shear component 1"),
+            "ETA2": (eta2, "shear component 2"),
+            "JROTATE": (apx, "rotation angle, CCW in-->out, radians"),
+            "G1": (g1, "reduced shear component 1"),
+            "G2": (g2, "reduced shear component 2"),
+            "CONV": (conv, "convergence kappa"),
         }
 
-        return {'image':image, 'mask':mask, 'wcs':outwcs, 'pars':pardict, 'layers':layerlist,
-                'psf_fwhm':np.sqrt(8.*np.log(2))*pardict['SIGMAOUT'][0],
-                'ref':(xref-1,yref-1)}
+        return {
+            "image": image,
+            "mask": mask,
+            "wcs": outwcs,
+            "pars": pardict,
+            "layers": layerlist,
+            "psf_fwhm": np.sqrt(8.0 * np.log(2)) * pardict["SIGMAOUT"][0],
+            "ref": (xref - 1, yref - 1),
+        }
 
     def origimage(self, N, select_layers=None):
         """
@@ -536,40 +606,42 @@ class MetaMosaic:
         """
 
         # check PSF type
-        if self.cfg.outpsf != 'GAUSSIAN':
-            raise ValueError('shearimage: only works on GAUSSIAN, received '+self.cfg.outpsf)
+        if self.cfg.outpsf != "GAUSSIAN":
+            raise ValueError("shearimage: only works on GAUSSIAN, received " + self.cfg.outpsf)
 
         # parity check:
         # dshift = 0 --> image is *centered* on the block
         # dshift = 1 --> image is centered (-0.5,-0.5) pixels to the lower-left of the block center
-        dshift = (self.cfg.n1 * self.cfg.n2 + N)%2
+        dshift = (self.cfg.n1 * self.cfg.n2 + N) % 2
 
         # Figure out the geometrical mapping.
         scale = self.cfg.dtheta
-        xref = (self.cfg.nblock/2 - self.ix - 0.5) * self.cfg.n1 * self.cfg.n2 + (N+dshift+1)/2
-        yref = (self.cfg.nblock/2 - self.iy - 0.5) * self.cfg.n1 * self.cfg.n2 + (N+dshift+1)/2
+        xref = (self.cfg.nblock / 2 - self.ix - 0.5) * self.cfg.n1 * self.cfg.n2 + (N + dshift + 1) / 2
+        yref = (self.cfg.nblock / 2 - self.iy - 0.5) * self.cfg.n1 * self.cfg.n2 + (N + dshift + 1) / 2
 
         # offset of output array from imput array coordinates
-        opos_ = (3 * self.cfg.n1 * self.cfg.n2 - N - dshift)//2 - self.trunc
+        opos_ = (3 * self.cfg.n1 * self.cfg.n2 - N - dshift) // 2 - self.trunc
 
         # generate the WCS
-        outwcs = wcs.WCS({
-            'CTYPE1': "RA---STG",
-            'CUNIT1': 'deg',
-            'CRPIX1': xref,
-            'NAXIS1': N,
-            'CTYPE2': "DEC--STG",
-            'CUNIT2': 'deg',
-            'CRPIX2': yref,
-            'NAXIS2': N,
-            'CD1_1': -scale,
-            'CD1_2': 0.,
-            'CD2_1': 0.,
-            'CD2_2': scale,
-            'CRVAL1': self.cfg.ra,
-            'CRVAL2': self.cfg.dec,
-            'LONPOLE': self.cfg.lonpole
-        })
+        outwcs = wcs.WCS(
+            {
+                "CTYPE1": "RA---STG",
+                "CUNIT1": "deg",
+                "CRPIX1": xref,
+                "NAXIS1": N,
+                "CTYPE2": "DEC--STG",
+                "CUNIT2": "deg",
+                "CRPIX2": yref,
+                "NAXIS2": N,
+                "CD1_1": -scale,
+                "CD1_2": 0.0,
+                "CD2_1": 0.0,
+                "CD2_2": scale,
+                "CRVAL1": self.cfg.ra,
+                "CRVAL2": self.cfg.dec,
+                "LONPOLE": self.cfg.lonpole,
+            }
+        )
 
         # layer selection
         ul = np.arange(np.shape(self.in_image)[0]).astype(np.int64)
@@ -580,39 +652,46 @@ class MetaMosaic:
             layerlist.append(self.cfg.extrainput[ul[i]])
 
         # this one is just a subarray
-        if opos_<0 or opos_+N>3*self.cfg.n1 * self.cfg.n2:
-            raise ValueError('Requested image size too large (overfills 3 blocks)')
-        image = self.in_image[ul,opos_:opos_+N,opos_:opos_+N]
-        mask = np.copy(self.in_mask[opos_:opos_+N,opos_:opos_+N])
+        if opos_ < 0 or opos_ + N > 3 * self.cfg.n1 * self.cfg.n2:
+            raise ValueError("Requested image size too large (overfills 3 blocks)")
+        image = self.in_image[ul, opos_ : opos_ + N, opos_ : opos_ + N]
+        mask = np.copy(self.in_mask[opos_ : opos_ + N, opos_ : opos_ + N])
 
         pardict = {
-            'STEM': (self.stem, 'stem for file name'),
-            'BLOCKX': (self.ix, 'x block index'),
-            'BLOCKY': (self.iy, 'y block index'),
-            'UMAX': (0., 'interp - max leakage (square norm)'),
-            'SMAX': (1., 'interp - max noise (square norm)'),
-            'JXX': (1., 'Jacobian x_in, x_out'),
-            'JXY': (0., 'Jacobian x_in, y_out'),
-            'JYX': (0., 'Jacobian y_in, x_out'),
-            'JYY': (1., 'Jacobian y_in, y_out'),
-            'COVXX': (0., 'smoothing covariance xx'),
-            'COVXY': (0., 'smoothing covariance xy'),
-            'COVYY': (0., 'smoothing covariance yy'),
-            'SIGMAOUT': (self.cfg.sigmatarget * Settings.pixscale_native * (180./np.pi) * 3600, 'arcsec'),
-            'PIXSCALE': (self.cfg.dtheta*3600, 'arcsec'),
-            'OVERSAMP': (1., 'oversampling implemented in shearimage'),
-            'MU': (1., 'amplification applied'),
-            'ETA1': (0., 'shear component 1'),
-            'ETA2': (0., 'shear component 2'),
-            'JROTATE': (0., 'rotation angle, CCW in-->out, radians'),
-            'G1': (0., 'reduced shear component 1'),
-            'G2': (0., 'reduced shear component 2'),
-            'CONV': (0., 'convergence kappa')
+            "STEM": (self.stem, "stem for file name"),
+            "BLOCKX": (self.ix, "x block index"),
+            "BLOCKY": (self.iy, "y block index"),
+            "UMAX": (0.0, "interp - max leakage (square norm)"),
+            "SMAX": (1.0, "interp - max noise (square norm)"),
+            "JXX": (1.0, "Jacobian x_in, x_out"),
+            "JXY": (0.0, "Jacobian x_in, y_out"),
+            "JYX": (0.0, "Jacobian y_in, x_out"),
+            "JYY": (1.0, "Jacobian y_in, y_out"),
+            "COVXX": (0.0, "smoothing covariance xx"),
+            "COVXY": (0.0, "smoothing covariance xy"),
+            "COVYY": (0.0, "smoothing covariance yy"),
+            "SIGMAOUT": (self.cfg.sigmatarget * Settings.pixscale_native * (180.0 / np.pi) * 3600, "arcsec"),
+            "PIXSCALE": (self.cfg.dtheta * 3600, "arcsec"),
+            "OVERSAMP": (1.0, "oversampling implemented in shearimage"),
+            "MU": (1.0, "amplification applied"),
+            "ETA1": (0.0, "shear component 1"),
+            "ETA2": (0.0, "shear component 2"),
+            "JROTATE": (0.0, "rotation angle, CCW in-->out, radians"),
+            "G1": (0.0, "reduced shear component 1"),
+            "G2": (0.0, "reduced shear component 2"),
+            "CONV": (0.0, "convergence kappa"),
         }
 
-        return {'image':image, 'mask':mask, 'wcs':outwcs, 'pars':pardict, 'layers':layerlist,
-                'psf_fwhm':np.sqrt(8.*np.log(2))*pardict['SIGMAOUT'][0],
-                'ref':(xref-1,yref-1)}
+        return {
+            "image": image,
+            "mask": mask,
+            "wcs": outwcs,
+            "pars": pardict,
+            "layers": layerlist,
+            "psf_fwhm": np.sqrt(8.0 * np.log(2)) * pardict["SIGMAOUT"][0],
+            "ref": (xref - 1, yref - 1),
+        }
+
 
 def shearimage_to_fits(im, fname, layers=None, overwrite=False):
     """
@@ -636,20 +715,21 @@ def shearimage_to_fits(im, fname, layers=None, overwrite=False):
     """
 
     # which layers to use?
-    nlayer = np.shape(im['image'])[-3]
+    nlayer = np.shape(im["image"])[-3]
     use_layers = layers
     if layers is None:
         use_layers = range(nlayer)
     use_layers = np.asarray(use_layers).astype(np.int16)
 
-    H1 = fits.PrimaryHDU(im['image'][use_layers,:,:], header=im['wcs'].to_header())
-    H1.header['SOURCE'] = 'pyimcom.meta.distortimage.shearimage_to_fits'
-    for p in im['pars'].keys():
-        H1.header[p] = im['pars'][p]
+    H1 = fits.PrimaryHDU(im["image"][use_layers, :, :], header=im["wcs"].to_header())
+    H1.header["SOURCE"] = "pyimcom.meta.distortimage.shearimage_to_fits"
+    for p in im["pars"]:
+        H1.header[p] = im["pars"][p]
     for q in range(len(use_layers)):
-        qst = 'LAYER{:03d}'.format(q+1)
-        st = im['layers'][q]
-        if st is None: st = '__SCI__'
-        H1.header[qst] = (st, 'layer {:3d} here, was {:3d} in original'.format(use_layers[q]+1, q+1))
-    H2 = fits.ImageHDU(im['mask'].astype(np.uint8))
-    fits.HDUList([H1,H2]).writeto(fname, overwrite=overwrite)
+        qst = f"LAYER{q + 1:03d}"
+        st = im["layers"][q]
+        if st is None:
+            st = "__SCI__"
+        H1.header[qst] = (st, f"layer {use_layers[q] + 1:3d} here, was {q + 1:3d} in original")
+    H2 = fits.ImageHDU(im["mask"].astype(np.uint8))
+    fits.HDUList([H1, H2]).writeto(fname, overwrite=overwrite)
