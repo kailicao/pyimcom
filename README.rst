@@ -6,6 +6,7 @@ This is the Python implementation of Image Combination (PyIMCOM) package being d
 Documentation on this site
 **************************
 
+See also the `readthedocs page <https://pyimcom.readthedocs.io/en/latest/autoapi/index.html>`_.
 
 Installing PyIMCOM
 ------------------
