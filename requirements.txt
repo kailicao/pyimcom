@@ -11,3 +11,4 @@ healpy
 matplotlib
 treecorr
 scikit-image
+pytz
