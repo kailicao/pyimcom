@@ -112,9 +112,15 @@ class OutImage:
         return hdu_names
 
     def __init__(self, fpath: str, cfg: Config = None, hdu_names: list[str] = None) -> None:
-        assert exists(fpath), f"{fpath} does not exist"
         self.fpath = fpath
-        self.ibx, self.iby = map(int, Path(fpath).stem.split("_")[-2:])
+
+        # Get file indices.
+        fstem = Path(fpath).stem
+        # This part is for legacy file names that had a '_map'.
+        # Summer 2025 run and later don't have this.
+        if fstem[-4:] == "_map":
+            fstem = fstem[:-4]
+        self.ibx, self.iby = map(int, fstem.split("_")[-2:])
 
         self.cfg = cfg
         if cfg is None:

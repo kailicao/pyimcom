@@ -134,7 +134,16 @@ class MetaMosaic:
         # (including handling of boundary effects)
         xpad = [self.ix == 0, self.ix == self.cfg.nblock - 1]
         ypad = [self.iy == 0, self.iy == self.cfg.nblock - 1]
-        for dx in range(-1, 2):
+
+        # Suggestion from Federico Berlfein:
+        # If the additional blocks aren't going to be read, don't load them.
+        block_min = -1
+        block_max = 2
+        if (extpix is not None) and extpix <= 0:
+            block_min = 0
+            block_max = 1
+
+        for dx in range(block_min, block_max):
             # lower-left corner in block is (cx,cy) in the mosaic
             cx = self.cfg.n1 * self.cfg.n2 * (1 + dx) - self.cfg.postage_pad * self.cfg.n2 - self.trunc
             sxmin = self.cfg.postage_pad * self.cfg.n2
@@ -147,7 +156,7 @@ class MetaMosaic:
                 sxmin = -cx
             if cx + sxmax > self.Nside:
                 sxmax = self.Nside - cx
-            for dy in range(-1, 2):
+            for dy in range(block_min, block_max):
                 cy = self.cfg.n1 * self.cfg.n2 * (1 + dy) - self.cfg.postage_pad * self.cfg.n2 - self.trunc
                 symin = self.cfg.postage_pad * self.cfg.n2
                 symax = symin + self.cfg.n1 * self.cfg.n2
@@ -583,14 +592,14 @@ class MetaMosaic:
             "ref": (xref - 1, yref - 1),
         }
 
-    def origimage(self, N, select_layers=None):
+    def origimage(self, N=None, select_layers=None):
         """
         Like shearimage, but without applying the deconvolution/shear/reconvolution (so is faster).
 
         Parameters
         ----------
-        N : int
-            Size of the output image (shape will be (`N`, `N`)).
+        N : int, optional
+            Size of the output image (shape will be (`N`, `N`)). Default is one block.
         select_layers : np.array of int or None, optional
             If given, only process these layers.
 
@@ -604,6 +613,10 @@ class MetaMosaic:
         shearimage : Carries out a shear, same output format.
 
         """
+
+        # If N is not specified, use the block size.
+        if N is None:
+            N = self.cfg.n1 * self.cfg.n2
 
         # check PSF type
         if self.cfg.outpsf != "GAUSSIAN":
@@ -652,8 +665,8 @@ class MetaMosaic:
             layerlist.append(self.cfg.extrainput[ul[i]])
 
         # this one is just a subarray
-        if opos_ < 0 or opos_ + N > 3 * self.cfg.n1 * self.cfg.n2:
-            raise ValueError("Requested image size too large (overfills 3 blocks)")
+        if opos_ < 0 or opos_ + N > 3 * self.cfg.n1 * self.cfg.n2 - 2 * self.trunc:
+            raise ValueError("Requested image size too large (overfills original image)")
         image = self.in_image[ul, opos_ : opos_ + N, opos_ : opos_ + N]
         mask = np.copy(self.in_mask[opos_ : opos_ + N, opos_ : opos_ + N])
 
