@@ -824,7 +824,7 @@ def main():
         :param direction: 2D np array, direction of conjugate gradient search
         :param f: function, cost function form
         :param f_prime: function, derivative of cost function form
-        :param grad_current: 2D np array, current gradient
+        :param grad_current: 2D np array, current gradient AKA current residuals
         :param n_iter: int, number of iterations at which to stop searching
         :param tol: float, absolute value of d_cost at which to converge
         :return best_p: parameters object, containing the best parameters found via search
@@ -861,21 +861,42 @@ def main():
             alpha_min = 1e-4
             alpha_max = 10
 
-        # Calculate f(alpha_max) and f(alpha_min), which need to be defined for secant update
-        write_to_file('### Calculating min and max epsilon and cost')
-        max_params = p.params + alpha_max * direction
-        max_p.params = max_params
-        max_epsilon, max_psi = cost_function(max_p, f, thresh)
-        max_resids = residual_function(max_psi, f_prime, thresh)
-        del max_psi
-        d_cost_max = np.sum(max_resids * direction)
+        # Attempt: Reusing/rescaling residuals
+        test_p = copy.deepcopy(p)
+        test_params = p.params + alpha_test * direction
+        test_eps, test_psi = cost_function(test_p, f, thresh)
+        J_dir = (test_psi-best_psi) / (alpha_test+1e-30) # Jacobian in this direction (dPsi/dalpha)
 
-        min_params = p.params + alpha_min * direction
-        min_p.params = min_params
-        min_epsilon, min_psi = cost_function(min_p, f, thresh)
-        min_resids = residual_function(min_psi, f_prime, thresh)
-        del min_psi
-        d_cost_min = np.sum(min_resids * direction)
+        _, J_resid = residual_function(J_dir, f_prime, thresh)
+
+        def residuals_at(alpha):
+            return grad_current + alpha * J_resid
+        
+        def epsilon_at(alpha):
+            resids=residuals_at(alpha)
+            return best_epsilon + 2*alpha*np.sum(grad_current, J_resid) + alpha**2 * np.sum(J_resid*J_resid)
+        
+        def dcost_at(alpha):
+            return np.sum(grad_current * direction) + alpha * np.sum(J_resid * direction)
+        
+
+        # Calculate f(alpha_max) and f(alpha_min), which need to be defined for secant update
+        # write_to_file('### Calculating min and max epsilon and cost')
+        # max_params = p.params + alpha_max * direction
+        # max_p.params = max_params
+        # max_epsilon, max_psi = cost_function(max_p, f, thresh)
+        # max_resids = residual_function(max_psi, f_prime, thresh)
+        # del max_psi
+        # d_cost_max = np.sum(max_resids * direction)
+        d_cost_max = dcost_at(alpha_max)
+
+        # min_params = p.params + alpha_min * direction
+        # min_p.params = min_params
+        # min_epsilon, min_psi = cost_function(min_p, f, thresh)
+        # min_resids = residual_function(min_psi, f_prime, thresh)
+        # del min_psi
+        # d_cost_min = np.sum(min_resids * direction)
+        d_cost_min = dcost_at(alpha_min)
 
         conv_params = []
 
@@ -915,7 +936,8 @@ def main():
 
             working_epsilon, working_psi = cost_function(working_p, f, thresh)
             print('Global elapsed t = {:8.1f}'.format((time.time()-t0_global)/60))
-            working_resids = residual_function(working_psi, f_prime, thresh)
+            # working_resids = residual_function(working_psi, f_prime, thresh)
+            working_resids = residuals_at(alpha_test)
             print('Global elapsed t = {:8.1f}'.format((time.time()-t0_global)/60))
             d_cost = np.sum(working_resids * direction)
             convergence_crit = (alpha_max - alpha_min)
@@ -938,7 +960,7 @@ def main():
                 best_epsilon = working_epsilon
                 best_p = copy.deepcopy(working_p)
                 best_psi = working_psi
-                best_resids = working_resids
+                best_resids = residual_function(working_psi, f_prime, thresh) # get the real residuals, not an approx
                 write_to_file(f"Linear search convergence in {k} iterations")
                 save_fits(best_p.params, 'best_p', dir=test_image_dir, overwrite=True)
                 save_fits(np.array(conv_params), 'conv_params', dir=test_image_dir, overwrite=True)
