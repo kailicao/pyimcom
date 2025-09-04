@@ -33,6 +33,7 @@ from astropy.io import fits
 from scipy import ndimage
 
 from .coadd import Block, OutStamp
+from .compress.compressutils import ReadFile
 from .config import Config, Timer
 from .config import Settings as Stn
 from .diagnostics.outimage_utils.helper import HDU_to_bels
@@ -111,15 +112,21 @@ class OutImage:
         return hdu_names
 
     def __init__(self, fpath: str, cfg: Config = None, hdu_names: list[str] = None) -> None:
-        assert exists(fpath), f"{fpath} does not exist"
         self.fpath = fpath
-        self.ibx, self.iby = map(int, Path(fpath).stem.split("_")[-2:])
 
-        cfg()
+        # Get file indices.
+        fstem = Path(fpath).stem
+        # This part is for legacy file names that had a '_map'.
+        # Summer 2025 run and later don't have this.
+        if fstem[-4:] == "_map":
+            fstem = fstem[:-4]
+        self.ibx, self.iby = map(int, fstem.split("_")[-2:])
+
         self.cfg = cfg
         if cfg is None:
-            with fits.open(fpath) as hdu_list:
+            with ReadFile(fpath) as hdu_list:
                 self.cfg = Config("".join(hdu_list["CONFIG"].data["text"].tolist()))
+        self.cfg()  # update configuration parameters
 
         self.hdu_names = hdu_names
         if hdu_names is None:
@@ -189,7 +196,7 @@ class OutImage:
 
         if load_mode:
             if not hasattr(self, "hdu_list"):
-                self.hdu_list = fits.open(self.fpath)
+                self.hdu_list = ReadFile(self.fpath)
 
         else:
             if save_file:
@@ -241,7 +248,7 @@ class OutImage:
 
         data_loaded = hasattr(self, "hdu_list")
         if not data_loaded:
-            self.hdu_list = fits.open(self.fpath)
+            self.hdu_list = ReadFile(self.fpath)
 
         if j_out is not None:
             data = (self.hdu_list["PRIMARY"].data[j_out, idx]).astype(np.float32)
@@ -277,7 +284,7 @@ class OutImage:
 
         data_loaded = hasattr(self, "hdu_list")
         if not data_loaded:
-            self.hdu_list = fits.open(self.fpath)
+            self.hdu_list = ReadFile(self.fpath)
 
         if not flat:  # read T_hdu
             if j_out is not None:
@@ -351,7 +358,7 @@ class OutImage:
 
         data_loaded = hasattr(self, "hdu_list")
         if not data_loaded:
-            self.hdu_list = fits.open(self.fpath)
+            self.hdu_list = ReadFile(self.fpath)
 
         coef = int(self.hdu_list[outmap].header.comments["UNIT"].partition("*")[0])
         slice_ = np.s_[j_out] if j_out is not None else np.s_[:]

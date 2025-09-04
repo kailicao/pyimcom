@@ -6,6 +6,7 @@ This is the Python implementation of Image Combination (PyIMCOM) package being d
 Documentation on this site
 **************************
 
+See also the `readthedocs page <https://pyimcom.readthedocs.io/en/latest/autoapi/index.html>`_.
 
 Installing PyIMCOM
 ------------------
@@ -47,6 +48,8 @@ Running PyIMCOM
 
 Post-processing of PyIMCOM outputs
 ----------------------------------
+
+- `Options for interacting with the PyIMCOM output files <docs/output_README.rst>`_
 
 - Instructions for using the `meta post-processing module <docs/meta_README.rst>`_
 
