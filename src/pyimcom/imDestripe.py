@@ -20,10 +20,13 @@ from config import Settings as Stn, Config
 import re
 import sys
 import copy
-import pyimcom_croutines
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from filelock import Timeout, FileLock
 from scipy.ndimage import binary_dilation
+try:
+    import furry_parakeet.pyimcom_croutines as pyimcom_croutines
+except ImportError:
+    import pyimcom_croutines
 
 
 TIME = False
@@ -762,7 +765,7 @@ def main():
         """
         write_to_file('Initializing cost function')
         t0_cost = time.time()
-        psi = np.memmap(tempfile, dtype=use_output_float, mode='w+', shape=(len(all_scas), 4088, 4088))
+        psi = np.memmap(tempdir+'psi_all.dat', dtype=use_output_float, mode='w+', shape=(len(all_scas), 4088, 4088))
         psi.fill(0)
         epsilon = 0
 
