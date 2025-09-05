@@ -826,7 +826,7 @@ def main():
         return resids
 
     
-    def linear_search(p, direction, f, f_prime, grad_current, thresh=None, n_iter=100, tol=10 ** -4):
+    def linear_search_general(p, direction, f, f_prime, grad_current, thresh=None, n_iter=100, tol=10 ** -4):
         """
         Linear search via combination bisection and secant methods for parameters that minimize the function
          d_epsilon/d_alpha in the given direction . Note alpha = depth of step in direction
@@ -969,6 +969,76 @@ def main():
                 d_cost_min = d_cost
 
         return best_p, best_psi
+    
+    def linear_search_quadratic(p, direction, f, f_prime, grad_current, thresh=None):
+        """
+        For the quadratic cost function, direct calculation of alpha that minimizes the function
+         d_epsilon/d_alpha in the given direction . Note alpha = depth of step in direction
+        Finds the best alpha, computes the new parameters and diff image, and prints the new cost and convergence criteria
+        :param p: params object, the current de-striping parameters
+        :param direction: 2D np array, direction of conjugate gradient search
+        :param f: function, cost function form
+        :param f_prime: function, derivative of cost function form
+        :param grad_current: 2D np array, current gradient AKA current residuals
+
+        :return best_p: parameters object, containing the best parameters found via search
+        :return best_psi: 3D numpy array, the difference images made from images with the best_p params subtracted off
+        """
+        t0_ls = time.time()
+
+        best_epsilon, best_psi = cost_function(p, f, thresh)
+        best_p = copy.deepcopy(p)
+
+        # Simple linear search
+        new_p = copy.deepcopy(p)
+        trial_p = copy.deepcopy(p)
+
+        method = 'bisection'
+
+        eta = 0.1
+        d_cost_init = np.sum(grad_current * direction)
+        d_cost_tol = np.abs(d_cost_init * 1*10**-3)
+
+    
+        alpha_test = -eta * (np.sum(grad_current*direction))/(np.sum(direction*direction)+1e-12)
+        if alpha_test <= 0:
+            # Not a descent direction — fallback
+            alpha_min = -0.9
+            alpha_max = 1.0
+        else:
+            # Curvature-based search window
+            alpha_min = alpha_test * 1e-4
+            alpha_max = alpha_test * 10
+
+        # Calculate 
+        trial_params = p.params + alpha_max * direction
+        trial_p.params = trial_params
+        trial_epsilon, trial_psi = cost_function(trial_p, f, thresh)
+        trial_resids = residual_function(trial_psi, f_prime, thresh)
+        del trial_psi, trial_epsilon
+        d_cost_trial = np.sum(trial_resids * direction)
+
+        alpha_new = alpha_max * (-np.sum(direction, grad_current)) / (np.sum(direction, trial_resids-grad_current)+1e-12)
+
+        new_params = p.params + alpha_new * direction
+        new_p.params = new_params
+        new_epsilon, new_psi = cost_function(new_p, f, thresh)
+        new_resids = grad_current + (alpha_new/alpha_max) * (trial_resids - grad_current)
+        print('Global elapsed t = {:8.1f}'.format((time.time()-t0_global)/60))
+
+        d_cost = np.sum(new_resids * direction)
+
+        write_to_file(f"Ending LS")
+        write_to_file(f"Current d_cost = {d_cost}, epsilon = {new_epsilon}")
+        write_to_file(f"Working resids: {new_resids}")
+        write_to_file(f"Working params: {new_p.params}")
+        write_to_file(f"Current alpha: {alpha_new}")
+        write_to_file(f"Time spent in this LS: {(time.time() - t0_ls) / 60} minutes.")
+
+        # Convergence and update criteria and checks
+        save_fits(new_p.params, 'best_p', dir=test_image_dir, overwrite=True)
+        return new_p, new_psi , new_resids
+
 
     
     def conjugate_gradient(p, f, f_prime, method='FR', tol=1e-5, max_iter=100, thresh=None):
@@ -1014,8 +1084,7 @@ def main():
 
             # Compute the gradient
             if i==0:
-                grad, gr_term1, gr_term2 = residual_function(psi, f_prime, thresh, extrareturn=True)
-                del gr_term1, gr_term2
+                grad = residual_function(psi, f_prime, thresh)
                 write_to_file(f"Minutes spent in initial residual function: {(time.time() - t_start_CG_iter) / 60}")
                 print('Global elapsed t = {:8.1f}'.format((time.time()-t0_global)/60))
                 sys.stdout.flush()
@@ -1057,9 +1126,13 @@ def main():
             # Perform linear search
             t_start_LS = time.time()
             write_to_file(f"Initiating linear search in direction: {direction}")
-            p_new, psi_new, grad_new = linear_search(p, direction, f, f_prime, grad, thresh)
+            if cost_model=='quadratic':
+                p_new, psi_new, grad_new = linear_search_quadratic(p, direction, f, f_prime, grad, thresh)
+            else:
+                p_new, psi_new, grad_new = linear_search_general(p, direction, f, f_prime, grad, thresh)
             print('Global elapsed t = {:8.1f}'.format((time.time()-t0_global)/60))
             ls_time = (time.time() - t_start_LS) / 60
+            
             write_to_file(f'Total time spent in linear search: {ls_time}')
             write_to_file(
                 f'Current norm: {current_norm}, Tol * Norm_0: {tol}, Difference (CN-TOL): {current_norm - tol}')
