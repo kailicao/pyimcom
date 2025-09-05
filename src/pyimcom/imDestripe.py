@@ -762,7 +762,8 @@ def main():
         """
         write_to_file('Initializing cost function')
         t0_cost = time.time()
-        psi = np.zeros((len(all_scas), 4088, 4088))
+        psi = np.memmap(tempfile, dtype=use_output_float, mode='w+', shape=(len(all_scas), 4088, 4088))
+        psi.fill(0)
         epsilon = 0
 
         with ProcessPoolExecutor(max_workers=workers) as executor:
