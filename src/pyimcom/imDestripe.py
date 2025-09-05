@@ -826,7 +826,7 @@ def main():
         return resids
 
     
-    def linear_search_general(p, direction, f, f_prime, grad_current, thresh=None, n_iter=100, tol=10 ** -4):
+    def linear_search_general(p, direction, f, f_prime, epsilon_current, psi_current, grad_current, thresh=None, n_iter=100, tol=10 ** -4):
         """
         Linear search via combination bisection and secant methods for parameters that minimize the function
          d_epsilon/d_alpha in the given direction . Note alpha = depth of step in direction
@@ -840,7 +840,7 @@ def main():
         :return best_p: parameters object, containing the best parameters found via search
         :return best_psi: 3D numpy array, the difference images made from images with the best_p params subtracted off
         """
-        best_epsilon, best_psi = cost_function(p, f, thresh)
+        best_epsilon, best_psi = epsilon_current, psi_current
         best_p = copy.deepcopy(p)
 
         # Simple linear search
@@ -952,7 +952,7 @@ def main():
                 write_to_file(f"Linear search convergence in {k} iterations")
                 save_fits(best_p.params, 'best_p', dir=test_image_dir, overwrite=True)
                 save_fits(np.array(conv_params), 'conv_params', dir=test_image_dir, overwrite=True)
-                return best_p, best_psi ,best_resids
+                return best_p, best_psi ,best_resids, best_epsilon
 
             # Updates for next iteration, if convergence isn't yet reached
             if d_cost > tol and method == 'bisection':
@@ -986,14 +986,12 @@ def main():
         """
         t0_ls = time.time()
 
-        best_epsilon, best_psi = cost_function(p, f, thresh)
-        best_p = copy.deepcopy(p)
+        # best_epsilon, best_psi = cost_function(p, f, thresh)
+        # best_p = copy.deepcopy(p)
 
         # Simple linear search
         new_p = copy.deepcopy(p)
         trial_p = copy.deepcopy(p)
-
-        method = 'bisection'
 
         eta = 0.1
         d_cost_init = np.sum(grad_current * direction)
@@ -1016,7 +1014,6 @@ def main():
         trial_epsilon, trial_psi = cost_function(trial_p, f, thresh)
         trial_resids = residual_function(trial_psi, f_prime, thresh)
         del trial_psi, trial_epsilon
-        d_cost_trial = np.sum(trial_resids * direction)
 
         alpha_new = alpha_max * (-np.sum(direction, grad_current)) / (np.sum(direction, trial_resids-grad_current)+1e-12)
 
@@ -1029,7 +1026,8 @@ def main():
         d_cost = np.sum(new_resids * direction)
 
         write_to_file(f"Ending LS")
-        write_to_file(f"Current d_cost = {d_cost}, epsilon = {new_epsilon}")
+        write_to_file(f"Current d_cost = {d_cost}")
+        write_to_file(f"Current epsilon = {new_epsilon}")
         write_to_file(f"Working resids: {new_resids}")
         write_to_file(f"Working params: {new_p.params}")
         write_to_file(f"Current alpha: {alpha_new}")
@@ -1037,7 +1035,7 @@ def main():
 
         # Convergence and update criteria and checks
         save_fits(new_p.params, 'best_p', dir=test_image_dir, overwrite=True)
-        return new_p, new_psi , new_resids
+        return new_p, new_psi , new_resids, new_epsilon
 
 
     
@@ -1072,7 +1070,7 @@ def main():
         print('Global elapsed t = {:8.1f}'.format((time.time()-t0_global)/60))
         global test_image_dir
         test_image_dir = outpath + '/test_images/' + str(0) + '/'
-        psi = cost_function(p, f, thresh)[1]
+        epsilon, psi = cost_function(p, f, thresh)
         print('Global elapsed t = {:8.1f}'.format((time.time()-t0_global)/60))
         sys.stdout.flush()
 
@@ -1097,6 +1095,7 @@ def main():
                 write_to_file(f'Initial gradient: {grad}')
                 norm_0 = np.linalg.norm(grad)
                 write_to_file(f'Initial norm: {norm_0}')
+                write_to_file(f'Initial epsilon: {epsilon}')
                 tol = tol * norm_0
                 direction = -grad
 
@@ -1127,16 +1126,16 @@ def main():
             t_start_LS = time.time()
             write_to_file(f"Initiating linear search in direction: {direction}")
             if cost_model=='quadratic':
-                p_new, psi_new, grad_new = linear_search_quadratic(p, direction, f, f_prime, grad, thresh)
+                p_new, psi_new, grad_new, epsilon_new = linear_search_quadratic(p, direction, f, f_prime, grad, thresh)
             else:
-                p_new, psi_new, grad_new = linear_search_general(p, direction, f, f_prime, grad, thresh)
+                p_new, psi_new, grad_new, epsilon_new = linear_search_general(p, direction, f, f_prime, epsilon, psi, grad, thresh)
+
             print('Global elapsed t = {:8.1f}'.format((time.time()-t0_global)/60))
             ls_time = (time.time() - t_start_LS) / 60
-            
             write_to_file(f'Total time spent in linear search: {ls_time}')
             write_to_file(
                 f'Current norm: {current_norm}, Tol * Norm_0: {tol}, Difference (CN-TOL): {current_norm - tol}')
-            write_to_file(f'Current best params: {p_new.params}')
+            # write_to_file(f'Current best params: {p_new.params}')
 
             # Calculate additional metrics
             convergence_rate = (current_norm - np.linalg.norm(grad_new)) / current_norm
@@ -1154,6 +1153,7 @@ def main():
             # Update to current values
             p = p_new
             psi = psi_new
+            epsilon = epsilon_new
             grad_prev = grad
             grad = grad_new
             direction_prev = direction
