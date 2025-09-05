@@ -689,7 +689,12 @@ def residual_function_single(k, sca_a, psi, f_prime, thresh=None):
     if TIME: write_to_file(f"Time re-normalizing SCA A for transpose interp: {time.time() - T} seconds")
 
     term_2_list = []
-    for j, sca_b in enumerate(all_scas):
+    neighbors = {k: [j for j in range(len(all_scas))
+                 if ov_mat[k,j] != 0 and get_ids(all_scas[j])[0] != get_ids(all_scas[k])[0] ]
+             for k in range(len(all_scas))}
+
+    for j in neighbors[k]:
+        sca_b=all_scas[j]
         obsid_B, scaid_B = get_ids(sca_b)
 
         if obsid_B != obsid_A and ov_mat[k, j] != 0:
