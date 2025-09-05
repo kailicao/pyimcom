@@ -656,20 +656,21 @@ else:
 def residual_function_single(k, sca_a, psi, f_prime, thresh=None):
     # Go and get the WCS object for image A
     obsid_A, scaid_A = get_ids(sca_a)
-    filepath = outpath + f'interpolations/{obsid_A}_{scaid_A}_interp.fits'
-    lockfile = f"{filepath}.lock"
-    timeout=30
-    try:
-        with FileLock(lockfile, timeout=timeout):
-            with fits.open(filepath, memmap=True) as file:
-                wcs_A = wcs.WCS(file[0].header)
-                file.close()
-    except Timeout:
-        print(f"RF Exception Timeout: Could not acquire lock on {filepath} within {timeout} seconds.")
-    except FileNotFoundError:
-        print(f"RF Exception File not found: {filepath}")
-    except Exception as e:
-        print(f"RF Exception Other error: {e}")
+    wcs_A = all_wcs[k]
+    # filepath = outpath + f'interpolations/{obsid_A}_{scaid_A}_interp.fits'
+    # lockfile = f"{filepath}.lock"
+    # timeout=30
+    # try:
+    #     with FileLock(lockfile, timeout=timeout):
+    #         with fits.open(filepath, memmap=True) as file:
+    #             wcs_A = wcs.WCS(file[0].header)
+    #             file.close()
+    # except Timeout:
+    #     print(f"RF Exception Timeout: Could not acquire lock on {filepath} within {timeout} seconds.")
+    # except FileNotFoundError:
+    #     print(f"RF Exception File not found: {filepath}")
+    # except Exception as e:
+    #     print(f"RF Exception Other error: {e}")
 
     # Calculate and then transpose the gradient of I_A-J_A
     if TIME: T = time.time()
