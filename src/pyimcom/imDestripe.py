@@ -871,42 +871,21 @@ def main():
             alpha_min = 1e-4
             alpha_max = 10
 
-        # Attempt: Reusing/rescaling residuals
-        test_p = copy.deepcopy(p)
-        test_params = p.params + alpha_test * direction
-        test_eps, test_psi = cost_function(test_p, f, thresh)
-        J_dir = (test_psi-best_psi) / (alpha_test+1e-30) # Jacobian in this direction (dPsi/dalpha)
-
-        _, J_resid = residual_function(J_dir, f_prime, thresh)
-
-        def residuals_at(alpha):
-            return grad_current + alpha * J_resid
-        
-        def epsilon_at(alpha):
-            resids=residuals_at(alpha)
-            return best_epsilon + 2*alpha*np.sum(grad_current, J_resid) + alpha**2 * np.sum(J_resid*J_resid)
-        
-        def dcost_at(alpha):
-            return np.sum(grad_current * direction) + alpha * np.sum(J_resid * direction)
-        
-
         # Calculate f(alpha_max) and f(alpha_min), which need to be defined for secant update
-        # write_to_file('### Calculating min and max epsilon and cost')
-        # max_params = p.params + alpha_max * direction
-        # max_p.params = max_params
-        # max_epsilon, max_psi = cost_function(max_p, f, thresh)
-        # max_resids = residual_function(max_psi, f_prime, thresh)
-        # del max_psi
-        # d_cost_max = np.sum(max_resids * direction)
-        d_cost_max = dcost_at(alpha_max)
+        write_to_file('### Calculating min and max epsilon and cost')
+        max_params = p.params + alpha_max * direction
+        max_p.params = max_params
+        max_epsilon, max_psi = cost_function(max_p, f, thresh)
+        max_resids = residual_function(max_psi, f_prime, thresh)
+        del max_psi
+        d_cost_max = np.sum(max_resids * direction)
 
-        # min_params = p.params + alpha_min * direction
-        # min_p.params = min_params
-        # min_epsilon, min_psi = cost_function(min_p, f, thresh)
-        # min_resids = residual_function(min_psi, f_prime, thresh)
-        # del min_psi
-        # d_cost_min = np.sum(min_resids * direction)
-        d_cost_min = dcost_at(alpha_min)
+        min_params = p.params + alpha_min * direction
+        min_p.params = min_params
+        min_epsilon, min_psi = cost_function(min_p, f, thresh)
+        min_resids = residual_function(min_psi, f_prime, thresh)
+        del min_psi
+        d_cost_min = np.sum(min_resids * direction)
 
         conv_params = []
 
@@ -946,8 +925,7 @@ def main():
 
             working_epsilon, working_psi = cost_function(working_p, f, thresh)
             print('Global elapsed t = {:8.1f}'.format((time.time()-t0_global)/60))
-            # working_resids = residual_function(working_psi, f_prime, thresh)
-            working_resids = residuals_at(alpha_test)
+            working_resids = residual_function(working_psi, f_prime, thresh)
             print('Global elapsed t = {:8.1f}'.format((time.time()-t0_global)/60))
             d_cost = np.sum(working_resids * direction)
             convergence_crit = (alpha_max - alpha_min)
@@ -975,26 +953,6 @@ def main():
                 save_fits(best_p.params, 'best_p', dir=test_image_dir, overwrite=True)
                 save_fits(np.array(conv_params), 'conv_params', dir=test_image_dir, overwrite=True)
                 return best_p, best_psi ,best_resids
-
-            # if np.abs(d_cost) < tol:
-            #     write_to_file(f"Linear search convergence via |d_cost|< {tol} in {k} iterations")
-            #     write_to_file("I think this is bad because nothing has actually been updated if I exit this way... \n"
-            #                   "so I'm going to let this break the program bc best_resids isn't defined")
-            #     hdu = fits.PrimaryHDU(best_p.params)
-            #     hdu.writeto(test_image_dir + 'best_p.fits', overwrite=True)
-            #     hdu = fits.PrimaryHDU(np.array(conv_params))
-            #     hdu.writeto(test_image_dir + 'conv_params.fits', overwrite=True)
-            #     return best_p, best_psi, best_resids
-            #
-            # if convergence_crit < (0.01 / current_norm):
-            #     write_to_file(f"Linear search convergence via crit<{0.01 / current_norm} in {k} iterations")
-            #     write_to_file("I think this is bad because nothing has actually been updated if I exit this way... \n"
-            #                   "so I'm going to let this break the program bc best_resids isn't defined")
-            #     hdu = fits.PrimaryHDU(best_p.params)
-            #     hdu.writeto(test_image_dir + 'best_p.fits', overwrite=True)
-            #     hdu = fits.PrimaryHDU(np.array(conv_params))
-            #     hdu.writeto(test_image_dir + 'conv_params.fits', overwrite=True)
-            #     return best_p, best_psi, best_resids
 
             # Updates for next iteration, if convergence isn't yet reached
             if d_cost > tol and method == 'bisection':
