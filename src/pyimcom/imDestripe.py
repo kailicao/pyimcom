@@ -679,9 +679,9 @@ def residual_function_single(k, sca_a, psi, f_prime, thresh=None):
 
     # Avoid dividing by zero
     valid_mask = n_eff_A != 0
-    gradient_interpolated[valid_mask] = gradient_interpolated[valid_mask] / (
-            g_eff_A[valid_mask] * n_eff_A[valid_mask])
-    gradient_interpolated[~valid_mask] = 0
+    denom = g_eff_A * n_eff_A
+    gradient_interpolated = np.where(denom != 0, gradient_interpolated / denom, 0)
+
     if TIME: write_to_file(f"Time re-normalizing SCA A for transpose interp: {time.time() - T} seconds")
 
     term_2_list = []
