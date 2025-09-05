@@ -8,6 +8,8 @@ CompressedOutput
 
 Functions
 ---------
+_parser
+    File name parser; only needed for file names with regular expressions.
 ReadFile
     Stand-alone function to read a compressed FITS file.
 test
@@ -17,6 +19,7 @@ test1
 
 """
 
+import re
 import sys
 import time
 
@@ -38,6 +41,8 @@ class CompressedOutput:
         File name for uncompressed file.
     format : str or None, optional
         Compression format.
+    extraargs : dict, optional
+        Extra arguments for astropy.io.fits.
 
     Attributes
     ----------
@@ -82,7 +87,7 @@ class CompressedOutput:
 
     """
 
-    def __init__(self, fname, format=None):
+    def __init__(self, fname, format=None, extraargs={}):
         self.origfile = fname
 
         # figure out what type of file it is, and if it is gzipped
@@ -95,8 +100,7 @@ class CompressedOutput:
             # right now supports fits files
             if pref[-5:] == ".fits":
                 self.ftype = "fits"
-                self.hdul = fits.open(fname, mode="readonly", decompress_in_memory=True)
-
+                self.hdul = fits.open(fname, mode="readonly", decompress_in_memory=True, **extraargs)
                 if "CPRSTYPE" in self.hdul[0].header:
                     self.cprstype = self.hdul[0].header["CPRSTYPE"]
                 else:
@@ -337,6 +341,53 @@ class CompressedOutput:
         return False  # do not suppress exception
 
 
+def _parser(fname):
+    """
+    Re-formats a file name containing a regular expression.
+
+    Regular expressions are separated with the ^ character and contain a row and column index,
+    followed by the suffix. For example::
+
+        >>> _parser('hello_world/Q_02_31.fits') # no ^, regular file name
+        'hello_world/Q_02_31.fits'
+        >>> _parser('hello_world/Row{1:2d}/Q_{0:02d}_{1:02d}^_02_31.fits') # FITS file
+        'hello_world/Row31/Q_02_31.fits'
+        >>> _parser('hello_world/Row{1:2d}/Q_{0:02d}_{1:02d}^_02_12.fits.gz') # gzipped; suffix is copied over
+        'hello_world/Row12/Q_02_12.fits.gz'
+
+    This is useful if the files are not all in the same directory.
+
+    Parameters
+    ----------
+    fname : str
+        Regular file name (not including ^) or regular expression.
+
+    Returns
+    -------
+    str
+        The formatted file name.
+
+    """
+
+    # normal file name: nothing to be done
+    if "^" not in fname:
+        return fname
+
+    # pattern match
+    parts = fname.split("^")
+    sub = parts[1].split(".")
+    coordstring = sub[0]
+    m = re.match(r"_(\d+)_(\d+)(\D*)", coordstring)
+    if m is not None:
+        ix = int(m.group(1))
+        iy = int(m.group(2))
+        term = m.group(3)
+    suffix = term + "." + ".".join(sub[1:])
+    outname = "^".join(parts[:-1])
+    outname = outname.format(ix, iy) + suffix
+    return outname
+
+
 def ReadFile(fname):
     """Wrapper to read a compressed file.
 
@@ -355,17 +406,35 @@ def ReadFile(fname):
         with ReadFile('my.fits.gz') as f:
           ...
 
+    File names with sepcific types of regular expressions are allowed, and unpacked by the ``_parser``
+    function. Regular expressions are separated with the ^ character and contain a row and column index,
+    followed by the suffix. For example::
+
+        >>> _parser('hello_world/Q_02_31.fits') # no ^, regular file name
+        'hello_world/Q_02_31.fits'
+        >>> _parser('hello_world/Row{1:2d}/Q_{0:02d}_{1:02d}^_02_31.fits') # FITS file
+        'hello_world/Row31/Q_02_31.fits'
+        >>> _parser('hello_world/Row{1:2d}/Q_{0:02d}_{1:02d}^_02_12.fits.gz') # gzipped; suffix is copied over
+        'hello_world/Row12/Q_02_12.fits.gz'
+
     """
 
+    fname = _parser(fname)  # if the file name is a regular expression.
+
+    # extra arguments for remote files.
+    extraargs = {}
+    if fname[:8] == "https://":
+        extraargs["use_fsspec"] = True
+
     # if this file hasn't been compressed, just pass the handle:
-    f = fits.open(fname)
+    f = fits.open(fname, **extraargs)
     if "CPRESS" not in [hdu.name for hdu in f]:
         return f
     else:
         f.close()
 
     # otherwise, make a decompressed version
-    x = CompressedOutput(fname)
+    x = CompressedOutput(fname, extraargs=extraargs)
     x.decompress()
     return fits.HDUList(x.hdul)
 
