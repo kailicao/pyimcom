@@ -39,9 +39,12 @@ from scipy.linalg import LinAlgError, cho_solve, cholesky
 from .config import Settings as Stn
 
 try:
-    from pyimcom_croutines import build_reduced_T_wrap, lakernel1
+    from furry_parakeet.pyimcom_croutines import build_reduced_T_wrap, lakernel1
 except ImportError:
-    from .routine import build_reduced_T_wrap, lakernel1
+    try:
+        from pyimcom_croutines import build_reduced_T_wrap, lakernel1
+    except ImportError:
+        from .routine import build_reduced_T_wrap, lakernel1
 
 
 class _LAKernel:

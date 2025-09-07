@@ -32,9 +32,12 @@ from .config import Settings as Stn
 from .config import format_axis
 
 try:
-    from pyimcom_croutines import gridD5512C, iD5512C, iD5512C_sym
+    from furry_parakeet.pyimcom_croutines import gridD5512C, iD5512C, iD5512C_sym
 except ImportError:
-    from .routine import gridD5512C, iD5512C, iD5512C_sym
+    try:
+        from pyimcom_croutines import gridD5512C, iD5512C, iD5512C_sym
+    except ImportError:
+        from .routine import gridD5512C, iD5512C, iD5512C_sym
 
 
 class OutPSF:

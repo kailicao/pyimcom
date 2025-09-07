@@ -42,9 +42,12 @@ from .config import Settings as Stn
 from .config import fpaCoords
 
 try:
-    from pyimcom_croutines import iD5512C
+    from furry_parakeet.pyimcom_croutines import iD5512C
 except ImportError:
-    from .routine import iD5512C
+    try:
+        from pyimcom_croutines import iD5512C
+    except ImportError:
+        from .routine import iD5512C
 
 from .wcsutil import PyIMCOM_WCS, local_partial_pixel_derivatives2
 
