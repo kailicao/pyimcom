@@ -93,7 +93,7 @@ repos:
       - id: pytest-check
         name: Run unit tests
         description: Run unit tests with pytest.
-        entry: pytest tests/
+        entry: bash -c "if python -m pytest ./tests --co -qq; then python -m pytest ./tests --cov=./src --cov-report=html; fi"
         language: system
         pass_filenames: false
         always_run: true
