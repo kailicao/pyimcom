@@ -1018,7 +1018,7 @@ def main():
         trial_resids = residual_function(trial_psi, f_prime, thresh)
         del trial_psi, trial_epsilon
 
-        alpha_new = alpha_max * (-np.sum(direction, grad_current)) / (np.sum(direction, trial_resids-grad_current)+1e-12)
+        alpha_new = alpha_max * (-np.sum(direction * grad_current)) / (np.sum(direction * (trial_resids-grad_current))+1e-12)
 
         new_params = p.params + alpha_new * direction
         new_p.params = new_params
