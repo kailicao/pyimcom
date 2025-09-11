@@ -26,6 +26,9 @@ from scipy.signal.windows import tukey
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.switch_backend('agg')
+from astropy.wcs import WCS
+from astropy.wcs.wcsapi import SlicedLowLevelWCS
 
 # local imports
 from ..config import Config
@@ -104,6 +107,15 @@ def get_wcs(cachefile):
                 return PyIMCOM_WCS(f2["wcs"])
         return PyIMCOM_WCS(hdul["SCIWCS"].header)
 
+def get_wcs_from_infile(infile):
+    """
+    #### I need to add the documentation for this
+    
+    """
+    g = infile[0].header
+    block_wcs = SlicedLowLevelWCS(WCS(g), slices=[0,0,slice(0,g['NAXIS2']),slice(0,g['NAXIS1'])])
+
+    return block_wcs
 
 def run_imsubtract(config_file, display=None):
     """
@@ -177,7 +189,7 @@ def run_imsubtract(config_file, display=None):
             I_input = np.copy(hdul[0].data)  # this is I # noqa: F841
 
         # get wcs information from fits file (or asdf if indicated)
-        mywcs = get_wcs(exp)
+        sca_wcs = get_wcs(exp)
 
         # results from splitpsf
         # read in the kernel
@@ -197,8 +209,8 @@ def run_imsubtract(config_file, display=None):
         # define pad
         pad = ker_size / 2  # at least half of the kernel size in native pixels
         # convert to x, y, z using wcs coords (center of SCA)
-        x, y, z, p = compareutils.getfootprint(mywcs, pad)
-        v = np.array([x, y, z])
+        x, y, z, p = compareutils.getfootprint(sca_wcs, pad)
+        v = np.array([x,y,z])
 
         # convert to x', y', z'
         # define coordinates and transformation matrix
@@ -263,6 +275,7 @@ def run_imsubtract(config_file, display=None):
             # open the block info
             hdul3 = fits.open(block_path + f"_{ix:02d}_{iy:02d}.fits")
             block_data = np.copy(hdul3[0].data)
+            block_wcs = get_wcs_from_infile(hdul3) 
             hdul3.close()
 
             # determine the length of one axis of the block
@@ -301,7 +314,7 @@ def run_imsubtract(config_file, display=None):
                 window[block_length - overlap] + window[block_length - overlap - 2],
             )
 
-            # find the 'Bounding Box'
+            # find the 'Bounding Box' in SCA coordinates
             # create mesh grid for output block
             block_arr = np.arange(block_length)
             x_out, y_out = np.meshgrid(block_arr, block_arr)
