@@ -25,6 +25,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
+from astropy.wcs import WCS
+from astropy.wcs.wcsapi import SlicedLowLevelWCS
 
 # local imports
 from ..utils import compareutils
@@ -97,6 +99,16 @@ def get_wcs(cachefile):
                 with asdf.open(cachefile[:-5]+'_wcs.asdf') as f2:
                     return PyIMCOM_WCS(f2['wcs'])
         return PyIMCOM_WCS(hdul['SCIWCS'].header)
+    
+def get_wcs_from_infile(infile):
+    """
+    #### I need to add the documentation for this
+    
+    """
+    g = infile[0].header
+    block_wcs = SlicedLowLevelWCS(WCS(g), slices=[0,0,slice(0,g['NAXIS2']),slice(0,g['NAXIS1'])])
+
+    return block_wcs
 
 def run_imsubtract(config_file, display=None):
     """
@@ -170,7 +182,7 @@ def run_imsubtract(config_file, display=None):
             I = np.copy(hdul[0].data) # this is I
 
         # get wcs information from fits file (or asdf if indicated)
-        mywcs = get_wcs(exp)
+        sca_wcs = get_wcs(exp)
 
         # results from splitpsf
         # read in the kernel
@@ -190,7 +202,7 @@ def run_imsubtract(config_file, display=None):
         # define pad
         pad = ker_size/2 # at least half of the kernel size in native pixels
         # convert to x, y, z using wcs coords (center of SCA)
-        x, y, z, p = compareutils.getfootprint(mywcs, pad)
+        x, y, z, p = compareutils.getfootprint(sca_wcs, pad)
         v = np.array([x,y,z])
 
         # convert to x', y', z'
@@ -213,7 +225,7 @@ def run_imsubtract(config_file, display=None):
 
         # convert to eta and xi (block coordinates)
         block_coords = coeff * np.matmul(rot, v_convert)
-        xi = block_coords[0]
+        xi = block_coords[0]  #these are defined to check values 
         eta = block_coords[1]
 
         # find theta in original coordinates, convert to block coordinates
@@ -251,6 +263,7 @@ def run_imsubtract(config_file, display=None):
             # open the block info
             hdul3 = fits.open(block_path+'_{:02d}_{:02d}.fits'.format(ix,iy))
             block_data = np.copy(hdul3[0].data)
+            block_wcs = get_wcs_from_infile(hdul3) 
             hdul3.close()
 
             # determine the length of one axis of the block
@@ -277,7 +290,7 @@ def run_imsubtract(config_file, display=None):
             print(window[block_length - 2], window[block_length - 2*overlap], window[block_length - 2] + window[block_length - 2*overlap])
             print(window[block_length - overlap],window[block_length - overlap-2], window[block_length - overlap]+window[block_length - overlap-2])
 
-            # find the 'Bounding Box'
+            # find the 'Bounding Box' in SCA coordinates
             # create mesh grid for output block
             block_arr = np.arange(block_length)
             x_out, y_out = np.meshgrid(block_arr, block_arr)
