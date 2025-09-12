@@ -325,10 +325,18 @@ def run_imsubtract(config_file, display=None):
             x_in, y_in = sca_wcs.all_world2pix(ra_sca, dec_sca, 0)
             print("x_in, y_in: ", x_in[0::2663,0::2663], y_in[0::2663,0::2663])
             # get the bounding box from the max and min values
-            left = np.min(x_in)
-            right = np.max(x_in)
-            bottom = np.min(y_in)
-            top = np.max(y_in) 
+            left = np.floor(np.min(x_in))
+            right = np.ceil(np.max(x_in))
+            bottom = np.floor(np.min(y_in))
+            top = np.ceil(np.max(y_in))
+            # create the bounding box mesh grid, with ovsamp
+            # determine side lengths of the box
+            width = oversamp * (np.max(x_in)- np.min(x_in)) + 2
+            height = oversamp * (np.max(y_in) - np.min(y_in)) + 2
+            # create arrays for meshgrid
+            x = np.linspace(left, right, width)
+            y = np.linspace(bottom, right, height)
+            bb_x, bb_y = np.meshgrid(x, y)
 
 
 if __name__ == "__main__":
