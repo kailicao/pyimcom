@@ -22,18 +22,17 @@ import asdf
 import matplotlib
 import numpy as np
 from astropy.io import fits
-from scipy.signal.windows import tukey
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-plt.switch_backend('agg')
 from astropy.wcs import WCS
 from astropy.wcs.wcsapi import SlicedLowLevelWCS
+from scipy.signal.windows import tukey
 
 # local imports
 from ..config import Config
 from ..utils import compareutils
 from ..wcsutil import PyIMCOM_WCS
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 plt.switch_backend("agg")
 
@@ -107,15 +106,17 @@ def get_wcs(cachefile):
                 return PyIMCOM_WCS(f2["wcs"])
         return PyIMCOM_WCS(hdul["SCIWCS"].header)
 
+
 def get_wcs_from_infile(infile):
     """
     #### I need to add the documentation for this
-    
+
     """
     g = infile[0].header
-    block_wcs = SlicedLowLevelWCS(WCS(g), slices=[0,0,slice(0,g['NAXIS2']),slice(0,g['NAXIS1'])])
+    block_wcs = SlicedLowLevelWCS(WCS(g), slices=[0, 0, slice(0, g["NAXIS2"]), slice(0, g["NAXIS1"])])
 
     return block_wcs
+
 
 def run_imsubtract(config_file, display=None):
     """
@@ -210,7 +211,7 @@ def run_imsubtract(config_file, display=None):
         pad = ker_size / 2  # at least half of the kernel size in native pixels
         # convert to x, y, z using wcs coords (center of SCA)
         x, y, z, p = compareutils.getfootprint(sca_wcs, pad)
-        v = np.array([x,y,z])
+        v = np.array([x, y, z])
 
         # convert to x', y', z'
         # define coordinates and transformation matrix
@@ -275,7 +276,7 @@ def run_imsubtract(config_file, display=None):
             # open the block info
             hdul3 = fits.open(block_path + f"_{ix:02d}_{iy:02d}.fits")
             block_data = np.copy(hdul3[0].data)
-            block_wcs = get_wcs_from_infile(hdul3) 
+            block_wcs = get_wcs_from_infile(hdul3)
             hdul3.close()
 
             # determine the length of one axis of the block
@@ -319,12 +320,12 @@ def run_imsubtract(config_file, display=None):
             block_arr = np.arange(block_length)
             x_out, y_out = np.meshgrid(block_arr, block_arr)
             # convert to ra and dec using block wcs
-            ra_sca,dec_sca = block_wcs.pixel_to_world_values(x_out, y_out,0) 
+            ra_sca, dec_sca = block_wcs.pixel_to_world_values(x_out, y_out, 0)
             # print(ra_sca.shape, dec_sca.shape)
-            print("ra, dec: ", ra_sca[0::2663,0::2663], dec_sca[0::2663,0::2663])
+            print("ra, dec: ", ra_sca[0::2663, 0::2663], dec_sca[0::2663, 0::2663])
             # convert into coordinates in the SCA
             x_in, y_in = sca_wcs.all_world2pix(ra_sca, dec_sca, 0)
-            print("x_in, y_in: ", x_in[0::2663,0::2663], y_in[0::2663,0::2663])
+            print("x_in, y_in: ", x_in[0::2663, 0::2663], y_in[0::2663, 0::2663])
             # get the bounding box from the max and min values
             left = np.floor(np.min(x_in))
             right = np.ceil(np.max(x_in))
