@@ -320,6 +320,7 @@ def run_imsubtract(config_file, display=None):
             x_out, y_out = np.meshgrid(block_arr, block_arr)
             # convert to ra and dec using block wcs
             ra_sca,dec_sca = block_wcs.pixel_to_world_values(x_out, y_out,0) 
+            # print(ra_sca.shape, dec_sca.shape)
             print("ra, dec: ", ra_sca[0::2663,0::2663], dec_sca[0::2663,0::2663])
             # convert into coordinates in the SCA
             x_in, y_in = sca_wcs.all_world2pix(ra_sca, dec_sca, 0)
@@ -331,11 +332,11 @@ def run_imsubtract(config_file, display=None):
             top = np.ceil(np.max(y_in))
             # create the bounding box mesh grid, with ovsamp
             # determine side lengths of the box
-            width = oversamp * (np.max(x_in)- np.min(x_in)) + 2
-            height = oversamp * (np.max(y_in) - np.min(y_in)) + 2
+            width = oversamp * (right - left) + 2
+            height = oversamp * (top - bottom) + 2
             # create arrays for meshgrid
             x = np.linspace(left, right, width)
-            y = np.linspace(bottom, right, height)
+            y = np.linspace(bottom, top, height)
             bb_x, bb_y = np.meshgrid(x, y)
 
 
